@@ -201,11 +201,15 @@ export function parseMix(data: Uint8Array, context: ParseContext): Parsed {
         warnings.push(`The header says the body is ${bytesLabel(mix.bodySize)}${mix.checksum ? ' plus a 20-byte checksum' : ''}, which would end the file at ${bytesLabel(expectedEnd)}, but the file is ${bytesLabel(data.length)}.`);
     }
     if (mix.flags & ~(FLAG_CHECKSUM | FLAG_ENCRYPTED)) warnings.push(`Unknown flag bits are set: 0x${hex(mix.flags & ~(FLAG_CHECKSUM | FLAG_ENCRYPTED))}.`);
-    const seen = new Set<number>();
-    for (const e of mix.index) {
-        if (seen.has(e.id)) warnings.push(`ID ${hex(e.id)} appears more than once; the game will only ever find one of them.`);
-        seen.add(e.id);
-    }
+    // Westwood's packer sometimes stored a file twice. Harmless if the copies match.
+    const firstById = new Map<number, Entry>();
+    const copies: Entry[] = [];
+    entries.forEach((entry, i) => {
+        const first = firstById.get(mix.index[i].id);
+        if (!first) return void firstById.set(mix.index[i].id, entry);
+        if (first.data.length === entry.data.length && first.data.every((b, j) => b === entry.data[j])) copies.push(entry);
+        else warnings.push(`ID ${hex(mix.index[i].id)} appears more than once with different contents; the game will only ever find one of them.`);
+    });
     // The games binary-search the index by ID, compared as signed numbers (TS onward: unsigned).
     const asSigned = scheme === 'classic';
     const key = (id: number) => (asSigned ? id | 0 : id >>> 0);
@@ -278,6 +282,7 @@ export function parseMix(data: Uint8Array, context: ParseContext): Parsed {
             ['Body', `${formatSize(mix.bodySize)}, starting at offset ${mix.bodyStart}`],
             ['Names', `${names.size} of ${mix.count} known${fromDatabase ? ` (${fromDatabase} from the archive's own name list)` : ''}`],
             ['File IDs', `${ID_SCHEMES[scheme].label} hashes`],
+            ...(copies.length ? [['Duplicates', `${copies.length} file${copies.length === 1 ? ' is' : 's are'} stored twice, as identical copies (${formatSize(copies.reduce((n, e) => n + e.size, 0))} wasted)`] as [string, string]] : []),
             ...(mix.key ? [['Blowfish key', toHex(mix.key)] as [string, string]] : []),
         ],
         fields,

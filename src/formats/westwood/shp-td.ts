@@ -109,7 +109,7 @@ const parser: FormatParser = {
                 ...(embedded ? [field('Palette', table, 768)] : []),
                 ...dataFields,
             ],
-            preview: { kind: 'images', frames, palette: embedded && expandPalette(embedded), transparentIndex: 0 },
+            preview: { kind: 'images', frames, palette: embedded && expandPalette(embedded), transparentIndex: 0, shadowIndex: 4 },
             warnings,
         };
     },

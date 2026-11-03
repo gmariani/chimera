@@ -62,7 +62,7 @@ export function App() {
                             </ol>
                         </nav>
                     )}
-                    <Inspector key={trail.length + current.name} file={current} names={names} onOpen={(file) => setTrail((t) => [...t, file])} onNames={updateNames} />
+                    <Inspector key={trail.length + current.name} file={current} root={trail.length === 1} names={names} onOpen={(file) => setTrail((t) => [...t, file])} onNames={updateNames} />
                 </main>
             ) : (
                 <OpenPanel onOpen={(file) => setTrail([file])} />

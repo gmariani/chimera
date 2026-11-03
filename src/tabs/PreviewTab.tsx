@@ -12,7 +12,7 @@ const stem = (name: string) => name.replace(/\.[^.]+$/, '');
 export function PreviewTab({ preview, fileName, names }: { preview: Preview; fileName: string; names: readonly string[] }) {
     switch (preview.kind) {
         case 'images':
-            return <ImagesPreview frames={preview.frames} ownPalette={preview.palette} transparentIndex={preview.transparentIndex} fileName={fileName} names={names} />;
+            return <ImagesPreview frames={preview.frames} ownPalette={preview.palette} transparentIndex={preview.transparentIndex} shadowIndex={preview.shadowIndex} fileName={fileName} names={names} />;
         case 'palette':
             return <PalettePreview colors={preview.colors} fileName={fileName} />;
         case 'audio':
@@ -22,22 +22,34 @@ export function PreviewTab({ preview, fileName, names }: { preview: Preview; fil
     }
 }
 
+/** How to turn palette indexes into colours. */
+interface Paint {
+    palette: Uint8Array;
+    transparentIndex?: number;
+    shadowIndex?: number;
+}
+
 /** Paints indexed pixels through a palette. */
-function toImageData(image: IndexedImage, palette: Uint8Array, transparentIndex?: number): ImageData {
+function toImageData(image: IndexedImage, { palette, transparentIndex, shadowIndex }: Paint): ImageData {
     const out = new ImageData(image.width, image.height);
     const rgba = out.data;
     for (let i = 0; i < image.pixels.length; i++) {
         const p = image.pixels[i];
+        if (p === transparentIndex) continue;
+        if (p === shadowIndex) {
+            rgba[i * 4 + 3] = 128;
+            continue;
+        }
         rgba[i * 4] = palette[p * 3];
         rgba[i * 4 + 1] = palette[p * 3 + 1];
         rgba[i * 4 + 2] = palette[p * 3 + 2];
-        rgba[i * 4 + 3] = p === transparentIndex ? 0 : 255;
+        rgba[i * 4 + 3] = 255;
     }
     return out;
 }
 
 /** All frames in a grid, as one canvas. */
-function sheet(frames: IndexedImage[], palette: Uint8Array, transparentIndex?: number): HTMLCanvasElement {
+function sheet(frames: IndexedImage[], paint: Paint): HTMLCanvasElement {
     const columns = Math.ceil(Math.sqrt(frames.length));
     const w = Math.max(...frames.map((f) => f.width));
     const h = Math.max(...frames.map((f) => f.height));
@@ -45,24 +57,39 @@ function sheet(frames: IndexedImage[], palette: Uint8Array, transparentIndex?: n
     canvas.width = columns * w;
     canvas.height = Math.ceil(frames.length / columns) * h;
     const ctx = canvas.getContext('2d')!;
-    frames.forEach((f, i) => ctx.putImageData(toImageData(f, palette, transparentIndex), (i % columns) * w, Math.floor(i / columns) * h));
+    frames.forEach((f, i) => ctx.putImageData(toImageData(f, paint), (i % columns) * w, Math.floor(i / columns) * h));
     return canvas;
 }
 
-function frameCanvas(frame: IndexedImage, palette: Uint8Array, transparentIndex?: number): HTMLCanvasElement {
+function frameCanvas(frame: IndexedImage, paint: Paint): HTMLCanvasElement {
     const canvas = document.createElement('canvas');
     canvas.width = frame.width;
     canvas.height = frame.height;
-    canvas.getContext('2d')!.putImageData(toImageData(frame, palette, transparentIndex), 0, 0);
+    canvas.getContext('2d')!.putImageData(toImageData(frame, paint), 0, 0);
     return canvas;
 }
 
 const png = (canvas: HTMLCanvasElement) => new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not make a PNG.'))), 'image/png'));
 
-function ImagesPreview({ frames, ownPalette, transparentIndex, fileName, names }: { frames: IndexedImage[]; ownPalette?: Uint8Array; transparentIndex?: number; fileName: string; names: readonly string[] }) {
+function ImagesPreview({
+    frames,
+    ownPalette,
+    transparentIndex,
+    shadowIndex,
+    fileName,
+    names,
+}: {
+    frames: IndexedImage[];
+    ownPalette?: Uint8Array;
+    transparentIndex?: number;
+    shadowIndex?: number;
+    fileName: string;
+    names: readonly string[];
+}) {
     const { palettes, current, select, add } = usePalettes();
     const [useOwn, setUseOwn] = useState(true);
     const palette = ownPalette && useOwn ? ownPalette : current.colors;
+    const paint = useMemo(() => ({ palette, transparentIndex, shadowIndex }), [palette, transparentIndex, shadowIndex]);
     const [frame, setFrame] = useState(0);
     const [playing, setPlaying] = useState(false);
     const [view, setView] = useState<'frame' | 'sheet'>(frames.length > 1 ? 'sheet' : 'frame');
@@ -79,16 +106,16 @@ function ImagesPreview({ frames, ownPalette, transparentIndex, fileName, names }
         return () => clearInterval(timer);
     }, [playing, frames.length]);
 
-    const sheetCanvas = useMemo(() => (view === 'sheet' ? sheet(frames, palette, transparentIndex) : null), [view, frames, palette, transparentIndex]);
+    const sheetCanvas = useMemo(() => (view === 'sheet' ? sheet(frames, paint) : null), [view, frames, paint]);
 
     useEffect(() => {
         const el = canvas.current;
         if (!el) return;
-        const source = view === 'sheet' ? sheetCanvas! : frameCanvas(frames[frame], palette, transparentIndex);
+        const source = view === 'sheet' ? sheetCanvas! : frameCanvas(frames[frame], paint);
         el.width = source.width;
         el.height = source.height;
         el.getContext('2d')!.drawImage(source, 0, 0);
-    }, [view, sheetCanvas, frames, frame, palette, transparentIndex]);
+    }, [view, sheetCanvas, frames, frame, paint]);
 
     const clickSheet = (e: React.MouseEvent<HTMLCanvasElement>) => {
         if (view !== 'sheet') return;
@@ -107,7 +134,7 @@ function ImagesPreview({ frames, ownPalette, transparentIndex, fileName, names }
     const saveAll = async () => {
         setBusy(true);
         try {
-            const files = await Promise.all(frames.map(async (f, i) => ({ name: `${stem(fileName)}-${String(i).padStart(4, '0')}.png`, data: new Uint8Array(await (await png(frameCanvas(f, palette, transparentIndex))).arrayBuffer()) })));
+            const files = await Promise.all(frames.map(async (f, i) => ({ name: `${stem(fileName)}-${String(i).padStart(4, '0')}.png`, data: new Uint8Array(await (await png(frameCanvas(f, paint))).arrayBuffer()) })));
             download(zip(files), `${safeName(stem(fileName))}-frames.zip`);
         } finally {
             setBusy(false);
@@ -194,12 +221,12 @@ function ImagesPreview({ frames, ownPalette, transparentIndex, fileName, names }
                 </Form.Group>
 
                 <div className="d-flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline-light" onClick={async () => download(await png(frameCanvas(frames[frame], palette, transparentIndex)), `${safeName(stem(fileName))}${frames.length > 1 ? `-${String(frame).padStart(4, '0')}` : ''}.png`)}>
+                    <Button size="sm" variant="outline-light" onClick={async () => download(await png(frameCanvas(frames[frame], paint)), `${safeName(stem(fileName))}${frames.length > 1 ? `-${String(frame).padStart(4, '0')}` : ''}.png`)}>
                         <i className="bi bi-image me-1" /> {frames.length > 1 ? 'This frame' : 'Save'} PNG
                     </Button>
                     {frames.length > 1 && (
                         <>
-                            <Button size="sm" variant="outline-light" onClick={async () => download(await png(sheet(frames, palette, transparentIndex)), `${safeName(stem(fileName))}-sheet.png`)}>
+                            <Button size="sm" variant="outline-light" onClick={async () => download(await png(sheet(frames, paint)), `${safeName(stem(fileName))}-sheet.png`)}>
                                 <i className="bi bi-grid-3x3 me-1" /> Sheet PNG
                             </Button>
                             <Button size="sm" variant="outline-light" disabled={busy} onClick={() => void saveAll()}>

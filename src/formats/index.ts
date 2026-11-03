@@ -1,6 +1,6 @@
 import type { FormatDescriptor, FormatParser } from '../core/types';
 import { sniffMix } from './mix/sniff';
-import { sniffAud, sniffCps, sniffPal, sniffShpTd, sniffShpTs, sniffText, sniffVqa } from './westwood/sniff';
+import { sniffAud, sniffCps, sniffPal, sniffShpD2, sniffShpTd, sniffShpTs, sniffText, sniffVqa } from './westwood/sniff';
 
 /**
  * Every format the app knows. The sniffers are small and always loaded; each
@@ -14,6 +14,7 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'mix', name: 'Westwood MIX archive', extensions: ['mix'], sniff: sniffMix, load: parserOf(() => import('./mix')) },
     { id: 'shp-td', name: 'Sprite (TD/RA SHP)', extensions: ['shp'], sniff: sniffShpTd, load: parserOf(() => import('./westwood/shp-td')) },
     { id: 'shp-ts', name: 'Sprite (TS/RA2 SHP)', extensions: ['shp'], sniff: sniffShpTs, load: parserOf(() => import('./westwood/shp-ts')) },
+    { id: 'shp-d2', name: 'Sprite (Dune II-style SHP)', extensions: ['shp'], sniff: sniffShpD2, load: parserOf(() => import('./westwood/shp-d2')) },
     { id: 'aud', name: 'Westwood audio', extensions: ['aud', 'juv', 'v00', 'v01', 'v02', 'v03', 'r00', 'r01', 'r02', 'r03'], sniff: sniffAud, load: parserOf(() => import('./westwood/aud')) },
     { id: 'cps', name: 'Picture (CPS)', extensions: ['cps'], sniff: sniffCps, load: parserOf(() => import('./westwood/cps')) },
     { id: 'vqa', name: 'Video (VQA)', extensions: ['vqa'], sniff: sniffVqa, load: parserOf(() => import('./westwood/vqa')) },

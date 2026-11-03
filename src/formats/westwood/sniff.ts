@@ -36,6 +36,36 @@ export function sniffShpTd(data: Uint8Array): boolean {
     return true;
 }
 
+/**
+ * Dune II-style sprites (TD and RA keep their mouse cursors in this format): a
+ * frame count, then offsets counted from byte 2, the last real one being the
+ * end of the file. Offsets are 2 bytes each in Dune II, 4 in C&C.
+ */
+export function shpD2Offsets(data: Uint8Array): number[] | null {
+    const b = new Bytes(data);
+    const frames = b.u16(0);
+    if (frames === 0 || data.length < 6) return null;
+    const wide = b.u16(4) === 0;
+    const size = wide ? 4 : 2;
+    const read = (i: number) => (wide ? b.u32(2 + i * size) : b.u16(2 + i * size)) + 2;
+    if (2 + (frames + 1) * size > data.length) return null;
+    const offsets: number[] = [];
+    for (let i = 0; i <= frames; i++) offsets.push(read(i));
+    if (offsets[0] < 2 + (frames + 1) * size || offsets[frames] !== data.length) return null;
+    for (let i = 0; i < frames; i++) {
+        const at = offsets[i];
+        // Each frame: flags, slices, width, height, then its own size. Offsets needn't be in order:
+        // identical frames point at the same data.
+        const size = b.u16(at + 6);
+        if (b.u16(at + 3) === 0 || b.u8(at + 5) === 0 || size < 10 || at + size > data.length) return null;
+    }
+    return offsets;
+}
+
+export function sniffShpD2(data: Uint8Array): boolean {
+    return shpD2Offsets(data) !== null;
+}
+
 /** TS/RA2 sprites: a zero word, the canvas size and frame count, then 24-byte frame headers. */
 export function sniffShpTs(data: Uint8Array): boolean {
     const b = new Bytes(data);

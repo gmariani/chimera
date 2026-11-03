@@ -3,7 +3,7 @@ import { Alert, Button, Nav, Spinner, Tab } from 'react-bootstrap';
 import { bytesLabel, formatSize } from '../core/bytes';
 import { download, safeName } from '../lib/download';
 import { useParsed, type OpenFile } from '../lib/inspect';
-import { findPalettes } from '../lib/palette-sources';
+import { findPalettes, preferred } from '../lib/palette-sources';
 import { usePalettes } from '../lib/palettes';
 import { ContentsTab } from '../tabs/ContentsTab';
 import { PreviewTab } from '../tabs/PreviewTab';
@@ -13,20 +13,38 @@ import { Dl } from './ui';
 type TabKey = 'contents' | 'preview' | 'structure';
 
 /** One file, whatever it is: what it holds, what it looks like, and how its bytes are laid out. */
-export function Inspector({ file, names, onOpen, onNames }: { file: OpenFile; names: readonly string[]; onOpen: (file: OpenFile) => void; onNames: (names: string[]) => void }) {
+export function Inspector({
+    file,
+    root,
+    names,
+    onOpen,
+    onNames,
+}: {
+    file: OpenFile;
+    /** Opened from disk, rather than from inside another file. */
+    root: boolean;
+    names: readonly string[];
+    onOpen: (file: OpenFile) => void;
+    onNames: (names: string[]) => void;
+}) {
     const state = useParsed(file, names);
     const [tab, setTab] = useState<TabKey | null>(null);
     const { add } = usePalettes();
 
-    // Palettes in an archive are what its sprites are meant to be seen with.
+    // Palettes in an archive are what its sprites are meant to be seen with. A newly opened
+    // file's own palette replaces one from an earlier file (Red Alert's differ from TD's).
     useEffect(() => {
         if (state.status !== 'ready' || state.format.id !== 'mix') return;
         let cancelled = false;
-        void findPalettes(file.name, file.data, names).then((found) => !cancelled && add(found));
+        void findPalettes(file.name, file.data, names).then((found) => {
+            if (cancelled || !found.length) return;
+            const best = preferred(found)!;
+            add([best, ...found.filter((p) => p !== best)], root);
+        });
         return () => {
             cancelled = true;
         };
-    }, [state, file, names, add]);
+    }, [state, file, names, add, root]);
 
     const parsed = state.status === 'ready' ? state.parsed : null;
     const available: TabKey[] = parsed ? [...(parsed.entries ? ['contents' as const] : []), ...(parsed.preview ? ['preview' as const] : []), 'structure'] : [];

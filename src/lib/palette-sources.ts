@@ -22,7 +22,12 @@ export async function findPalettes(name: string, data: Uint8Array, names: readon
     for (const typed of typeEntries(entries)) {
         if (typed.format.id !== 'pal' && typed.format.id !== 'mix') continue;
         const inner = await findPalettes(typed.fileName, typed.entry.data, names, depth + 1);
-        found.push(...inner.map((p) => ({ ...p, id: `${name}/${p.id}`, label: `${p.label} (${name})` })));
+        found.push(...inner.map((p) => ({ ...p, id: `${name}/${p.id}`, label: `${name} › ${p.label}` })));
     }
     return found;
+}
+
+/** The palette a file's sprites most likely want: the temperate one if there is one. */
+export function preferred(palettes: NamedPalette[]): NamedPalette | undefined {
+    return palettes.find((p) => /(^|› )temperat\.pal$/i.test(p.label)) ?? palettes[0];
 }

@@ -7,7 +7,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Format | Read | Preview | Extract |
 | --- | --- | --- | --- |
 | Westwood MIX (TD, RA, TS, RA2), plain or Blowfish-encrypted | full structure, names from hashes | — | single files, all as ZIP, nested MIX |
-| SHP sprites (TD/RA and TS/RA2) | headers, frame table | all frames, animation, any palette | PNG frame, sheet, all frames |
+| SHP sprites (TD/RA, TS/RA2, and the Dune II-style cursors) | headers, frame table | all frames, animation, any palette | PNG frame, sheet, all frames |
 | AUD audio (IMA and Westwood ADPCM) | headers, chunks | player | WAV |
 | CPS pictures | headers | image | PNG |
 | PAL palettes | each colour | swatches, use for sprites | — |
@@ -35,6 +35,9 @@ Each format is a plain TypeScript module that turns bytes into data. It never re
 npm install
 npm run dev      # http://localhost:5173
 npm test         # also checks every file in "MIX Samples/" if that folder exists
+
+# Every MIX in a game install, every archive nested in those, and every file inside them:
+CHIMERA_GAME_DATA=/path/to/CnCRemastered/Data/CNCDATA npx vitest run src/formats/gamedata.test.ts
 npm run build    # static site in build/
 ```
 

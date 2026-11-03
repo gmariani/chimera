@@ -40,7 +40,15 @@ export interface IndexedImage {
 }
 
 export type Preview =
-    | { kind: 'images'; frames: IndexedImage[]; /** 768 bytes of 8-bit RGB, when the file brings its own. */ palette?: Uint8Array; transparentIndex?: number }
+    | {
+          kind: 'images';
+          frames: IndexedImage[];
+          /** 768 bytes of 8-bit RGB, when the file brings its own. */
+          palette?: Uint8Array;
+          transparentIndex?: number;
+          /** An index the game draws as darkening rather than as its palette colour. */
+          shadowIndex?: number;
+      }
     | { kind: 'palette'; /** 256 colours as 8-bit RGB. */ colors: Uint8Array }
     | { kind: 'audio'; wav: Uint8Array; sampleRate: number; channels: number; bits: number; seconds: number }
     | { kind: 'text'; text: string };
