@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, ButtonGroup, Form, Spinner } from 'react-bootstrap';
-import type { IndexedImage, Preview } from '../core/types';
-import { CodeBlock, Muted, Tip } from '../components/ui';
+import type { AudioClip, IndexedImage, Preview } from '../core/types';
+import { CodeBlock, Muted, SectionTitle, Tip } from '../components/ui';
 import { download, safeName } from '../lib/download';
 import { findPalettes } from '../lib/palette-sources';
 import { usePalettes } from '../lib/palettes';
@@ -12,13 +12,36 @@ const stem = (name: string) => name.replace(/\.[^.]+$/, '');
 export function PreviewTab({ preview, fileName, names }: { preview: Preview; fileName: string; names: readonly string[] }) {
     switch (preview.kind) {
         case 'images':
-            return <ImagesPreview frames={preview.frames} ownPalette={preview.palette} transparentIndex={preview.transparentIndex} shadowIndex={preview.shadowIndex} fileName={fileName} names={names} />;
+            return (
+                <ImagesPreview
+                    frames={preview.frames}
+                    ownPalette={preview.palette}
+                    transparentIndex={preview.transparentIndex}
+                    shadowIndex={preview.shadowIndex}
+                    columns={preview.columns}
+                    fileName={fileName}
+                    names={names}
+                />
+            );
         case 'palette':
             return <PalettePreview colors={preview.colors} fileName={fileName} />;
         case 'audio':
-            return <AudioPreview preview={preview} fileName={fileName} />;
+            return <AudioPreview clip={preview} fileName={fileName} />;
+        case 'video':
+            return <VideoPreview preview={preview} fileName={fileName} />;
         case 'text':
             return <CodeBlock copy>{preview.text.length > 500_000 ? `${preview.text.slice(0, 500_000)}\n… (${preview.text.length - 500_000} more characters)` : preview.text}</CodeBlock>;
+        case 'stack':
+            return (
+                <>
+                    {preview.items.map((item, i) => (
+                        <section key={i} className="mb-5">
+                            <SectionTitle className="mb-3">{item.title}</SectionTitle>
+                            <PreviewTab preview={item.preview} fileName={fileName} names={names} />
+                        </section>
+                    ))}
+                </>
+            );
     }
 }
 
@@ -48,9 +71,12 @@ function toImageData(image: IndexedImage, { palette, transparentIndex, shadowInd
     return out;
 }
 
+/** How many frames to a row on a sheet: as given, or as square as possible. */
+const sheetColumns = (frames: IndexedImage[], columns?: number) => columns ?? Math.ceil(Math.sqrt(frames.length));
+
 /** All frames in a grid, as one canvas. */
-function sheet(frames: IndexedImage[], paint: Paint): HTMLCanvasElement {
-    const columns = Math.ceil(Math.sqrt(frames.length));
+function sheet(frames: IndexedImage[], paint: Paint, columnsWanted?: number): HTMLCanvasElement {
+    const columns = sheetColumns(frames, columnsWanted);
     const w = Math.max(...frames.map((f) => f.width));
     const h = Math.max(...frames.map((f) => f.height));
     const canvas = document.createElement('canvas');
@@ -76,6 +102,7 @@ function ImagesPreview({
     ownPalette,
     transparentIndex,
     shadowIndex,
+    columns,
     fileName,
     names,
 }: {
@@ -83,6 +110,7 @@ function ImagesPreview({
     ownPalette?: Uint8Array;
     transparentIndex?: number;
     shadowIndex?: number;
+    columns?: number;
     fileName: string;
     names: readonly string[];
 }) {
@@ -106,7 +134,7 @@ function ImagesPreview({
         return () => clearInterval(timer);
     }, [playing, frames.length]);
 
-    const sheetCanvas = useMemo(() => (view === 'sheet' ? sheet(frames, paint) : null), [view, frames, paint]);
+    const sheetCanvas = useMemo(() => (view === 'sheet' ? sheet(frames, paint, columns) : null), [view, frames, paint, columns]);
 
     useEffect(() => {
         const el = canvas.current;
@@ -120,11 +148,11 @@ function ImagesPreview({
     const clickSheet = (e: React.MouseEvent<HTMLCanvasElement>) => {
         if (view !== 'sheet') return;
         const rect = e.currentTarget.getBoundingClientRect();
-        const columns = Math.ceil(Math.sqrt(frames.length));
+        const across = sheetColumns(frames, columns);
         const h = Math.max(...frames.map((f) => f.height));
-        const x = Math.floor(((e.clientX - rect.left) / rect.width) * columns);
+        const x = Math.floor(((e.clientX - rect.left) / rect.width) * across);
         const y = Math.floor(((e.clientY - rect.top) / rect.height) * e.currentTarget.height / h);
-        const index = y * columns + x;
+        const index = y * across + x;
         if (index < frames.length) {
             setFrame(index);
             setView('frame');
@@ -161,10 +189,10 @@ function ImagesPreview({
                     <div className="mb-3">
                         <ButtonGroup size="sm" className="mb-2 d-flex">
                             <Button variant={view === 'sheet' ? 'primary' : 'outline-light'} onClick={() => setView('sheet')}>
-                                All frames
+                                {columns ? 'Assembled' : 'All frames'}
                             </Button>
                             <Button variant={view === 'frame' ? 'primary' : 'outline-light'} onClick={() => setView('frame')}>
-                                One frame
+                                {columns ? 'One tile' : 'One frame'}
                             </Button>
                         </ButtonGroup>
                         {view === 'frame' && (
@@ -226,8 +254,8 @@ function ImagesPreview({
                     </Button>
                     {frames.length > 1 && (
                         <>
-                            <Button size="sm" variant="outline-light" onClick={async () => download(await png(sheet(frames, paint)), `${safeName(stem(fileName))}-sheet.png`)}>
-                                <i className="bi bi-grid-3x3 me-1" /> Sheet PNG
+                            <Button size="sm" variant="outline-light" onClick={async () => download(await png(sheet(frames, paint, columns)), `${safeName(stem(fileName))}-sheet.png`)}>
+                                <i className="bi bi-grid-3x3 me-1" /> {columns ? 'Assembled' : 'Sheet'} PNG
                             </Button>
                             <Button size="sm" variant="outline-light" disabled={busy} onClick={() => void saveAll()}>
                                 {busy ? <Spinner animation="border" size="sm" className="me-1" /> : <i className="bi bi-file-zip me-1" />} Every frame
@@ -262,18 +290,164 @@ function PalettePreview({ colors, fileName }: { colors: Uint8Array; fileName: st
     );
 }
 
-function AudioPreview({ preview, fileName }: { preview: Extract<Preview, { kind: 'audio' }>; fileName: string }) {
-    const url = useMemo(() => URL.createObjectURL(new Blob([preview.wav as Uint8Array<ArrayBuffer>], { type: 'audio/wav' })), [preview.wav]);
-    useEffect(() => () => URL.revokeObjectURL(url), [url]);
+function useWavUrl(wav: Uint8Array | undefined): string | undefined {
+    const url = useMemo(() => wav && URL.createObjectURL(new Blob([wav as Uint8Array<ArrayBuffer>], { type: 'audio/wav' })), [wav]);
+    useEffect(() => () => {
+        if (url) URL.revokeObjectURL(url);
+    }, [url]);
+    return url;
+}
+
+const clipLabel = (clip: AudioClip) => `${clip.seconds.toFixed(2)} s · ${clip.sampleRate} Hz · ${clip.bits}-bit ${clip.channels === 2 ? 'stereo' : 'mono'}`;
+
+function AudioPreview({ clip, fileName }: { clip: AudioClip; fileName: string }) {
+    const url = useWavUrl(clip.wav);
     return (
         <div className="d-flex flex-wrap gap-3 align-items-center">
             <audio controls src={url} className="audio-player" />
-            <Button variant="outline-light" onClick={() => download(preview.wav, `${safeName(stem(fileName))}.wav`, 'audio/wav')}>
+            <Button variant="outline-light" onClick={() => download(clip.wav, `${safeName(stem(fileName))}.wav`, 'audio/wav')}>
                 <i className="bi bi-file-earmark-music me-1" /> Save as WAV
             </Button>
-            <Muted>
-                {preview.seconds.toFixed(2)} s · {preview.sampleRate} Hz · {preview.bits}-bit {preview.channels === 2 ? 'stereo' : 'mono'}
-            </Muted>
+            <Muted>{clipLabel(clip)}</Muted>
+        </div>
+    );
+}
+
+/**
+ * Plays a movie by decoding frames as they're needed. With sound, the sound is
+ * the clock and the picture follows it.
+ */
+function VideoPreview({ preview, fileName }: { preview: Extract<Preview, { kind: 'video' }>; fileName: string }) {
+    const { width, height, frameCount, fps, audio } = preview;
+    const [frame, setFrame] = useState(0);
+    const [playing, setPlaying] = useState(false);
+    const [zoom, setZoom] = useState(width <= 320 ? 2 : 1);
+    const [busy, setBusy] = useState<string | null>(null);
+    const canvas = useRef<HTMLCanvasElement>(null);
+    const sound = useRef<HTMLAudioElement>(null);
+    const url = useWavUrl(audio?.wav);
+    const shown = useRef(-1);
+
+    const frameImage = (index: number) => {
+        const { pixels, palette } = preview.frame(index);
+        return toImageData({ width, height, pixels }, { palette });
+    };
+
+    useEffect(() => {
+        const el = canvas.current;
+        if (!el || shown.current === frame) return;
+        el.getContext('2d')!.putImageData(frameImage(frame), 0, 0);
+        shown.current = frame;
+    });
+
+    useEffect(() => {
+        if (!playing) return;
+        const el = sound.current;
+        if (el) {
+            if (el.currentTime >= el.duration - 0.05) el.currentTime = 0;
+            void el.play();
+        }
+        const start = performance.now() - (frame / fps) * 1000;
+        let request = 0;
+        const tick = () => {
+            const seconds = el ? el.currentTime : (performance.now() - start) / 1000;
+            const next = Math.floor(seconds * fps);
+            if (next >= frameCount || (el && el.ended)) {
+                setFrame(frameCount - 1);
+                setPlaying(false);
+                return;
+            }
+            setFrame(next);
+            request = requestAnimationFrame(tick);
+        };
+        request = requestAnimationFrame(tick);
+        return () => {
+            cancelAnimationFrame(request);
+            el?.pause();
+        };
+        // Restart the clock only when play is pressed, not on every frame.
+    }, [playing]);
+
+    const seek = (index: number) => {
+        setFrame(index);
+        if (sound.current) sound.current.currentTime = index / fps;
+    };
+
+    const framePng = (index: number) => {
+        const c = document.createElement('canvas');
+        c.width = width;
+        c.height = height;
+        c.getContext('2d')!.putImageData(frameImage(index), 0, 0);
+        return png(c);
+    };
+
+    const saveAll = async () => {
+        const files: { name: string; data: Uint8Array }[] = [];
+        try {
+            for (let i = 0; i < frameCount; i++) {
+                if (i % 50 === 0) {
+                    setBusy(`${i} / ${frameCount}`);
+                    await new Promise((r) => setTimeout(r, 0));
+                }
+                files.push({ name: `${stem(fileName)}-${String(i).padStart(4, '0')}.png`, data: new Uint8Array(await (await framePng(i)).arrayBuffer()) });
+            }
+            download(zip(files), `${safeName(stem(fileName))}-frames.zip`);
+        } finally {
+            setBusy(null);
+            shown.current = -1;
+        }
+    };
+
+    return (
+        <div className="row g-4">
+            <div className="col-lg-8">
+                <div className="image-stage">
+                    <canvas ref={canvas} width={width} height={height} className="image-canvas" style={{ width: width * zoom }} />
+                </div>
+            </div>
+            <div className="col-lg-4">
+                <div className="d-flex align-items-center gap-2 mb-3">
+                    <Button size="sm" variant="outline-light" onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
+                        <i className={`bi ${playing ? 'bi-pause-fill' : 'bi-play-fill'}`} />
+                    </Button>
+                    <Form.Range min={0} max={frameCount - 1} value={frame} onChange={(e) => seek(Number(e.target.value))} aria-label="Frame" />
+                    <span className="text-nowrap small">
+                        {frame + 1} / {frameCount}
+                    </span>
+                </div>
+                {url && <audio ref={sound} src={url} preload="auto" />}
+
+                <Form.Group className="mb-3">
+                    <Form.Label className="small text-body-secondary mb-1">Zoom</Form.Label>
+                    <ButtonGroup size="sm" className="d-flex">
+                        {[1, 2, 3].map((z) => (
+                            <Button key={z} variant={zoom === z ? 'primary' : 'outline-light'} onClick={() => setZoom(z)}>
+                                {z}×
+                            </Button>
+                        ))}
+                    </ButtonGroup>
+                </Form.Group>
+
+                <p className="small mb-3">
+                    <Muted>
+                        {width} × {height} · {fps} fps · {(frameCount / fps).toFixed(1)} s{audio ? ` · sound: ${clipLabel(audio)}` : ' · no sound'}
+                    </Muted>
+                </p>
+
+                <div className="d-flex flex-wrap gap-2">
+                    <Button size="sm" variant="outline-light" onClick={async () => download(await framePng(frame), `${safeName(stem(fileName))}-${String(frame).padStart(4, '0')}.png`)}>
+                        <i className="bi bi-image me-1" /> This frame PNG
+                    </Button>
+                    <Button size="sm" variant="outline-light" disabled={busy !== null || playing} onClick={() => void saveAll()}>
+                        {busy !== null ? <Spinner animation="border" size="sm" className="me-1" /> : <i className="bi bi-file-zip me-1" />} {busy ?? 'Every frame'}
+                    </Button>
+                    {audio && (
+                        <Button size="sm" variant="outline-light" onClick={() => download(audio.wav, `${safeName(stem(fileName))}.wav`, 'audio/wav')}>
+                            <i className="bi bi-file-earmark-music me-1" /> Sound as WAV
+                        </Button>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

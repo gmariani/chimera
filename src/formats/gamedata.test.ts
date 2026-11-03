@@ -64,6 +64,8 @@ async function walk(name: string, data: Uint8Array, report: Report, depth = 0): 
         try {
             const result = (await format.load()).parse(entry.data, { name: entry.name, names: [] });
             report.problems.push(...result.warnings.map((w) => `${path} (${format.id}): ${w}`));
+            // Movies decode on demand, so play each one through.
+            if (result.preview?.kind === 'video') for (let i = 0; i < result.preview.frameCount; i++) result.preview.frame(i);
         } catch (e) {
             report.problems.push(`${path} (${format.id}) threw: ${e instanceof Error ? e.message : e}`);
         }

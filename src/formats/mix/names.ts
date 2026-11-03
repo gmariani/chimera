@@ -1,4 +1,5 @@
 import { Bytes } from '../../core/bytes';
+import { templateFileNames } from '../westwood/templates';
 
 /**
  * File names to try against a MIX file's IDs. A name that isn't in the archive
@@ -112,11 +113,30 @@ const TD_SPEECH = [
     'pwrmd', 'radaon1', 'radaof1', 'silos1', 'stucdes1', 'unitreinf', 'upgrade1',
 ];
 
+/**
+ * Missions are sc, the side (g GDI, b Nod, u USSR, m multiplayer, j the funpark), the number,
+ * the direction on the campaign map (e, w, x) and the variant; each is an INI, and in TD a .bin map too.
+ */
+const MISSION_SIDES = ['g', 'b', 'u', 'm', 'j'];
+const MISSION_DIRECTIONS = ['e', 'w', 'x'];
+const MISSION_VARIANTS = ['a', 'b', 'c', 'd'];
+
 let cached: string[] | null = null;
 
 export function builtInNames(): string[] {
     if (cached) return cached;
-    const names = new Set<string>([...ARCHIVES, ...SINGLES]);
+    const names = new Set<string>([...ARCHIVES, ...SINGLES, ...templateFileNames()]);
+    for (const side of MISSION_SIDES) {
+        for (let n = 1; n <= 99; n++) {
+            for (const direction of MISSION_DIRECTIONS) {
+                for (const variant of MISSION_VARIANTS) {
+                    const base = `sc${side}${String(n).padStart(2, '0')}${direction}${variant}`;
+                    names.add(`${base}.ini`);
+                    names.add(`${base}.bin`);
+                }
+            }
+        }
+    }
     for (const base of SPRITES) {
         for (const ext of SPRITE_EXTENSIONS) names.add(`${base}.${ext}`);
         for (const suffix of ICON_SUFFIXES) names.add(`${base}${suffix}.shp`);

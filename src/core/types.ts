@@ -3,7 +3,8 @@
  * plain data: a tree of labelled byte ranges (what each part of the file is),
  * the files stored inside it (if it's an archive), and a preview of what it
  * holds. Formats never render anything, so the same parser can sit behind any
- * UI, or be loaded at runtime from elsewhere.
+ * UI, or be loaded at runtime from elsewhere. (Video is the one exception to
+ * plain data: its preview decodes frames when asked.)
  */
 
 /** A labelled range of bytes, like one row of a 010 Editor template. */
@@ -39,6 +40,21 @@ export interface IndexedImage {
     pixels: Uint8Array;
 }
 
+/** Decoded sound, as a WAV file. */
+export interface AudioClip {
+    wav: Uint8Array;
+    sampleRate: number;
+    channels: number;
+    bits: number;
+    seconds: number;
+}
+
+/** One frame of video: palette indexes, and the 768-byte 8-bit RGB palette in force for it. */
+export interface VideoFrame {
+    pixels: Uint8Array;
+    palette: Uint8Array;
+}
+
 export type Preview =
     | {
           kind: 'images';
@@ -48,10 +64,24 @@ export type Preview =
           transparentIndex?: number;
           /** An index the game draws as darkening rather than as its palette colour. */
           shadowIndex?: number;
+          /** Lay the frames out this many to a row with no gaps, when together they make one picture (a tile set's template). */
+          columns?: number;
       }
     | { kind: 'palette'; /** 256 colours as 8-bit RGB. */ colors: Uint8Array }
-    | { kind: 'audio'; wav: Uint8Array; sampleRate: number; channels: number; bits: number; seconds: number }
-    | { kind: 'text'; text: string };
+    | ({ kind: 'audio' } & AudioClip)
+    | {
+          kind: 'video';
+          width: number;
+          height: number;
+          frameCount: number;
+          fps: number;
+          /** Decodes a frame on demand (movies are too big to decode up front). Fastest in order. */
+          frame(index: number): VideoFrame;
+          audio?: AudioClip;
+      }
+    | { kind: 'text'; text: string }
+    /** Several previews of the same file, e.g. a mission's map and its text. */
+    | { kind: 'stack'; items: { title: string; preview: Preview }[] };
 
 /** Bytes to show in place of the file's own, e.g. a header after decryption. */
 export interface Overlay {
@@ -91,5 +121,7 @@ export interface FormatDescriptor {
     extensions: string[];
     /** A cheap check of the first bytes. Must not throw. */
     sniff(data: Uint8Array): boolean;
+    /** False when the extension is shared by other files too (.dat, .bin), so it only counts alongside a sniff. */
+    byNameAlone?: boolean;
     load(): Promise<FormatParser>;
 }

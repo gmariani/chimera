@@ -1,0 +1,81 @@
+import { Bytes, bytesLabel, field } from '../core/bytes';
+import type { FormatParser } from '../core/types';
+
+/**
+ * ZSoft PCX pictures. A 128-byte header, run-length encoded rows (a byte with
+ * the top two bits set is a count for the byte after it), and for 256-colour
+ * pictures, a 0x0C byte and 768 bytes of palette at the end. Westwood used
+ * these for RA's high-resolution title and menu screens.
+ */
+const parser: FormatParser = {
+    parse(data) {
+        const b = new Bytes(data);
+        const bits = b.u8(3);
+        const [x0, y0, x1, y1] = [b.u16(4), b.u16(6), b.u16(8), b.u16(10)];
+        const width = x1 - x0 + 1;
+        const height = y1 - y0 + 1;
+        const planes = b.u8(65);
+        const stride = b.u16(66);
+        const warnings: string[] = [];
+        if (bits !== 8 || planes !== 1) throw new Error(`Only 256-colour PCX pictures are supported (this one is ${bits}-bit, ${planes} plane${planes === 1 ? '' : 's'}).`);
+
+        const pixels = new Uint8Array(width * height);
+        const row = new Uint8Array(stride);
+        let s = 128;
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < stride && s < data.length; ) {
+                const v = data[s++];
+                if ((v & 0xc0) === 0xc0) {
+                    const value = data[s++];
+                    for (let n = v & 0x3f; n > 0 && x < stride; n--) row[x++] = value;
+                } else {
+                    row[x++] = v;
+                }
+            }
+            pixels.set(row.subarray(0, width), y * width);
+        }
+        const paletteAt = data.length - 769;
+        const hasPalette = paletteAt >= s && data[paletteAt] === 0x0c;
+        if (!hasPalette) warnings.push('There\'s no palette at the end of the file.');
+
+        return {
+            title: 'Picture (PCX)',
+            summary: [
+                ['Size', `${width} × ${height}`],
+                ['Colours', '256'],
+                ['Palette', hasPalette ? 'Included' : 'Missing'],
+            ],
+            fields: [
+                {
+                    name: 'Header',
+                    offset: 0,
+                    length: 128,
+                    children: [
+                        field('Manufacturer', 0, 1, b.u8(0), 'Always 10 (ZSoft).'),
+                        field('Version', 1, 1, b.u8(1), '5 is 3.0, with a 256-colour palette.'),
+                        field('Encoding', 2, 1, b.u8(2), '1 = run-length.'),
+                        field('Bits per pixel', 3, 1, bits),
+                        field('Left', 4, 2, x0),
+                        field('Top', 6, 2, y0),
+                        field('Right', 8, 2, x1),
+                        field('Bottom', 10, 2, y1),
+                        field('Horizontal DPI', 12, 2, b.u16(12)),
+                        field('Vertical DPI', 14, 2, b.u16(14)),
+                        field('16-colour palette', 16, 48, undefined, 'Unused in 256-colour pictures.'),
+                        field('Reserved', 64, 1),
+                        field('Planes', 65, 1, planes),
+                        field('Bytes per row', 66, 2, stride, 'Always even, so it can be wider than the picture.'),
+                        field('Palette type', 68, 2, b.u16(68)),
+                        field('Padding', 70, 58),
+                    ],
+                },
+                field('Picture data', 128, s - 128, bytesLabel(s - 128), 'Run-length encoded, row by row.'),
+                ...(hasPalette ? [{ name: 'Palette', offset: paletteAt, length: 769, children: [field('Marker', paletteAt, 1, '0x0C'), field('Colours', paletteAt + 1, 768, '256 colours, 8-bit')] }] : []),
+            ],
+            preview: { kind: 'images', frames: [{ width, height, pixels }], palette: hasPalette ? data.slice(paletteAt + 1) : undefined },
+            warnings,
+        };
+    },
+};
+
+export default parser;

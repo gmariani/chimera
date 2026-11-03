@@ -9,10 +9,19 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Westwood MIX (TD, RA, TS, RA2), plain or Blowfish-encrypted | full structure, names from hashes | — | single files, all as ZIP, nested MIX |
 | SHP sprites (TD/RA, TS/RA2, and the Dune II-style cursors) | headers, frame table | all frames, animation, any palette | PNG frame, sheet, all frames |
 | AUD audio (IMA and Westwood ADPCM) | headers, chunks | player | WAV |
-| CPS pictures | headers | image | PNG |
+| CPS and PCX pictures | headers | image | PNG |
+| WSA animations | headers, frame offsets | all frames, animation | PNG frame, sheet, all frames |
+| Terrain tile sets (.tem, .des, .win, .sno, .int, .icn) | header, tiles, cell map | the template assembled, each tile | PNG |
+| VQA video (TD/RA, version 2) | chunk map, VQHD | player with sound | PNG frame, all frames, WAV |
+| Map terrain (TD .bin, RA [MapPack] in mission INIs) | every cell | terrain kinds, ore and walls (RA) | PNG |
+| Fonts (.fnt) | header, each character | every character | PNG |
 | PAL palettes | each colour | swatches, use for sprites | — |
-| VQA video | chunk map, VQHD | — | — |
-| Text (INI etc.) | — | text | — |
+| VQP palette blending tables | tables | first table | — |
+| INI files | sections and entries | text | — |
+| XCC local mix database | names | list | — |
+| Other text | — | text | — |
+
+Template names, TD template sizes and RA overlay types come from the GPL source of the Remastered Collection (`DEFINES.H`, `CDATA.CPP`).
 
 Anything else opens in the hex view.
 

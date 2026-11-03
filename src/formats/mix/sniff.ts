@@ -21,6 +21,11 @@ export function sniffMix(data: Uint8Array): boolean {
     return sizesAddUp(bytes, 4, flags & FLAG_CHECKSUM ? CHECKSUM_SIZE : 0);
 }
 
+/** XCC's file name lists start with its author's signature. */
+export function sniffXccDatabase(data: Uint8Array): boolean {
+    return new Bytes(data).ascii(0, 24) === 'XCC by Olaf van der Spek';
+}
+
 function sizesAddUp(bytes: Bytes, start: number, trailer: number): boolean {
     const count = bytes.u16(start);
     const bodySize = bytes.u32(start + 2);
