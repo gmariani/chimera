@@ -1,0 +1,12 @@
+/node_modules
+/build
+/legacy
+/legacy/node_modules
+npm-debug.log
+/.idea
+
+# Game files used for manual testing
+/samples
+/MIX Samples
+*.mix
+*.MIX
