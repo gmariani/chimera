@@ -245,6 +245,33 @@ class Canvas {
         this.width = Math.ceil(fullWidth / step);
         this.height = Math.ceil(fullHeight / step);
         this.rgba = new Uint8Array(this.width * this.height * 4);
+        this.groundDepth = new Int16Array(this.width * this.height).fill(-1);
+        this.groundLevel = new Int8Array(this.width * this.height);
+        this.groundOwner = new Int32Array(this.width * this.height).fill(-1);
+    }
+    /**
+     * Which cell's ground each pixel shows: its depth (rx + ry) and height. While `ground` is set, drawing
+     * records it; while `object` is set, drawing skips pixels where ground in front of the object and two
+     * or more levels above it was drawn (a plateau's top hides what's behind it; a slope doesn't).
+     * Ground drawn with an `owner` (a tile's raised part) can be drawn again later where it still shows,
+     * with `only` set to that owner.
+     */
+    private readonly groundDepth: Int16Array;
+    private readonly groundLevel: Int8Array;
+    private readonly groundOwner: Int32Array;
+    ground: { depth: number; level: number; owner?: number } | null = null;
+    object: { depth: number; level: number } | null = null;
+    only: number | null = null;
+    /** Whether pixel i is hidden from the current object, recording the ground there if drawing ground. */
+    private covered(i: number): boolean {
+        if (this.ground) {
+            this.groundDepth[i] = this.ground.depth;
+            this.groundLevel[i] = this.ground.level;
+            this.groundOwner[i] = this.ground.owner ?? -1;
+            return false;
+        }
+        if (this.only !== null) return this.groundOwner[i] !== this.only;
+        return !!this.object && this.groundDepth[i] > this.object.depth && this.groundLevel[i] >= this.object.level + 2;
     }
     /** Draws indexed pixels (0 transparent) through a palette at x, y in map pixels. */
     draw(pixels: ArrayLike<number>, w: number, h: number, x: number, y: number, palette: Uint8Array) {
@@ -259,7 +286,7 @@ class Canvas {
                 const mx = x + sx - this.left;
                 if (!p || mx % s || mx < 0) continue;
                 const tx = mx / s;
-                if (tx >= this.width) continue;
+                if (tx >= this.width || this.covered(ty * this.width + tx)) continue;
                 const at = (ty * this.width + tx) * 4;
                 this.rgba[at] = palette[p * 3];
                 this.rgba[at + 1] = palette[p * 3 + 1];
@@ -276,7 +303,7 @@ class Canvas {
             if (my % s || my < 0 || my / s >= this.height) continue;
             for (let sx = 0; sx < w; sx++) {
                 const mx = x + sx - this.left;
-                if (!pixels[sy * w + sx] || mx % s || mx < 0 || mx / s >= this.width) continue;
+                if (!pixels[sy * w + sx] || mx % s || mx < 0 || mx / s >= this.width || this.covered((my / s) * this.width + mx / s)) continue;
                 const at = ((my / s) * this.width + mx / s) * 4;
                 for (let c = 0; c < 3; c++) this.rgba[at + c] >>= 1;
             }
@@ -291,7 +318,7 @@ class Canvas {
             for (let sx = 0; sx < w; sx++) {
                 const mx = x + sx - this.left;
                 const from = (sy * w + sx) * 4;
-                if (!rgba[from + 3] || mx % s || mx < 0 || mx / s >= this.width) continue;
+                if (!rgba[from + 3] || mx % s || mx < 0 || mx / s >= this.width || this.covered((my / s) * this.width + mx / s)) continue;
                 this.rgba.set(rgba.subarray(from, from + 4), ((my / s) * this.width + mx / s) * 4);
             }
         }
@@ -304,6 +331,15 @@ const THEATER_LETTERS = ['g', 't', 'a', 'u', 'n', 'd', 'l'];
 const THEATER_EXTENSIONS = ['tem', 'sno', 'urb', 'lun', 'des', 'ubn'];
 /** BRIDGE1, BRIDGE2, RAILBRDG1 and RAILBRDG2 in both games' [OverlayTypes], and RA2's BRIDGEB1 and BRIDGEB2. */
 const HIGH_BRIDGES = [0x18, 0x19, 0x3b, 0x3c, 0xed, 0xee];
+/** TRACKS01–16, LOBRDG01–28, and RA2's LOBRDB01–28 and LOBRDGB1–4: drawn on their cell's center. */
+const CENTERED_OVERLAYS: [number, number][] = [
+    [0x27, 0x36],
+    [0x4a, 0x65],
+    [0xcd, 0xec],
+];
+const VEINHOLE = 0xa7;
+/** How many levels a high bridge's deck stands above the ground under it. */
+const BRIDGE_LEVELS = 4;
 
 export interface IsoRender {
     image: { width: number; height: number; rgba: Uint8Array };
@@ -377,17 +413,28 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const levels = new Map<number, number>();
     for (const c of cells) levels.set(c.ry * 1024 + c.rx, c.level);
 
-    // Ground.
+    // Ground. The parts of tiles that stand above their diamond (cliff faces, rocks) are drawn with it,
+    // so the ground in front trims them, then what's left of them again in depth order with the objects,
+    // so a cliff hides what's behind it.
+    const raised: { rx: number; ry: number; owner: number; draw: () => void }[] = [];
     const flat = new Uint8Array(768);
     const diamond = unpackDiamond(new Uint8Array((tw * th) / 2).fill(1), tw, th);
     for (const c of cells) {
         const [x, y] = place(c);
         if (real) {
             const t = tile((c.tile & 0xffff) === 0xffff ? 0 : c.tile);
+            canvas.ground = { depth: c.rx + c.ry, level: c.level };
             const cell = t?.cells[c.sub] ?? t?.cells.find(Boolean) ?? first!.cells.find(Boolean);
             if (!cell) continue;
             canvas.draw(cell.diamond, t?.width ?? tw, t?.height ?? th, x, y, isoPalette);
-            if (cell.extra) canvas.draw(cell.extra.pixels, cell.extra.width, cell.extra.height, x + cell.extra.dx, y + cell.extra.dy, isoPalette);
+            const extra = cell.extra;
+            if (extra) {
+                const owner = raised.length;
+                const draw = () => canvas.draw(extra.pixels, extra.width, extra.height, x + extra.dx, y + extra.dy, isoPalette);
+                canvas.ground = { depth: c.rx + c.ry, level: c.level, owner };
+                draw();
+                raised.push({ rx: c.rx, ry: c.ry, owner, draw });
+            }
         } else {
             const k = Math.min(c.level, 14) / 14;
             flat.set(HEIGHT_LOW.map((lo, i) => Math.round(lo + (HEIGHT_HIGH[i] - lo) * k)), 3);
@@ -404,6 +451,8 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const art = artFile ? Ini.of(artFile.data) : null;
     const image = (name: string) => (rulesIni?.get(name, 'Image') ?? art?.get(name, 'Image') ?? name).trim().toUpperCase();
     const sprites = new Map<string, { width: number; height: number; frames: ShpTsFrame[] } | null>();
+    /** The file each sprite came from, which says its palette: theater art (.tem…) is drawn in the terrain palette, a .shp in the unit palette. */
+    const spriteFiles = new Map<string, string>();
     /**
      * An object's sprite, found the way the TS/RA2 mission editor finds it (EA's GPL source): each
      * candidate in turn, the first that exists wins.
@@ -441,6 +490,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 found = find?.(f).find((c) => sniffShpTs(c.data));
                 if (found) {
                     links.use(f, found, role);
+                    spriteFiles.set(name, f);
                     break;
                 }
             }
@@ -477,7 +527,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
         const [cx, cy] = point(rx + 0.5, ry + 0.5);
         drawFrame(shp, frame, cx, cy + dy, palette, shadow);
     };
-    // rules.ini marks walls (Wall=yes), which are drawn in the unit palette; their names don't say so (TS's sandbags are GASAND).
+    // rules.ini marks walls (Wall=yes); their names don't say so (TS's sandbags are GASAND).
     const isWall = (name: string) => /^(yes|true|1)$/i.test(rulesIni?.get(name, 'Wall') ?? '') || overlayMark(name) === 'wall';
     /**
      * TS draws Tiberium in the unit palette, whose gray base the crystals sit on, with entries 16–31 in
@@ -494,11 +544,20 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
         }
         return tiberiumPalettes.get(image)!;
     };
+    /**
+     * Palettes as the TS/RA2 mission editor picks them (EA's GPL source, and FinalSun's FSData.ini):
+     * by the file the sprite came from, unless named otherwise. Tiberium, veins and the veinhole are
+     * drawn in TS's unit palette, RA2's theater palette; crates in the terrain palette; Tiberium
+     * trees, the veinhole and BIGBLU in the unit palette.
+     */
+    const fromFile = (name: string) => (sprite(name), /\.shp$/.test(spriteFiles.get(name) ?? '') ? unitPalette : isoPalette);
     const overlayPalette = (name: string) => {
-        const kind = overlayMark(name);
-        if (/^(yes|true|1)$/i.test(rulesIni?.get(name, 'Tiberium') ?? '')) return tiberiumPalette(name);
-        return kind === 'ore' || kind === 'gems' ? objPalette : isWall(name) ? unitPalette : isoPalette;
+        if (yes(rulesIni?.get(name, 'Tiberium'))) return tiberiumPalette(name);
+        if (yes(rulesIni?.get(name, 'IsVeins')) || yes(rulesIni?.get(name, 'IsVeinholeMonster')) || /^VEINHOLE/i.test(name)) return tw === 48 ? unitPalette : objPalette;
+        if (/^CRAT/i.test(name)) return isoPalette;
+        return fromFile(name);
     };
+    const terrainPalette = (name: string) => (/^(TIBTRE|VEINHOLE|BIGBLU)/i.test(image(name)) ? unitPalette : yes(art?.get(image(name), 'TerrainPalette')) ? isoPalette : fromFile(name));
 
     // Each side's color: the map's own ([GDI] Color=Gold), else rules.ini's, from the game's [Colors] (hue, saturation, value).
     const teams = new Map<string, Uint8Array>();
@@ -547,26 +606,36 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const voxelPictures = new Map<string, ReturnType<typeof drawVoxels>>();
 
     /**
-     * High bridges (BRIDGE1/2 and RAILBRDG1/2, by their place in [OverlayTypes]) are drawn higher than
-     * other overlays so their deck meets the ramp tiles: half a cell, or a whole one for the frames
-     * running the other way (9–17). The offsets are the TS/RA2 mission editor's (EA's GPL source).
+     * How far above its cell's center an overlay is drawn, by its place in [OverlayTypes], as the TS/RA2
+     * mission editor draws them (EA's GPL source). Most sit on the cell's top corner, half a cell up, like
+     * buildings; tracks and low bridges on its center. High bridges' frames running the other way
+     * (9–17) go half a cell further, so their deck meets the ramp tiles, and the veinhole, two cells
+     * across, a cell and a half further.
      */
-    const overlayLift = (id: number, frame: number) => (HIGH_BRIDGES.includes(id) ? (frame >= 9 && frame <= 17 ? -th : -th / 2) : 0);
-    const objects: { rx: number; ry: number; draw: () => void }[] = [];
+    const overlayLift = (id: number, frame: number) => {
+        if (CENTERED_OVERLAYS.some(([from, to]) => id >= from && id <= to)) return 0;
+        if (HIGH_BRIDGES.includes(id) && frame >= 9 && frame <= 17) return -th;
+        if (id === VEINHOLE) return -th * 2;
+        return -th / 2;
+    };
+    // Raised ground first, so at the same depth an object stands in front of it (the sort keeps order).
+    // `up`: levels above its cell, which bring it forward (a high bridge's deck is over what's under it).
+    // `owner`: raised ground, drawn again only where it showed.
+    const objects: { rx: number; ry: number; up?: number; owner?: number; draw: () => void }[] = [...raised];
     if (map.overlays) {
         for (let i = 0; i < map.overlays.length; i++) {
             const id = map.overlays[i];
             if (id === 0xff) continue;
             const [rx, ry] = [i % 512, Math.floor(i / 512)];
             const name = overlayNames[id];
-            if (real && name) objects.push({ rx, ry, draw: () => drawSprite(rx, ry, name, map.overlayData?.[i] ?? 0, overlayPalette(name), false, overlayLift(id, map.overlayData?.[i] ?? 0)) });
+            if (real && name) objects.push({ rx, ry, up: HIGH_BRIDGES.includes(id) ? BRIDGE_LEVELS : 0, draw: () => drawSprite(rx, ry, name, map.overlayData?.[i] ?? 0, overlayPalette(name), false, overlayLift(id, map.overlayData?.[i] ?? 0)) });
             else {
                 const kind = name ? (isWall(name) ? 'wall' : overlayMark(name)) : null;
                 if (kind) objects.push({ rx, ry, draw: () => mark(rx, ry, MARK[kind]) });
             }
         }
     }
-    for (const [rx, ry, name] of map.terrain) objects.push({ rx, ry, draw: () => (real ? drawSprite(rx, ry, name, 0, isoPalette, true) : mark(rx, ry, MARK.tree)) });
+    for (const [rx, ry, name] of map.terrain) objects.push({ rx, ry, draw: () => (real ? drawSprite(rx, ry, name, 0, terrainPalette(name), true) : mark(rx, ry, MARK.tree)) });
 
     for (const o of map.objects) {
         if (!real) {
@@ -575,12 +644,13 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
         }
         const img = image(o.type);
         if (o.kind === 'building') {
-            // Drawn centered on its footprint: its foundation slab (bib), the building (damaged at half
-            // strength or less), its animated parts, then a defense's turret.
+            // Its foundation slab (bib), the building (damaged at half strength or less), its animated
+            // parts, then a defense's turret, each sprite centered on the top corner of the building's
+            // first cell, as the TS/RA2 mission editor (EA's GPL source) draws them.
             const [fw, fh] = (art?.get(img, 'Foundation') ?? art?.get(o.type, 'Foundation') ?? '1x1').split(/x/i).map((n) => Number(n) || 1);
             const damaged = o.health <= 128;
             objects.push({ rx: o.rx + fw - 1, ry: o.ry + fh - 1, draw: () => {
-                const [cx, cy] = point(o.rx + fw / 2, o.ry + fh / 2);
+                const [cx, cy] = point(o.rx, o.ry);
                 const palette = artPalette(img, o.house);
                 const bib = art?.get(img, 'BibShape');
                 const bibShp = bib ? spriteFor(bib.toUpperCase(), 'Building foundation sprite') : null;
@@ -660,8 +730,15 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(cx - picture.originX), Math.round(cy - picture.originY));
         } });
     }
-    objects.sort((a, b) => a.rx + a.ry - (b.rx + b.ry));
-    for (const o of objects) o.draw();
+    objects.sort((a, b) => a.rx + a.ry + (a.up ?? 0) - (b.rx + b.ry + (b.up ?? 0)));
+    canvas.ground = null;
+    for (const o of objects) {
+        canvas.only = o.owner ?? null;
+        canvas.object = o.owner !== undefined ? null : { depth: o.rx + o.ry, level: (levels.get(o.ry * 1024 + o.rx) ?? 0) + (o.up ?? 0) };
+        o.draw();
+    }
+    canvas.object = null;
+    canvas.only = null;
 
     return { image: { width: canvas.width, height: canvas.height, rgba: canvas.rgba }, real, wanted };
 }
