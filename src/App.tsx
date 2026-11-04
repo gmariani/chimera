@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Inspector } from './components/Inspector';
 import { OpenPanel } from './components/OpenPanel';
 import { TopBar } from './components/TopBar';
 import type { OpenFile } from './lib/inspect';
 import { LibraryProvider } from './lib/library';
 import { PaletteProvider } from './lib/palettes';
+import type { ViewMemory } from './lib/view-memory';
 
 // File names the user loaded for MIX archives. Kept between visits; the files themselves never are.
 const NAMES_KEY = 'chimera:names';
@@ -30,6 +31,12 @@ export function App() {
     const [trail, setTrail] = useState<OpenFile[]>([]);
     const [names, setNames] = useState<string[]>(storedNames);
     const current = trail.at(-1);
+    // Each opened file's page settings, so going back to it restores them.
+    const memories = useRef(new WeakMap<OpenFile, ViewMemory>());
+    const memoryOf = (file: OpenFile) => {
+        if (!memories.current.has(file)) memories.current.set(file, new Map());
+        return memories.current.get(file)!;
+    };
 
     useEffect(() => {
         document.title = current ? `${current.name} — .chimera` : '.chimera';
@@ -64,7 +71,7 @@ export function App() {
                                 </ol>
                             </nav>
                         )}
-                        <Inspector key={trail.length + current.name} file={current} root={trail.length === 1} near={trail.length > 1 ? trail.slice(0, -1).map((f) => f.name).join(' › ') : undefined} names={names} onOpen={(file) => setTrail((t) => [...t, file])} onNames={updateNames} />
+                        <Inspector key={trail.length + current.name} file={current} root={trail.length === 1} near={trail.length > 1 ? trail.slice(0, -1).map((f) => f.name).join(' › ') : undefined} names={names} memory={memoryOf(current)} onOpen={(file) => setTrail((t) => [...t, file])} onNames={updateNames} />
                     </main>
                 ) : (
                     <OpenPanel onOpen={(file) => setTrail([file])} />

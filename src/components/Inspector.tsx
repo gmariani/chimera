@@ -4,6 +4,7 @@ import { bytesLabel, formatSize } from '../core/bytes';
 import { download, safeName } from '../lib/download';
 import { useParsed, type OpenFile } from '../lib/inspect';
 import { useLibrary } from '../lib/library';
+import { useRemembered, type ViewMemory } from '../lib/view-memory';
 import { findPalettes, preferred } from '../lib/palette-sources';
 import { usePalettes } from '../lib/palettes';
 import { ContentsTab } from '../tabs/ContentsTab';
@@ -19,6 +20,7 @@ export function Inspector({
     root,
     near,
     names,
+    memory,
     onOpen,
     onNames,
 }: {
@@ -27,6 +29,8 @@ export function Inspector({
     root: boolean;
     /** The archive it came out of, as a path ("MAIN.MIX › general.mix"). */
     near?: string;
+    /** What the user had set on this page, kept while they look inside one of its files. */
+    memory?: ViewMemory;
     names: readonly string[];
     onOpen: (file: OpenFile) => void;
     onNames: (names: string[]) => void;
@@ -37,7 +41,7 @@ export function Inspector({
     // The user's names and those learned from opened archives' INIs; `names` alone is what the user can edit.
     const allNames = library.names;
     const state = useParsed(file, allNames, { find, version: library.version });
-    const [tab, setTab] = useState<TabKey | null>(null);
+    const [tab, setTab] = useRemembered<TabKey | null>(memory, 'tab', null);
     const { add } = usePalettes();
 
     // Files opened from disk, and what's in them, are there for other files to use (a map's tiles).
@@ -61,6 +65,19 @@ export function Inspector({
     }, [state, file, allNames, add, root]);
 
     const parsed = state.status === 'ready' ? state.parsed : null;
+
+    // Coming back from a file inside this one: back to where the user had scrolled, once the page is drawn.
+    const ready = parsed !== null;
+    useEffect(() => {
+        const y = memory?.get('scroll');
+        if (!ready || typeof y !== 'number') return;
+        const frame = requestAnimationFrame(() => window.scrollTo(0, y));
+        return () => cancelAnimationFrame(frame);
+    }, [ready, memory]);
+    const openInside = (inner: OpenFile) => {
+        memory?.set('scroll', window.scrollY);
+        onOpen(inner);
+    };
     const available: TabKey[] = parsed ? [...(parsed.entries ? ['contents' as const] : []), ...(parsed.preview ? ['preview' as const] : []), 'structure'] : [];
     const active = tab && available.includes(tab) ? tab : available[0];
 
@@ -114,7 +131,7 @@ export function Inspector({
                         <Tab.Content>
                             {parsed.entries && (
                                 <Tab.Pane eventKey="contents">
-                                    <ContentsTab archiveName={file.name} entries={parsed.entries} names={names} onOpen={onOpen} onNames={onNames} />
+                                    <ContentsTab archiveName={file.name} entries={parsed.entries} names={names} memory={memory} onOpen={openInside} onNames={onNames} />
                                 </Tab.Pane>
                             )}
                             {parsed.preview && (

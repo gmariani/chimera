@@ -5,6 +5,7 @@ import type { Entry } from '../core/types';
 import { Muted, Tip } from '../components/ui';
 import { download, safeName } from '../lib/download';
 import { openEntry, typeEntries, type OpenFile, type TypedEntry } from '../lib/inspect';
+import { useRemembered, type ViewMemory } from '../lib/view-memory';
 import { zip } from '../lib/zip';
 import { readNameList } from '../formats/mix/names';
 
@@ -17,20 +18,23 @@ export function ContentsTab({
     archiveName,
     entries,
     names,
+    memory,
     onOpen,
     onNames,
 }: {
     archiveName: string;
     entries: Entry[];
     names: readonly string[];
+    /** Where the filter and sort are kept while the user looks inside a file. */
+    memory?: ViewMemory;
     onOpen: (file: OpenFile) => void;
     onNames: (names: string[]) => void;
 }) {
     const typed = useMemo(() => typeEntries(entries), [entries]);
-    const [filter, setFilter] = useState('');
-    const [type, setType] = useState('');
-    const [sort, setSort] = useState<{ key: SortKey; descending: boolean }>({ key: 'index', descending: false });
-    const [shown, setShown] = useState(PAGE);
+    const [filter, setFilter] = useRemembered(memory, 'filter', '');
+    const [type, setType] = useRemembered(memory, 'type', '');
+    const [sort, setSort] = useRemembered<{ key: SortKey; descending: boolean }>(memory, 'sort', { key: 'index', descending: false });
+    const [shown, setShown] = useRemembered(memory, 'shown', PAGE);
     const [busy, setBusy] = useState(false);
     const [message, setMessage] = useState<string | null>(null);
     const nameInput = useRef<HTMLInputElement>(null);
