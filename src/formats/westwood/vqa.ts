@@ -11,6 +11,11 @@ import { expandPalette } from './vga';
  * A full codebook comes first; after that, each frame carries a slice of the
  * next one, which replaces the current codebook once all its slices are in
  * (every "codebook interval" frames). Sound is interleaved, chunk by chunk.
+ *
+ * Tiberian Sun's movies are version 3 in high colour (flag 0x10): the codebook
+ * holds 15-bit RGB pixels, and each frame is a list of 16-bit commands (VPRZ,
+ * VPTR) that skip blocks (keeping the last frame's) or write codebook blocks,
+ * one or many times.
  */
 
 const CHUNKS: Record<string, string> = {
@@ -31,7 +36,8 @@ const CHUNKS: Record<string, string> = {
     CPLZ: 'Palette, LCW-compressed.',
     VPTZ: 'Block pointers, LCW-compressed.',
     VPT0: 'Block pointers.',
-    VPTR: 'Block pointers.',
+    VPTR: 'Block pointers; in high-colour movies, block commands.',
+    VPRZ: 'Block commands, LCW-compressed (high-colour movies).',
     CINF: 'Codebook info.',
     CINH: 'Codebook info header.',
 };
@@ -173,6 +179,111 @@ class Decoder {
     }
 }
 
+/** Version 3 high-colour movies: a 15-bit codebook and run-length block commands, drawn over the last frame. */
+class HighColourDecoder {
+    private codebook = new Uint16Array(0);
+    private screen: Uint16Array;
+    private position = -1;
+    private readonly commands: Uint8Array;
+    private readonly blockSize: number;
+    private readonly across: number;
+    private readonly blocks: number;
+
+    constructor(
+        private readonly data: Uint8Array,
+        private readonly header: Header,
+        private readonly frames: Chunk[][],
+    ) {
+        this.blockSize = header.blockWidth * header.blockHeight;
+        this.across = header.width / header.blockWidth;
+        this.blocks = this.across * (header.height / header.blockHeight);
+        this.screen = new Uint16Array(header.width * header.height);
+        // At most a command and a byte per block.
+        this.commands = new Uint8Array(this.blocks * 3 + 64);
+        this.reset();
+    }
+
+    private reset() {
+        this.codebook = new Uint16Array(0x2000 * this.blockSize);
+        this.screen.fill(0);
+        this.position = -1;
+    }
+
+    private bytes(c: Chunk, out: Uint8Array): Uint8Array {
+        const body = this.data.subarray(c.start, c.end);
+        if (!c.id.endsWith('Z')) return body;
+        return out.subarray(0, lcw(body, out));
+    }
+
+    private block(index: number, at: number) {
+        const { width, blockWidth, blockHeight } = this.header;
+        if (at >= this.blocks) return;
+        const x = (at % this.across) * blockWidth;
+        const y = Math.floor(at / this.across) * blockHeight;
+        let from = (index & 0x1fff) * this.blockSize;
+        for (let row = 0; row < blockHeight; row++, from += blockWidth) this.screen.set(this.codebook.subarray(from, from + blockWidth), (y + row) * width + x);
+    }
+
+    private step(index: number) {
+        for (const c of this.frames[index]) {
+            if (c.id === 'CBF0' || c.id === 'CBFZ') {
+                const raw = this.bytes(c, new Uint8Array(this.codebook.length * 2));
+                this.codebook = new Uint16Array(this.codebook.length);
+                for (let i = 0; i + 1 < raw.length && i / 2 < this.codebook.length; i += 2) this.codebook[i / 2] = raw[i] | (raw[i + 1] << 8);
+            }
+        }
+        const vectors = this.frames[index].find((c) => c.id === 'VPRZ' || c.id === 'VPTR');
+        if (!vectors) return;
+        const src = this.bytes(vectors, this.commands);
+        let at = 0;
+        for (let s = 0; s + 1 < src.length && at < this.blocks; ) {
+            const command = src[s] | (src[s + 1] << 8);
+            s += 2;
+            const run = 2 * (((command >> 8) & 0x1f) + 1);
+            switch (command >> 13) {
+                case 0: // Skip blocks: they keep the last frame's picture.
+                    at += command & 0x1fff;
+                    break;
+                case 1: // One block, many times.
+                    for (let i = 0; i < run; i++) this.block(command & 0xff, at++);
+                    break;
+                case 2: // One block, then as many more as listed, a byte each.
+                    this.block(command & 0xff, at++);
+                    for (let i = 0; i < run; i++) this.block(src[s++], at++);
+                    break;
+                case 3:
+                case 4: // One block, once.
+                    this.block(command & 0x1fff, at++);
+                    break;
+                case 5:
+                case 6: {
+                    // One block, as many times as the next byte says.
+                    const count = src[s++];
+                    for (let i = 0; i < count; i++) this.block(command & 0x1fff, at++);
+                    break;
+                }
+                default:
+                    s = src.length;
+            }
+        }
+    }
+
+    frame(index: number): VideoFrame {
+        if (index <= this.position) this.reset();
+        while (this.position < index) this.step(++this.position);
+        const rgba = new Uint8Array(this.screen.length * 4);
+        for (let i = 0; i < this.screen.length; i++) {
+            const v = this.screen[i];
+            const [r, g, b] = [(v >> 10) & 31, (v >> 5) & 31, v & 31];
+            rgba[i * 4] = (r << 3) | (r >> 2);
+            rgba[i * 4 + 1] = (g << 3) | (g >> 2);
+            rgba[i * 4 + 2] = (b << 3) | (b >> 2);
+            rgba[i * 4 + 3] = 255;
+        }
+        return { rgba };
+    }
+}
+
 /** Joins the sound chunks into one clip. */
 function decodeSound(data: Uint8Array, chunks: Chunk[], rate: number, channels: number, bits: number): AudioClip | undefined {
     const sound = chunks.filter((c) => c.id === 'SND0' || c.id === 'SND1' || c.id === 'SND2');
@@ -276,7 +387,7 @@ const parser: FormatParser = {
         if (vqhd) {
             listed.find((c) => c.name === 'VQHD')!.children = [
                 field('Version', h, 2, b.u16(h), '2 for TD and RA; 3 for Tiberian Sun\'s high-colour movies.'),
-                field('Flags', h + 2, 2, flags, 'Bit 0: has sound.'),
+                field('Flags', h + 2, 2, `0x${flags.toString(16)}`, 'Bit 0: has sound. Bit 4: high colour (15-bit codebook, no palette).'),
                 field('Frames', h + 4, 2, b.u16(h + 4)),
                 field('Width', h + 6, 2, b.u16(h + 6)),
                 field('Height', h + 8, 2, b.u16(h + 8)),
@@ -295,8 +406,10 @@ const parser: FormatParser = {
         }
 
         const warnings: string[] = [];
-        const drawable = header.version === 2 && header.width > 0 && header.width % header.blockWidth === 0 && header.height % header.blockHeight === 0 && [2, 4].includes(header.blockHeight);
-        if (header.version !== 2) warnings.push(`Version ${header.version} movies aren't decoded yet; the chunks are still listed.`);
+        const highColour = header.version === 3 && (flags & 0x10) !== 0;
+        const fits = header.width > 0 && header.blockWidth > 0 && header.blockHeight > 0 && header.width % header.blockWidth === 0 && header.height % header.blockHeight === 0;
+        const drawable = fits && ((header.version === 2 && [2, 4].includes(header.blockHeight)) || highColour);
+        if (!drawable) warnings.push(`Version ${header.version} movies${header.version === 3 ? ' in 256 colours' : ''} aren't decoded yet; the chunks are still listed.`);
         if (listed.length >= MAX_LISTED) warnings.push(`Only the first ${MAX_LISTED} chunks are listed (${frameChunks.length} frames).`);
 
         let sound: AudioClip | undefined;
@@ -305,14 +418,14 @@ const parser: FormatParser = {
         } catch (e) {
             warnings.push(`The sound couldn't be decoded: ${e instanceof Error ? e.message : e}`);
         }
-        const decoder = drawable ? new Decoder(data, header, frameChunks) : null;
+        const decoder = !drawable ? null : highColour ? new HighColourDecoder(data, header, frameChunks) : new Decoder(data, header, frameChunks);
 
         return {
             title: 'Video (VQA)',
             summary: [
                 ['Size', `${header.width} × ${header.height}`],
                 ['Frames', `${frameChunks.length}${fps ? `, ${(frameChunks.length / fps).toFixed(1)} s at ${fps} fps` : ''}`],
-                ['Blocks', `${header.blockWidth} × ${header.blockHeight}, a new codebook every ${header.interval} frames`],
+                ['Blocks', `${header.blockWidth} × ${header.blockHeight}${highColour ? ', high colour (15-bit)' : `, a new codebook every ${header.interval} frames`}`],
                 ['Sound', sound ? `${sound.sampleRate} Hz, ${sound.channels === 2 ? 'stereo' : 'mono'}, ${top.find((c) => c.id.startsWith('SND'))?.id}` : 'None'],
             ],
             fields: [

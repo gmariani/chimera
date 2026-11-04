@@ -26,6 +26,8 @@ export function PreviewTab({ preview, fileName, names }: { preview: Preview; fil
             );
         case 'palette':
             return <PalettePreview colors={preview.colors} fileName={fileName} />;
+        case 'picture':
+            return <PicturePreview width={preview.width} height={preview.height} rgba={preview.rgba} fileName={fileName} />;
         case 'audio':
             return <AudioPreview clip={preview} fileName={fileName} />;
         case 'video':
@@ -282,6 +284,45 @@ function ImagesPreview({
     );
 }
 
+/** A true-colour picture: no palette to pick, just zoom and save. */
+function PicturePreview({ width, height, rgba, fileName }: { width: number; height: number; rgba: Uint8Array; fileName: string }) {
+    const canvas = useRef<HTMLCanvasElement>(null);
+    const [zoom, setZoom] = useState(width <= 160 ? 2 : 1);
+
+    useEffect(() => {
+        const el = canvas.current;
+        if (!el) return;
+        el.width = width;
+        el.height = height;
+        el.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(rgba), width, height), 0, 0);
+    }, [width, height, rgba]);
+
+    return (
+        <div className="row g-4">
+            <div className="col-lg-8">
+                <div className="image-stage">
+                    <canvas ref={canvas} className="image-canvas" style={{ width: `calc(${zoom} * var(--w))`, ['--w' as string]: `${width}px` }} />
+                </div>
+            </div>
+            <div className="col-lg-4">
+                <Form.Group className="mb-3">
+                    <Form.Label className="small text-body-secondary mb-1">Zoom</Form.Label>
+                    <ButtonGroup size="sm" className="d-flex">
+                        {[1, 2, 3, 4].map((z) => (
+                            <Button key={z} variant={zoom === z ? 'primary' : 'outline-light'} onClick={() => setZoom(z)}>
+                                {z}×
+                            </Button>
+                        ))}
+                    </ButtonGroup>
+                </Form.Group>
+                <Button size="sm" variant="outline-light" onClick={async () => canvas.current && download(await png(canvas.current), `${safeName(stem(fileName))}.png`)}>
+                    <i className="bi bi-image me-1" /> Save PNG
+                </Button>
+            </div>
+        </div>
+    );
+}
+
 function PalettePreview({ colors, fileName }: { colors: Uint8Array; fileName: string }) {
     const { add, current } = usePalettes();
     const id = `opened:${fileName}:${colors.slice(0, 12).join(',')}`;
@@ -343,8 +384,8 @@ function VideoPreview({ preview, fileName }: { preview: Extract<Preview, { kind:
     const shown = useRef(-1);
 
     const frameImage = (index: number) => {
-        const { pixels, palette } = preview.frame(index);
-        return toImageData({ width, height, pixels }, { palette });
+        const f = preview.frame(index);
+        return 'rgba' in f ? new ImageData(new Uint8ClampedArray(f.rgba), width, height) : toImageData({ width, height, pixels: f.pixels }, { palette: f.palette });
     };
 
     useEffect(() => {

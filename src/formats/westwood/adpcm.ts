@@ -107,3 +107,30 @@ export function wav(samples: Uint8Array | Int16Array, sampleRate: number, channe
     return out;
 }
 
+
+/** A RIFF WAVE file around IMA ADPCM blocks as Microsoft lays them out (how RA2's audio.bag stores sounds). */
+export function imaWav(blocks: Uint8Array, sampleRate: number, channels: number, blockAlign: number): Uint8Array {
+    const perBlock = ((blockAlign - 4 * channels) * 8) / (4 * channels) + 1;
+    const out = new Uint8Array(60 + blocks.length);
+    const v = new DataView(out.buffer);
+    const text = (at: number, s: string) => [...s].forEach((c, i) => (out[at + i] = c.charCodeAt(0)));
+    text(0, 'RIFF');
+    v.setUint32(4, 52 + blocks.length, true);
+    text(8, 'WAVEfmt ');
+    v.setUint32(16, 20, true);
+    v.setUint16(20, 0x11, true);
+    v.setUint16(22, channels, true);
+    v.setUint32(24, sampleRate, true);
+    v.setUint32(28, Math.round((sampleRate * blockAlign) / perBlock), true);
+    v.setUint16(32, blockAlign, true);
+    v.setUint16(34, 4, true);
+    v.setUint16(36, 2, true);
+    v.setUint16(38, perBlock, true);
+    text(40, 'fact');
+    v.setUint32(44, 4, true);
+    v.setUint32(48, Math.floor(blocks.length / blockAlign) * perBlock, true);
+    text(52, 'data');
+    v.setUint32(56, blocks.length, true);
+    out.set(blocks, 60);
+    return out;
+}

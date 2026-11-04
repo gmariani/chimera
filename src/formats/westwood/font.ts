@@ -7,6 +7,10 @@ import type { Field, FormatParser, IndexedImage } from '../../core/types';
  * vertical offset and height, and the pixels at 4 bits each, two to a byte,
  * left pixel in the low nibble. Colour 0 is transparent; the game maps 1–15
  * onto whatever colours it's printing in.
+ *
+ * Tiberian Sun's own fonts (8point.fnt) use the same blocks, but mark the
+ * header 2, 0 instead of 0, 5, store a byte per pixel, and count each
+ * character's offset from the data block.
  */
 
 /** 15 shades of white for the font's colours, so the preview reads as text. */
@@ -27,22 +31,24 @@ const parser: FormatParser = {
         const count = (widthBlock - offsetBlock) / 2;
         const maxHeight = b.u8(info + 4);
         const maxWidth = b.u8(info + 5);
+        const eightBit = b.u8(2) === 2;
         const warnings: string[] = [];
 
         const frames: IndexedImage[] = [];
         const glyphs: Field[] = [];
         for (let c = 0; c < count; c++) {
-            const at = b.u16(offsetBlock + c * 2);
+            // TS's offsets count from the data block; TD's and RA's from the start of the file.
+            const at = (eightBit ? dataBlock : 0) + b.u16(offsetBlock + c * 2);
             const width = b.u8(widthBlock + c);
             const top = b.u8(heightBlock + c * 2);
             const rows = b.u8(heightBlock + c * 2 + 1);
-            const stride = Math.ceil(width / 2);
+            const stride = eightBit ? width : Math.ceil(width / 2);
             // Every glyph is drawn in a cell of the font's full size, so they line up as text does.
             const pixels = new Uint8Array(Math.max(width, 1) * maxHeight);
             for (let y = 0; y < rows && top + y < maxHeight; y++) {
                 for (let x = 0; x < width; x++) {
-                    const byte = b.u8(at + y * stride + (x >> 1));
-                    pixels[(top + y) * Math.max(width, 1) + x] = x & 1 ? byte >> 4 : byte & 0x0f;
+                    const byte = b.u8(at + y * stride + (eightBit ? x : x >> 1));
+                    pixels[(top + y) * Math.max(width, 1) + x] = eightBit ? byte : x & 1 ? byte >> 4 : byte & 0x0f;
                 }
             }
             frames.push({ width: Math.max(width, 1), height: maxHeight, pixels });
@@ -55,7 +61,7 @@ const parser: FormatParser = {
             summary: [
                 ['Characters', String(count)],
                 ['Largest', `${maxWidth} × ${maxHeight}`],
-                ['Colours', '4-bit: 15 shades plus transparent'],
+                ['Colours', eightBit ? '8-bit (Tiberian Sun)' : '4-bit: 15 shades plus transparent'],
             ],
             fields: [
                 {
@@ -64,8 +70,8 @@ const parser: FormatParser = {
                     length: 14,
                     children: [
                         field('File size', 0, 2, bytesLabel(b.u16(0))),
-                        field('Compression', 2, 1, b.u8(2), 'Always 0.'),
-                        field('Blocks', 3, 1, b.u8(3), 'Always 5.'),
+                        field('Format', 2, 1, b.u8(2), '0: 4 bits per pixel (TD, RA). 2: 8 bits (TS).'),
+                        field('Blocks', 3, 1, b.u8(3), '5 in TD and RA; 0 in TS.'),
                         field('Info block', 4, 2, info),
                         field('Offset block', 6, 2, offsetBlock),
                         field('Width block', 8, 2, widthBlock),
@@ -79,12 +85,14 @@ const parser: FormatParser = {
                     length: 6,
                     children: [field('Unknown', info, 3), field('Last character', info + 3, 1, b.u8(info + 3)), field('Largest height', info + 4, 1, maxHeight), field('Largest width', info + 5, 1, maxWidth)],
                 },
-                field('Offsets', offsetBlock, count * 2, `${count} characters`, 'Where each character\'s pixels start.'),
+                field('Offsets', offsetBlock, count * 2, `${count} characters`, eightBit ? 'Where each character\'s pixels start, from the data block.' : 'Where each character\'s pixels start.'),
                 field('Widths', widthBlock, count, undefined, 'One byte per character, in pixels.'),
                 field('Heights', heightBlock, count * 2, undefined, 'Two bytes per character: blank rows above it, then its height.'),
-                { name: 'Pixels', offset: dataBlock, length: heightBlock - dataBlock, children: glyphs },
+                // TD and RA put the heights after the pixels; TS puts them before.
+                { name: 'Pixels', offset: dataBlock, length: (heightBlock > dataBlock ? heightBlock : data.length) - dataBlock, children: glyphs },
             ],
-            preview: { kind: 'images', frames, palette: fontPalette(), transparentIndex: 0 },
+            // TS's 8-bit glyphs are in the game palette's colours.
+            preview: { kind: 'images', frames, palette: frames.some((f) => f.pixels.some((p) => p > 15)) ? undefined : fontPalette(), transparentIndex: 0 },
             warnings,
         };
     },

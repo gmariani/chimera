@@ -28,6 +28,10 @@ export class Bytes {
         return offset + 4 <= this.data.length ? this.view.getInt32(offset, true) : 0;
     }
 
+    f32(offset: number): number {
+        return offset + 4 <= this.data.length ? this.view.getFloat32(offset, true) : 0;
+    }
+
     ascii(offset: number, length: number): string {
         let text = '';
         for (let i = offset; i < Math.min(offset + length, this.data.length); i++) text += String.fromCharCode(this.data[i]);

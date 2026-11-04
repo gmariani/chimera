@@ -5,7 +5,9 @@ import type { FormatParser } from '../core/types';
  * ZSoft PCX pictures. A 128-byte header, run-length encoded rows (a byte with
  * the top two bits set is a count for the byte after it), and for 256-colour
  * pictures, a 0x0C byte and 768 bytes of palette at the end. Westwood used
- * these for RA's high-resolution title and menu screens.
+ * these for RA's high-resolution title and menu screens. True-colour ones
+ * (TS's menus and map previews) store each row as a red, a green and a blue
+ * plane in turn.
  */
 const parser: FormatParser = {
     parse(data) {
@@ -17,33 +19,40 @@ const parser: FormatParser = {
         const planes = b.u8(65);
         const stride = b.u16(66);
         const warnings: string[] = [];
-        if (bits !== 8 || planes !== 1) throw new Error(`Only 256-colour PCX pictures are supported (this one is ${bits}-bit, ${planes} plane${planes === 1 ? '' : 's'}).`);
+        if (bits !== 8 || (planes !== 1 && planes !== 3)) throw new Error(`Only 256-colour and 24-bit PCX pictures are supported (this one is ${bits}-bit, ${planes} plane${planes === 1 ? '' : 's'}).`);
+        const trueColour = planes === 3;
 
         const pixels = new Uint8Array(width * height);
-        const row = new Uint8Array(stride);
+        const rgba = trueColour ? new Uint8Array(width * height * 4) : null;
+        const row = new Uint8Array(stride * planes);
         let s = 128;
         for (let y = 0; y < height; y++) {
-            for (let x = 0; x < stride && s < data.length; ) {
+            // Runs can carry on from one plane into the next.
+            for (let x = 0; x < row.length && s < data.length; ) {
                 const v = data[s++];
                 if ((v & 0xc0) === 0xc0) {
                     const value = data[s++];
-                    for (let n = v & 0x3f; n > 0 && x < stride; n--) row[x++] = value;
+                    for (let n = v & 0x3f; n > 0 && x < row.length; n--) row[x++] = value;
                 } else {
                     row[x++] = v;
                 }
             }
-            pixels.set(row.subarray(0, width), y * width);
+            if (rgba) {
+                for (let x = 0; x < width; x++) rgba.set([row[x], row[stride + x], row[stride * 2 + x], 255], (y * width + x) * 4);
+            } else {
+                pixels.set(row.subarray(0, width), y * width);
+            }
         }
         const paletteAt = data.length - 769;
-        const hasPalette = paletteAt >= s && data[paletteAt] === 0x0c;
-        if (!hasPalette) warnings.push('There\'s no palette at the end of the file.');
+        const hasPalette = !trueColour && paletteAt >= s && data[paletteAt] === 0x0c;
+        if (!trueColour && !hasPalette) warnings.push('There\'s no palette at the end of the file.');
 
         return {
             title: 'Picture (PCX)',
             summary: [
                 ['Size', `${width} × ${height}`],
-                ['Colours', '256'],
-                ['Palette', hasPalette ? 'Included' : 'Missing'],
+                ['Colours', trueColour ? '24-bit' : '256'],
+                ...(trueColour ? [] : [['Palette', hasPalette ? 'Included' : 'Missing'] as [string, string]]),
             ],
             fields: [
                 {
@@ -69,10 +78,10 @@ const parser: FormatParser = {
                         field('Padding', 70, 58),
                     ],
                 },
-                field('Picture data', 128, s - 128, bytesLabel(s - 128), 'Run-length encoded, row by row.'),
+                field('Picture data', 128, s - 128, bytesLabel(s - 128), trueColour ? 'Run-length encoded, row by row; each row a red, green and blue plane.' : 'Run-length encoded, row by row.'),
                 ...(hasPalette ? [{ name: 'Palette', offset: paletteAt, length: 769, children: [field('Marker', paletteAt, 1, '0x0C'), field('Colours', paletteAt + 1, 768, '256 colours, 8-bit')] }] : []),
             ],
-            preview: { kind: 'images', frames: [{ width, height, pixels }], palette: hasPalette ? data.slice(paletteAt + 1) : undefined },
+            preview: rgba ? { kind: 'picture', width, height, rgba } : { kind: 'images', frames: [{ width, height, pixels }], palette: hasPalette ? data.slice(paletteAt + 1) : undefined },
             warnings,
         };
     },

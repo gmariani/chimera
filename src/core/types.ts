@@ -49,11 +49,8 @@ export interface AudioClip {
     seconds: number;
 }
 
-/** One frame of video: palette indexes, and the 768-byte 8-bit RGB palette in force for it. */
-export interface VideoFrame {
-    pixels: Uint8Array;
-    palette: Uint8Array;
-}
+/** One frame of video: palette indexes and the 768-byte 8-bit RGB palette in force for it, or (high-colour movies) RGBA. */
+export type VideoFrame = { pixels: Uint8Array; palette: Uint8Array } | { rgba: Uint8Array };
 
 export type Preview =
     | {
@@ -70,6 +67,8 @@ export type Preview =
           legend?: { label: string; index: number }[];
       }
     | { kind: 'palette'; /** 256 colours as 8-bit RGB. */ colors: Uint8Array }
+    /** A true-colour picture. */
+    | { kind: 'picture'; width: number; height: number; /** 8-bit RGBA, row by row. */ rgba: Uint8Array }
     | ({ kind: 'audio' } & AudioClip)
     | {
           kind: 'video';

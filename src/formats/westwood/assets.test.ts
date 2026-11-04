@@ -178,7 +178,9 @@ describe('VQA', () => {
         expect(detect(data, null).id).toBe('vqa');
         const preview = vqa.parse(data, context()).preview;
         if (preview?.kind !== 'video') throw new Error('expected video');
-        const { pixels, palette } = preview.frame(0);
+        const decoded = preview.frame(0);
+        if (!('pixels' in decoded)) throw new Error('expected an indexed frame');
+        const { pixels, palette } = decoded;
         expect([...pixels]).toEqual([1, 2, 3, 4, 9, 9, 9, 9, 5, 6, 7, 8, 9, 9, 9, 9]);
         expect(palette[0]).toBe(255);
     });

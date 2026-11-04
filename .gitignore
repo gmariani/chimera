@@ -10,3 +10,4 @@ npm-debug.log
 /MIX Samples
 *.mix
 *.MIX
+/dune2k

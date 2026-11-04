@@ -34,7 +34,9 @@ export function Inspector({
     const library = useLibrary();
     const { find: findAnywhere, add: addToLibrary } = library;
     const find = useCallback((name: string) => findAnywhere(name, near), [findAnywhere, near]);
-    const state = useParsed(file, names, { find, version: library.version });
+    // The user's names and those learned from opened archives' INIs; `names` alone is what the user can edit.
+    const allNames = library.names;
+    const state = useParsed(file, allNames, { find, version: library.version });
     const [tab, setTab] = useState<TabKey | null>(null);
     const { add } = usePalettes();
 
@@ -48,7 +50,7 @@ export function Inspector({
     useEffect(() => {
         if (state.status !== 'ready' || state.format.id !== 'mix') return;
         let cancelled = false;
-        void findPalettes(file.name, file.data, names).then((found) => {
+        void findPalettes(file.name, file.data, allNames).then((found) => {
             if (cancelled || !found.length) return;
             const best = preferred(found)!;
             add([best, ...found.filter((p) => p !== best)], root);
@@ -56,7 +58,7 @@ export function Inspector({
         return () => {
             cancelled = true;
         };
-    }, [state, file, names, add, root]);
+    }, [state, file, allNames, add, root]);
 
     const parsed = state.status === 'ready' ? state.parsed : null;
     const available: TabKey[] = parsed ? [...(parsed.entries ? ['contents' as const] : []), ...(parsed.preview ? ['preview' as const] : []), 'structure'] : [];
@@ -117,7 +119,7 @@ export function Inspector({
                             )}
                             {parsed.preview && (
                                 <Tab.Pane eventKey="preview">
-                                    <PreviewTab preview={parsed.preview} fileName={file.name} names={names} />
+                                    <PreviewTab preview={parsed.preview} fileName={file.name} names={allNames} />
                                 </Tab.Pane>
                             )}
                             <Tab.Pane eventKey="structure">

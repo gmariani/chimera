@@ -203,7 +203,9 @@ export function sniffPcx(data: Uint8Array): boolean {
  */
 export function sniffFont(data: Uint8Array): boolean {
     const b = new Bytes(data);
-    if (b.u16(0) !== data.length || b.u8(2) !== 0 || b.u8(3) !== 5 || b.u16(4) !== 14) return false;
+    // 0, 5 in TD and RA (4 bits a pixel); 2, 0 in TS (8 bits).
+    const kind = (b.u8(2) === 0 && b.u8(3) === 5) || (b.u8(2) === 2 && b.u8(3) === 0);
+    if (b.u16(0) !== data.length || !kind || b.u16(4) !== 14) return false;
     const blocks = [b.u16(6), b.u16(8), b.u16(10), b.u16(12)];
     return blocks.every((o) => o >= 20 && o < data.length);
 }
@@ -267,4 +269,78 @@ export function sniffVortex(data: Uint8Array): boolean {
     if (data.length !== VORTEX_SIZE * VORTEX_SIZE * 3) return false;
     for (let i = 0; i < data.length; i += 3) if (data[i] >= VORTEX_SIZE || data[i + 1] >= VORTEX_SIZE || data[i + 2] >= 16) return false;
     return true;
+}
+
+/**
+ * TS and RA2 isometric tiles (.tem, .sno, .urb… in the theater archives): cells
+ * across and down, then the size of a cell (48 × 24 in TS, 60 × 30 in RA2), then
+ * an offset per cell (0: no tile there).
+ */
+export function tmpLayout(data: Uint8Array, allowEmpty = false): { across: number; down: number; width: number; height: number; offsets: number[] } | null {
+    const b = new Bytes(data);
+    if (data.length < 16) return null;
+    const [across, down, width, height] = [b.u32(0), b.u32(4), b.u32(8), b.u32(12)];
+    if (!((width === 48 && height === 24) || (width === 60 && height === 30)) || across === 0 || down === 0 || across * down > 400) return null;
+    const table = 16 + across * down * 4;
+    if (table > data.length) return null;
+    const offsets = Array.from({ length: across * down }, (_, i) => b.u32(16 + i * 4));
+    const tile = 52 + (width * height) / 2;
+    // An empty one is valid (the editor's marble.mix has a few), but too plain to recognise by content.
+    if ((!allowEmpty && offsets.every((o) => o === 0)) || offsets.some((o) => o !== 0 && (o < table || o + tile > data.length))) return null;
+    return { across, down, width, height, offsets };
+}
+
+export function sniffTmp(data: Uint8Array): boolean {
+    return tmpLayout(data) !== null;
+}
+
+/** TS and RA2 voxel models. */
+export function sniffVxl(data: Uint8Array): boolean {
+    return new Bytes(data).ascii(0, 16) === 'Voxel Animation\0';
+}
+
+/** TS and RA2 voxel animations: a name, frame and section counts, section names, then a 3 × 4 matrix per section per frame. */
+export function hvaLayout(data: Uint8Array): { frames: number; sections: number } | null {
+    const b = new Bytes(data);
+    const [frames, sections] = [b.u32(16), b.u32(20)];
+    // A few have no sections at all: just the 24-byte header.
+    if (frames === 0 || frames > 10000 || sections > 256 || (sections === 0 && !/^[A-Za-z]:\\/.test(b.ascii(0, 3)))) return null;
+    return data.length === 24 + sections * 16 + frames * sections * 48 ? { frames, sections } : null;
+}
+
+export function sniffHva(data: Uint8Array): boolean {
+    return hvaLayout(data) !== null;
+}
+
+/** RIFF WAVE. */
+export function sniffWav(data: Uint8Array): boolean {
+    const b = new Bytes(data);
+    return b.ascii(0, 4) === 'RIFF' && b.ascii(8, 4) === 'WAVE';
+}
+
+/** RA2's string tables (.csf). */
+export function sniffCsf(data: Uint8Array): boolean {
+    return new Bytes(data).ascii(0, 4) === ' FSC';
+}
+
+/** RA2's sound index (audio.idx); the sounds are in the .bag of the same name. */
+export function sniffGaba(data: Uint8Array): boolean {
+    const b = new Bytes(data);
+    return b.ascii(0, 4) === 'GABA' && (b.u32(4) === 1 || b.u32(4) === 2) && data.length >= 12 + b.u32(8) * (b.u32(4) === 2 ? 36 : 32);
+}
+
+/** Bink video (RA2's movies). */
+export function sniffBink(data: Uint8Array): boolean {
+    return new Bytes(data).ascii(0, 3) === 'BIK';
+}
+
+/**
+ * TS and RA2 bitmap fonts at 1 bit a pixel: "fonT" (game.fnt), with a glyph
+ * number for each of 65,536 code points, or "FoNt" (map.fnt), with a glyph for
+ * each character from a first to a last.
+ */
+export function sniffUnicodeFont(data: Uint8Array): boolean {
+    const b = new Bytes(data);
+    if (b.ascii(0, 4) === 'fonT') return data.length === 28 + 65536 * 2 + b.u32(20) * b.u32(24);
+    return b.ascii(0, 4) === 'FoNt' && b.u32(44) >= b.u32(40) && data.length === 48 + (b.u32(44) - b.u32(40) + 1) * b.u32(24);
 }

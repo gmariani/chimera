@@ -117,11 +117,14 @@ function hashNames(names: Iterable<string>): Record<IdScheme, Map<number, string
 }
 
 let builtInHashes: Record<IdScheme, Map<number, string>> | null = null;
+/** The same list of extra names comes with every archive opened (and those inside it), so hash it once. */
+const extraHashCache = new WeakMap<readonly string[], Record<IdScheme, Map<number, string>>>();
 
 /** Picks the ID scheme that names the most files, and those names. */
 function resolveNames(mix: MixLayout, data: Uint8Array, extra: readonly string[]): { scheme: IdScheme; names: Map<number, string>; fromDatabase: number } {
     builtInHashes ??= hashNames(builtInNames());
-    const extraHashes = hashNames(extra);
+    let extraHashes = extraHashCache.get(extra);
+    if (!extraHashes) extraHashCache.set(extra, (extraHashes = hashNames(extra)));
     const ids = new Set(mix.index.map((e) => e.id));
 
     // The archive's own name list, if XCC (or Westwood, in TS and later) left one.
@@ -141,9 +144,10 @@ function resolveNames(mix: MixLayout, data: Uint8Array, extra: readonly string[]
     const pick = (scheme: IdScheme) => {
         const names = new Map<number, string>();
         let fromDatabase = 0;
-        for (const source of [databaseHashes, extraHashes, builtInHashes!]) {
-            for (const [id, name] of source[scheme]) {
-                if (ids.has(id) && !names.has(id)) {
+        for (const source of [databaseHashes, extraHashes!, builtInHashes!]) {
+            for (const id of ids) {
+                const name = source[scheme].get(id);
+                if (name !== undefined && !names.has(id)) {
                     names.set(id, name);
                     if (source === databaseHashes) fromDatabase++;
                 }
@@ -153,8 +157,7 @@ function resolveNames(mix: MixLayout, data: Uint8Array, extra: readonly string[]
         return { scheme, names, fromDatabase };
     };
 
-    // Tiberian Dawn's layout always used the classic IDs.
-    if (mix.layout === 'td') return pick('classic');
+    // Tiberian Dawn's layout (no flags) is also what TS and RA2 write when they don't encrypt, with their own IDs; so pick whichever names more.
     if (databaseScheme) return pick(databaseScheme);
     const classic = pick('classic');
     const crc = pick('crc');
@@ -162,8 +165,8 @@ function resolveNames(mix: MixLayout, data: Uint8Array, extra: readonly string[]
 }
 
 function gameName(mix: MixLayout, scheme: IdScheme): string {
-    if (mix.layout === 'td') return 'Tiberian Dawn';
-    return scheme === 'crc' ? 'Tiberian Sun / Red Alert 2' : 'Red Alert';
+    if (scheme === 'crc') return 'Tiberian Sun / Red Alert 2';
+    return mix.layout === 'td' ? 'Tiberian Dawn' : 'Red Alert';
 }
 
 function flagNames(flags: number): string {
@@ -210,11 +213,9 @@ export function parseMix(data: Uint8Array, context: ParseContext): Parsed {
         if (first.data.length === entry.data.length && first.data.every((b, j) => b === entry.data[j])) copies.push(entry);
         else warnings.push(`ID ${hex(mix.index[i].id)} appears more than once with different contents; the game will only ever find one of them.`);
     });
-    // The games binary-search the index by ID, compared as signed numbers (TS onward: unsigned).
-    const asSigned = scheme === 'classic';
-    const key = (id: number) => (asSigned ? id | 0 : id >>> 0);
-    if (mix.index.some((e, i) => i > 0 && key(mix.index[i - 1].id) > key(e.id))) {
-        warnings.push(`The index isn't sorted by ID (as ${asSigned ? 'signed' : 'unsigned'} numbers), so the game's binary search may not find some files.`);
+    // The games binary-search the index by ID, compared as signed numbers (every TS and RA2 archive is sorted that way too).
+    if (mix.index.some((e, i) => i > 0 && (mix.index[i - 1].id | 0) > (e.id | 0))) {
+        warnings.push('The index isn\'t sorted by ID (as signed numbers), so the game\'s binary search may not find some files.');
     }
 
     // The structure tree.

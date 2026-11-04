@@ -17,6 +17,26 @@ const ARCHIVES = [
     'tibsun.mix', 'ra2.mix', 'ra2md.mix', 'language.mix', 'langmd.mix', 'cameo.mix', 'cameomd.mix', 'audio.mix', 'audiomd.mix',
 ];
 
+/**
+ * TS and RA2 archives the games open by name: theater archives (tiles in iso*.mix,
+ * sprites in the theater's own and in its three-letter one), and the rest, each
+ * also with Yuri's Revenge's "md" suffix.
+ */
+const THEATER_STEMS = [
+    ['temperat', 'tem'], ['snow', 'sno'], ['urban', 'urb'], ['desert', 'des'], ['lunar', 'lun'], ['urbann', 'ubn'], ['generic', 'gen'],
+];
+const TS_RA2_ARCHIVES = [
+    'local', 'cache', 'conquer', 'cameo', 'neutral', 'audio', 'sidec01', 'sidec02', 'sidenc01', 'sidenc02', 'ecache01', 'ecache02', 'conqmd',
+    'sounds01', 'speech01', 'speech02', 'scores01', 'movies01', 'movies02', 'movies03', 'maps01', 'maps02', 'maps03', 'multi', 'theme', 'tibsun',
+    'patch', 'wdt', 'wdtvox', 'gmenu', 'e01sc01', 'e01sc02', 'e01vox01', 'e01vox02', 'e01scd01', 'e01scd02', 'sidecd01', 'sidecd02', 'expand01',
+    'expand02', 'expand03', 'expandmd01', 'ra2', 'ra2md', 'language', 'langmd', 'mapsmd03', 'movmd03', 'multimd', 'thememd', 'firestrm', 'fsmovies',
+];
+function tsRa2ArchiveNames(): string[] {
+    const stems = [...TS_RA2_ARCHIVES];
+    for (const [long, short] of THEATER_STEMS) stems.push(long, short, `iso${short}`, `iso${long.slice(0, 4)}`);
+    return stems.flatMap((stem) => [`${stem}.mix`, `${stem}md.mix`]);
+}
+
 const SINGLES = [
     'rules.ini', 'art.ini', 'sound.ini', 'theme.ini', 'tutorial.ini', 'mission.ini', 'ai.ini', 'battle.ini', 'conquer.eng',
     'rulesmd.ini', 'artmd.ini', 'aimd.ini', 'soundmd.ini', 'thememd.ini', 'ra2.csf', 'ra2md.csf',
@@ -30,6 +50,7 @@ const SINGLES = [
     'aftrmath.ini', 'mplayer.ini', 'scg01ea.ini', 'scu01ea.ini', 'scg01ea.bin', 'scu01ea.bin',
     'conquer.eng', 'conquer.ger', 'conquer.fre', 'editor.eng', 'editor.ger', 'editor.fre', 'debug.eng', 'credits.eng', 'record.bin', 'expand.dat',
     'temp_vtx.pal', 'snow_vtx.pal', 'intr_vtx.pal',
+    'audio.idx', 'audio.bag', 'audiomd.idx', 'audiomd.bag', 'game.fnt', 'gamemd.fnt', 'ra2.csf', 'ra2md.csf', 'keyboard.ini', 'keyboardmd.ini',
 ];
 
 /** TD's colour remap tables: the theater's first letter, then what the table is for (DISPLAY.CPP). */
@@ -138,7 +159,7 @@ let cached: string[] | null = null;
 
 export function builtInNames(): string[] {
     if (cached) return cached;
-    const names = new Set<string>([...ARCHIVES, ...SINGLES, ...templateFileNames()]);
+    const names = new Set<string>([...ARCHIVES, ...tsRa2ArchiveNames(), ...SINGLES, ...templateFileNames()]);
     for (const side of MISSION_SIDES) {
         for (let n = 1; n <= 99; n++) {
             for (const direction of MISSION_DIRECTIONS) {
@@ -223,4 +244,51 @@ export function readNameList(data: Uint8Array): string[] {
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter((line) => line && !line.startsWith(';') && !line.startsWith('#'));
+}
+
+/** Extensions TS and RA2 give their assets, for names found in their INIs. */
+const ASSET_EXTENSIONS = [
+    'shp', 'vxl', 'hva', 'tmp', 'pcx', 'pal', 'wav', 'aud', 'ini', 'mix', 'csf', 'fnt', 'vqa', 'bik', 'map', 'mpr', 'txt', 'cps', 'pkt', 'mmx',
+    'tem', 'sno', 'urb', 'des', 'lun', 'ubn', 'int', 'win', 'jun',
+];
+/** TS and RA2 theater tile set extensions: temperate, snow, urban, desert, lunar, new urban. */
+const TILE_EXTENSIONS = ['tem', 'sno', 'urb', 'des', 'lun', 'ubn'];
+/** In TS and RA2, the second letter of a building's image picks its theater: Generic, Temperate, Arctic (snow), Urban, Desert, Lunar, New urban. */
+const THEATER_IMAGE_LETTERS = 'GTAUDLN';
+
+/**
+ * File names from the text of a game's INIs. TS and RA2 archives keep no names,
+ * but rules.ini, art.ini, sound.ini and the theater INIs name nearly every asset:
+ * each word is tried with each asset extension, buildings in each theater, and
+ * each tile set's numbered files.
+ */
+export function namesFromText(texts: Iterable<string>): string[] {
+    const words = new Set<string>();
+    const out = new Set<string>();
+    for (const text of texts) {
+        // Maps only place what the rules define, and their packed sections are base64 noise.
+        if (/^\[(IsoMapPack5|MapPack|OverlayPack|Preview)\]/im.test(text)) continue;
+        for (const line of text.split(/\r?\n/)) {
+            const content = line.replace(/;.*$/, '');
+            const value = content.match(/^\s*\[([^\]]+)\]/)?.[1] ?? content.slice(content.indexOf('=') + 1);
+            for (const word of value.match(/[A-Za-z0-9_\-]{2,32}/g) ?? []) if (!/^\d+$/.test(word)) words.add(word.toLowerCase());
+        }
+        // Theater INIs: [TileSetNNNN] with FileName=cliff and TilesInSet=12 gives cliff01 … cliff12, some with variants a, b, …
+        for (const set of text.matchAll(/FileName\s*=\s*([A-Za-z0-9_\-]+)[^[]*?TilesInSet\s*=\s*(\d+)/gi)) {
+            for (let i = 1; i <= Math.min(Number(set[2]), 99); i++) {
+                for (const variant of ['', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) {
+                    for (const ext of TILE_EXTENSIONS) out.add(`${set[1].toLowerCase()}${String(i).padStart(2, '0')}${variant}.${ext}`);
+                }
+            }
+        }
+    }
+    for (const word of words) {
+        for (const ext of ASSET_EXTENSIONS) out.add(`${word}.${ext}`);
+        // Voxel units keep their turret and barrel in files of their own.
+        for (const part of ['tur', 'barl', 'wo']) for (const ext of ['vxl', 'hva']) out.add(`${word}${part}.${ext}`);
+        if (word.length >= 3 && THEATER_IMAGE_LETTERS.includes(word[1].toUpperCase())) {
+            for (const letter of THEATER_IMAGE_LETTERS) out.add(`${word[0]}${letter.toLowerCase()}${word.slice(2)}.shp`);
+        }
+    }
+    return [...out];
 }
