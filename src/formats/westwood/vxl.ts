@@ -1,5 +1,6 @@
 import { Bytes, bytesLabel, field } from '../../core/bytes';
-import type { Field, FormatParser, IndexedImage } from '../../core/types';
+import type { Field, FormatParser, IndexedImage, ParseContext, VoxelPart } from '../../core/types';
+import { decodeVxl, LIMB_HEADER, readHva, VXL_HEADER, type Limb } from './voxel-data';
 
 /**
  * TS and RA2 voxel models (.vxl): units drawn from 3D blocks. A header (with a
@@ -7,24 +8,10 @@ import type { Field, FormatParser, IndexedImage } from '../../core/types';
  * header per limb (a part: a body, a turret), the body of voxel data, then a
  * 92-byte tailer per limb with its size, scale, transform and bounds.
  *
- * Each limb's voxels are stored by column: for every x, y, a list of spans,
- * each a skip up the z axis, a count, that many colour and normal pairs, then
- * the count again. The animation (.hva) of the same name moves the limbs.
+ * The animation (.hva) of the same name places and moves the limbs. Tanks keep
+ * their turret and barrel in models of their own (htnktur.vxl, htnkbarl.vxl);
+ * when those are in an opened archive, they're shown too.
  */
-
-const HEADER = 802;
-const LIMB_HEADER = 28;
-const TAILER = 92;
-const EMPTY = 0xffffffff;
-
-interface Limb {
-    name: string;
-    size: [number, number, number];
-    /** Colour index per voxel, x fastest then y then z; 0 for empty. */
-    colours: Uint8Array;
-    count: number;
-    tailer: number;
-}
 
 /** Each limb seen four ways: from above, the front, the side, and from above at an angle as in the game. */
 function views(l: Limb): IndexedImage[] {
@@ -62,100 +49,113 @@ function views(l: Limb): IndexedImage[] {
     return [{ width: w, height: h, pixels }, top, front, side];
 }
 
-const parser: FormatParser = {
-    parse(data) {
-        const b = new Bytes(data);
-        if (b.ascii(0, 16) !== 'Voxel Animation\0') throw new Error('No "Voxel Animation" header.');
-        const [limbCount, tailerCount, bodySize] = [b.u32(20), b.u32(24), b.u32(28)];
-        const body = HEADER + limbCount * LIMB_HEADER;
-        const tailers = body + bodySize;
-        if (limbCount === 0 || limbCount > 256 || tailers + tailerCount * TAILER > data.length) throw new Error('The limb counts and body size don\'t fit the file.');
-        const warnings: string[] = [];
-        const palette = data.subarray(34, 34 + 768);
+/** A model's limbs as 3D parts, placed and animated by its .hva when there is one. */
+function parts(file: string, data: Uint8Array, find: ParseContext['find']): { parts: VoxelPart[]; frames: number; animated: boolean } {
+    const vxl = decodeVxl(data);
+    const hvaFile = file.replace(/\.vxl$/i, '.hva');
+    const hva = find?.(hvaFile).map((c) => readHva(c.data)).find((h) => h && h.names.length === vxl.limbs.length) ?? null;
+    return {
+        parts: vxl.limbs.map((l, i) => ({
+            name: `${file} › ${l.name}`,
+            size: l.size,
+            colours: l.colours,
+            min: l.min,
+            max: l.max,
+            // The animation's translations are in the limb's own units.
+            frames: hva
+                ? Array.from({ length: hva.frames }, (_, f) => {
+                      const m = hva.matrices.slice((f * hva.names.length + i) * 12, (f * hva.names.length + i + 1) * 12);
+                      for (const t of [3, 7, 11]) m[t] *= l.scale;
+                      return m;
+                  })
+                : [],
+        })),
+        frames: hva?.frames ?? 1,
+        animated: hva !== null,
+    };
+}
 
-        const limbs: Limb[] = [];
-        for (let i = 0; i < limbCount; i++) {
-            const t = tailers + i * TAILER;
-            const size: [number, number, number] = [b.u8(t + 88), b.u8(t + 89), b.u8(t + 90)];
-            const [sx, sy, sz] = size;
-            const colours = new Uint8Array(sx * sy * sz);
-            const starts = body + b.u32(t);
-            const ends = body + b.u32(t + 4);
-            const spans = body + b.u32(t + 8);
-            let count = 0;
-            for (let col = 0; col < sx * sy; col++) {
-                const start = b.u32(starts + col * 4);
-                if (start === EMPTY) continue;
-                let at = spans + start;
-                // The end offset is the column's last byte.
-                const last = Math.min(spans + b.u32(ends + col * 4), data.length - 1);
-                for (let z = 0; z < sz && at <= last; ) {
-                    z += b.u8(at++);
-                    const n = b.u8(at++);
-                    for (let k = 0; k < n && at < data.length; k++, z++, at += 2) {
-                        if (z < sz) {
-                            colours[col + sx * sy * z] = data[at] || 1;
-                            count++;
-                        }
-                    }
-                    at++;
-                }
+const parser: FormatParser = {
+    parse(data, context) {
+        const b = new Bytes(data);
+        const vxl = decodeVxl(data);
+        const { limbs, body, bodySize, tailerCount } = vxl;
+        const warnings: string[] = [];
+        if (tailerCount !== limbs.length) warnings.push(`${limbs.length} limb headers but ${tailerCount} tailers.`);
+
+        // This model, then its turret and barrel if they're separate files.
+        const name = context.name ?? 'model.vxl';
+        const own = parts(name, data, context.find);
+        const all = [own];
+        const stem = name.replace(/\.vxl$/i, '');
+        if (!/(tur|barl)$/i.test(stem)) {
+            for (const extra of [`${stem}tur.vxl`, `${stem}barl.vxl`]) {
+                const found = context.find?.(extra)[0];
+                if (found) all.push(parts(extra, found.data, context.find));
             }
-            limbs.push({ name: b.asciiz(HEADER + i * LIMB_HEADER).text.slice(0, 16), size, colours, count, tailer: t });
         }
-        if (tailerCount !== limbCount) warnings.push(`${limbCount} limb headers but ${tailerCount} tailers.`);
 
         const floats = (at: number, n: number) => Array.from({ length: n }, (_, i) => +b.f32(at + i * 4).toFixed(3)).join(', ');
         const fields: Field[] = [
             {
                 name: 'Header',
                 offset: 0,
-                length: HEADER,
+                length: VXL_HEADER,
                 children: [
                     field('ID', 0, 16, 'Voxel Animation'),
                     field('Palettes', 16, 4, b.u32(16)),
-                    field('Limbs', 20, 4, limbCount),
+                    field('Limbs', 20, 4, limbs.length),
                     field('Tailers', 24, 4, tailerCount),
                     field('Body size', 28, 4, bytesLabel(bodySize)),
-                    field('Remap start', 32, 1, b.u8(32), 'The palette range recoloured to the owner\'s colour.'),
-                    field('Remap end', 33, 1, b.u8(33)),
+                    field('Remap start', 32, 1, vxl.remap[0], 'The palette range recoloured to the owner\'s colour.'),
+                    field('Remap end', 33, 1, vxl.remap[1]),
                     field('Palette', 34, 768, undefined, 'Unused by the games, which draw voxels with the unit palette.'),
                 ],
             },
             ...limbs.map((l, i) => ({
                 name: `Limb header ${i}: ${l.name}`,
-                offset: HEADER + i * LIMB_HEADER,
+                offset: VXL_HEADER + i * LIMB_HEADER,
                 length: LIMB_HEADER,
-                children: [field('Name', HEADER + i * LIMB_HEADER, 16, l.name), field('Number', HEADER + i * LIMB_HEADER + 16, 4, b.u32(HEADER + i * LIMB_HEADER + 16))],
+                children: [field('Name', VXL_HEADER + i * LIMB_HEADER, 16, l.name), field('Number', VXL_HEADER + i * LIMB_HEADER + 16, 4, b.u32(VXL_HEADER + i * LIMB_HEADER + 16))],
             })),
             field('Body', body, bodySize, bytesLabel(bodySize), 'Each limb\'s column offsets and spans.'),
             ...limbs.map((l, i) => ({
                 name: `Limb tailer ${i}: ${l.name}`,
                 offset: l.tailer,
-                length: TAILER,
+                length: 92,
                 children: [
                     field('Span starts', l.tailer, 4, b.u32(l.tailer), 'From the start of the body.'),
                     field('Span ends', l.tailer + 4, 4, b.u32(l.tailer + 4)),
                     field('Span data', l.tailer + 8, 4, b.u32(l.tailer + 8)),
-                    field('Scale', l.tailer + 12, 4, +b.f32(l.tailer + 12).toFixed(4)),
+                    field('Scale', l.tailer + 12, 4, +l.scale.toFixed(4)),
                     field('Transform', l.tailer + 16, 48, floats(l.tailer + 16, 12), '3 × 4, row by row.'),
                     field('Minimum bounds', l.tailer + 64, 12, floats(l.tailer + 64, 3)),
                     field('Maximum bounds', l.tailer + 76, 12, floats(l.tailer + 76, 3)),
                     field('Size', l.tailer + 88, 3, l.size.join(' × ')),
-                    field('Normals', l.tailer + 91, 1, b.u8(l.tailer + 91) === 2 ? 'TS (36 directions)' : b.u8(l.tailer + 91) === 4 ? 'RA2 (244 directions)' : b.u8(l.tailer + 91)),
+                    field('Normals', l.tailer + 91, 1, l.normals === 2 ? 'TS (36 directions)' : l.normals === 4 ? 'RA2 (244 directions)' : l.normals),
                 ],
             })),
         ];
 
-        const ownPalette = palette.some((v) => v) ? palette : undefined;
+        const ownPalette = vxl.palette.some((v) => v) ? vxl.palette : undefined;
+        const frameCount = Math.max(...all.map((p) => p.frames));
         return {
             title: 'Voxel model (TS/RA2)',
             summary: [
                 ['Limbs', limbs.map((l) => `${l.name} (${l.size.join(' × ')}, ${l.count} voxels)`).join('; ')],
-                ['Preview', 'Each limb at an angle, then from above, the front and the side; best with the unit palette (unittem.pal)'],
+                ['Shown with', all.length > 1 ? all.slice(1).map((p) => p.parts[0].name.split(' › ')[0]).join(', ') : 'Nothing else'],
+                ['Animation', own.animated ? `${stem}.hva, ${own.frames} frame${own.frames === 1 ? '' : 's'}` : 'None found, so the limbs aren\'t placed'],
+                ['Colours', 'Best with the unit palette (unittem.pal)'],
             ],
             fields,
-            preview: { kind: 'images', frames: limbs.flatMap(views), palette: ownPalette, transparentIndex: 0 },
+            preview: {
+                kind: 'stack',
+                items: [
+                    { title: '3D', preview: { kind: 'voxels', parts: all.flatMap((p) => p.parts), frameCount, palette: ownPalette } },
+                    { title: 'Each limb, from four sides', preview: { kind: 'images', frames: limbs.flatMap(views), palette: ownPalette, transparentIndex: 0 } },
+                ],
+            },
+            wanted: own.animated || !context.find ? undefined : `${stem.toUpperCase()}.HVA places this model's limbs and animates them. Open the archive it's in (usually the same one) to use it.`,
             warnings,
         };
     },

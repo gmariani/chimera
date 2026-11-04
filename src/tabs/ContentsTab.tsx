@@ -96,7 +96,7 @@ export function ContentsTab({
                     ))}
                 </Form.Select>
                 <div className="ms-auto d-flex flex-wrap gap-2">
-                    <Tip label={`${known} of ${entries.length} names are known. MIX files store only a hash of each name, so names come from a list. Load XCC's "global mix database.dat" or a text file with one name per line.${names.length ? `\n\n${names.length.toLocaleString('en-US')} names loaded.` : ''}`}>
+                    <Tip label={`${known} of ${entries.length} names are known. MIX files store only a hash of each name, so names come from a list. Load XCC's "global mix database.dat", a text file with one name per line, or the game's executable (TS's Game.exe, RA2's gamemd.exe), which names files no INI does.${names.length ? `\n\n${names.length.toLocaleString('en-US')} names loaded.` : ''}`}>
                         <Button variant="outline-light" onClick={() => nameInput.current?.click()}>
                             <i className="bi bi-tags me-1" /> Add names…
                         </Button>

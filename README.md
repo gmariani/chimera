@@ -14,12 +14,14 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Terrain tile sets (.tem, .des, .win, .sno, .int, .icn) | header, tiles, cell map | the template assembled, each tile | PNG |
 | VQA video (TD/RA version 2; TS's high-colour version 3) | chunk map, VQHD | player with sound | PNG frame, all frames, WAV |
 | Isometric tiles (TS/RA2 .tem, .sno, .urb, .des, .lun, .ubn) | header, every cell | assembled, each cell | PNG |
-| Voxel models (.vxl) and animations (.hva) | headers, limbs, matrices | each limb from four sides | PNG |
+| Voxel models (.vxl) and animations (.hva) | headers, limbs, matrices | 3D viewer (turn, zoom, animate; turret and barrel included), each limb from four sides | PNG |
+| Voxel lighting tables (voxels.vpl) | header, tables | the palette at each light level | PNG |
 | WAV sound (PCM and IMA ADPCM) | chunks, format | player | WAV |
 | RA2 sound banks (audio.idx with audio.bag) | every sound | each sound as a WAV | WAV |
 | CSF string tables (RA2) | every label | text | — |
 | Bink video (RA2's movies) | header | — (the codec isn't public) | — |
 | Maps (TD .bin with its mission INI, RA [MapPack] in mission INIs) | every cell | drawn with the game's tiles, ore, walls and trees once the theater archive is open; terrain kinds with a key | PNG |
+| TS and RA2 maps (.map, .mpr, .yrm; inside .mmx/.yro) | sections, cells, overlays | drawn with the game's tiles, ore, walls, bridges and trees once the main archive is open (otherwise by height); the map's own preview | PNG |
 | Fonts (.fnt: TD/RA 4-bit, TS 8-bit, TS/RA2 1-bit and Unicode) | header, each character | every character | PNG |
 | PAL palettes | each colour | swatches, use for sprites | — |
 | String tables (.eng, .ger, .fre) | offsets, each string | numbered list | — |
@@ -32,11 +34,11 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 
 Template names, TD template sizes, overlay and tree names, how ore and walls pick their frames, and the remap table and vortex layouts come from the GPL source of the Remastered Collection (`DEFINES.H`, `CDATA.CPP`, `ODATA.CPP`, `TDATA.CPP`, `CELL.CPP`, `DISPLAY.CPP`, `VORTEX.CPP`).
 
-Anything else opens in the hex view. The only files in the TD and RA Remastered data that still do are `record.bin` (a recorded game: TD writes its in-memory structures straight to disk, so the layout depends on the build) and two empty files; in TS and RA2's archives, a handful of small unidentified files.
+Anything else opens in the hex view. The only files in the TD and RA Remastered data that still do are `record.bin` (a recorded game: TD writes its in-memory structures straight to disk, so the layout depends on the build) and two empty files; in TS and RA2's archives, nothing.
 
-Some files need others: a map needs its theater's tiles and palette, and a TD map's `.bin` and `.ini` need each other. Every archive opened in a session (and the archives inside it) is kept, so files can find their companions there. Drop several files at once to open the first with the rest alongside it, or use **Add files…** on the note a file shows when it's missing one. For TD, that's GENERAL.MIX with TEMPERAT.MIX (or DESERT.MIX, WINTER.MIX) and CONQUER.MIX for walls; for RA, MAIN.MIX with REDALERT.MIX for the palettes.
+Some files need others: a map needs its theater's tiles and palette, and a TD map's `.bin` and `.ini` need each other. Every archive opened in a session (and the archives inside it) is kept, so files can find their companions there. Drop several files at once to open the first with the rest alongside it, or use **Add files…** on the note a file shows when it's missing one. For TD, that's GENERAL.MIX with TEMPERAT.MIX (or DESERT.MIX, WINTER.MIX) and CONQUER.MIX for walls; for RA, MAIN.MIX with REDALERT.MIX for the palettes; for TS and RA2, the maps' archive with TIBSUN.MIX or RA2.MIX (and RA2MD.MIX for Yuri's Revenge). Voxel models find their animation, turret and barrel the same way.
 
-MIX archives store a hash of each file name, not the name. Names come from the archive's own `local mix database.dat` (if XCC added one), a built-in list of common C&C names, the INIs in the archives you open (TS and RA2 keep no names, but `rules.ini`, `art.ini` and the theater INIs name nearly every asset; opening RA2's `ra2.mix` names 90–99% of most archives inside it), and any list you load with **Add names…** (XCC's `global mix database.dat`, or a text file with one name per line). TS's speech files are only named in the game's executable, so they need XCC's list.
+MIX archives store a hash of each file name, not the name. Names come from the archive's own `local mix database.dat` (if XCC added one), a built-in list of common C&C names, the INIs in the archives you open (TS and RA2 keep no names, but `rules.ini`, `art.ini` and the theater INIs name nearly every asset; opening RA2's `ra2.mix` names 90–99% of most archives inside it), and any list you load with **Add names…**: XCC's `global mix database.dat`, a text file with one name per line, or the game's executable (TS's `Game.exe`, RA2's `gamemd.exe`), whose file names and name patterns (`E%02dSC%02d.MIX`) are read out of it. TS's speech files aren't named anywhere in the game, so they need XCC's list.
 
 ## Adding a format
 

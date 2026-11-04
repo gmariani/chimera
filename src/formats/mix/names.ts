@@ -34,7 +34,12 @@ const TS_RA2_ARCHIVES = [
 function tsRa2ArchiveNames(): string[] {
     const stems = [...TS_RA2_ARCHIVES];
     for (const [long, short] of THEATER_STEMS) stems.push(long, short, `iso${short}`, `iso${long.slice(0, 4)}`);
-    return stems.flatMap((stem) => [`${stem}.mix`, `${stem}md.mix`]);
+    const names = stems.flatMap((stem) => [`${stem}.mix`, `${stem}md.mix`]);
+    // Each theater's tile set INI and palettes: tiles (iso), objects, units.
+    for (const [long, short] of THEATER_STEMS) {
+        for (const md of ['', 'md']) names.push(`${long}${md}.ini`, `${long}${md}.pal`, `iso${short}${md}.pal`, `unit${short}${md}.pal`, `${short}${md}.pal`);
+    }
+    return names;
 }
 
 const SINGLES = [
@@ -50,7 +55,7 @@ const SINGLES = [
     'aftrmath.ini', 'mplayer.ini', 'scg01ea.ini', 'scu01ea.ini', 'scg01ea.bin', 'scu01ea.bin',
     'conquer.eng', 'conquer.ger', 'conquer.fre', 'editor.eng', 'editor.ger', 'editor.fre', 'debug.eng', 'credits.eng', 'record.bin', 'expand.dat',
     'temp_vtx.pal', 'snow_vtx.pal', 'intr_vtx.pal',
-    'audio.idx', 'audio.bag', 'audiomd.idx', 'audiomd.bag', 'game.fnt', 'gamemd.fnt', 'ra2.csf', 'ra2md.csf', 'keyboard.ini', 'keyboardmd.ini',
+    'audio.idx', 'audio.bag', 'audiomd.idx', 'audiomd.bag', 'game.fnt', 'gamemd.fnt', 'ra2.csf', 'ra2md.csf', 'keyboard.ini', 'keyboardmd.ini', 'voxels.vpl',
 ];
 
 /** TD's colour remap tables: the theater's first letter, then what the table is for (DISPLAY.CPP). */
@@ -208,8 +213,9 @@ export function readLocalMixDatabase(data: Uint8Array): string[] | null {
 
 /**
  * Names from a file the user loads: XCC's "global mix database.dat" (for each
- * game, a count then name/description pairs), an XCC local database, or a plain
- * text list with one name per line.
+ * game, a count then name/description pairs), an XCC local database, a plain
+ * text list with one name per line, or any other binary file (the game's
+ * executable), for the file names written in it.
  */
 export function readNameList(data: Uint8Array): string[] {
     const local = readLocalMixDatabase(data);
@@ -238,6 +244,8 @@ export function readNameList(data: Uint8Array): string[] {
         }
     }
     if (looksBinary && names.length) return names;
+    // Any other binary file, such as the game's executable: the file names written in it.
+    if (data.subarray(0, 4096).includes(0)) return namesFromBinary(data);
 
     return new TextDecoder('latin1')
         .decode(data)
@@ -290,5 +298,50 @@ export function namesFromText(texts: Iterable<string>): string[] {
             for (const letter of THEATER_IMAGE_LETTERS) out.add(`${word[0]}${letter.toLowerCase()}${word.slice(2)}.shp`);
         }
     }
+    return [...out];
+}
+
+/** What %s stands for in the games' file name patterns ("ISO%s.PAL"): theater names, long and short. */
+const PATTERN_WORDS = ['', 'md', ...THEATER_STEMS.flat()];
+/** No pattern expands to more names than this. */
+const PATTERN_LIMIT = 20_000;
+
+/** Every name a printf-style pattern can produce: %d and %02d as numbers, %c as a letter or digit, %s as a theater name. */
+function expandPattern(pattern: string): string[] {
+    const parts = pattern.split(/(%0?\d?[dcs])/i);
+    let out = [''];
+    for (const part of parts) {
+        const spec = part.match(/^%0?(\d?)([dcs])$/i);
+        let options: string[];
+        if (!spec) options = [part];
+        else if (spec[2].toLowerCase() === 'c') options = [...'abcdefghijklmnopqrstuvwxyz0123456789'];
+        else if (spec[2].toLowerCase() === 's') options = PATTERN_WORDS;
+        else {
+            const digits = Number(spec[1] || 1);
+            const top = Math.min(10 ** Math.max(digits, 2), 10_000);
+            options = Array.from({ length: top }, (_, n) => (spec[1] ? String(n).padStart(digits, '0') : String(n)));
+        }
+        if (out.length * options.length > PATTERN_LIMIT) return [];
+        out = out.flatMap((prefix) => options.map((o) => prefix + o));
+    }
+    return out;
+}
+
+/**
+ * File names in any file, such as the game's executable, which names what it
+ * loads; patterns like "E%02dSC%02d.MIX" are expanded.
+ */
+export function namesFromBinary(data: Uint8Array): string[] {
+    const out = new Set<string>();
+    let run = '';
+    const flush = () => {
+        for (const m of run.matchAll(/[A-Za-z0-9_%\-]{1,40}\.[A-Za-z]{2,4}/g)) for (const name of m[0].includes('%') ? expandPattern(m[0]) : [m[0]]) out.add(name.toLowerCase());
+        run = '';
+    };
+    for (const c of data) {
+        if (c >= 0x20 && c < 0x7f) run += String.fromCharCode(c);
+        else if (run) flush();
+    }
+    flush();
     return [...out];
 }

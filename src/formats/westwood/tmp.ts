@@ -1,6 +1,9 @@
 import { Bytes, field } from '../../core/bytes';
 import type { Field, FormatParser, IndexedImage } from '../../core/types';
 import { tmpLayout } from './sniff';
+import { unpackDiamond } from './tmp-diamond';
+
+export { unpackDiamond };
 
 /**
  * TS and RA2 isometric terrain tiles. A file is one tile set piece: a block of
@@ -18,20 +21,6 @@ const FLAG_DAMAGED = 4;
 
 /** Terrain types, as TS's isotile INIs call them (LandType). */
 const TERRAIN = ['Clear', 'Clear', 'Clear', 'Clear', 'Clear', 'Clear', 'Beach', 'Clear', 'Rock', 'Road', 'Water', 'Rough', 'Clear', 'Clear', 'Rough', 'Rough'];
-
-/** A diamond's pixels, from the bytes that store just the diamond, into a width × height rectangle (0 outside it). */
-export function unpackDiamond(src: Uint8Array, width: number, height: number): Uint8Array {
-    const out = new Uint8Array(width * height);
-    let row = 4;
-    let s = 0;
-    for (let y = 0; y < height; y++) {
-        const start = (width - row) / 2;
-        out.set(src.subarray(s, s + row), y * width + start);
-        s += row;
-        row += y < height / 2 - 1 ? 4 : -4;
-    }
-    return out;
-}
 
 interface Cell {
     index: number;

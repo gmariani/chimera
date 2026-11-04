@@ -6,6 +6,7 @@ import { download, safeName } from '../lib/download';
 import { findPalettes } from '../lib/palette-sources';
 import { usePalettes } from '../lib/palettes';
 import { zip } from '../lib/zip';
+import { VoxelViewer } from './VoxelViewer';
 
 const stem = (name: string) => name.replace(/\.[^.]+$/, '');
 
@@ -32,6 +33,8 @@ export function PreviewTab({ preview, fileName, names }: { preview: Preview; fil
             return <AudioPreview clip={preview} fileName={fileName} />;
         case 'video':
             return <VideoPreview preview={preview} fileName={fileName} />;
+        case 'voxels':
+            return <VoxelViewer parts={preview.parts} frameCount={preview.frameCount} ownPalette={preview.palette} fileName={fileName} />;
         case 'text':
             return <CodeBlock copy>{preview.text.length > 500_000 ? `${preview.text.slice(0, 500_000)}\n… (${preview.text.length - 500_000} more characters)` : preview.text}</CodeBlock>;
         case 'stack':
@@ -287,7 +290,8 @@ function ImagesPreview({
 /** A true-colour picture: no palette to pick, just zoom and save. */
 function PicturePreview({ width, height, rgba, fileName }: { width: number; height: number; rgba: Uint8Array; fileName: string }) {
     const canvas = useRef<HTMLCanvasElement>(null);
-    const [zoom, setZoom] = useState(width <= 160 ? 2 : 1);
+    // Big pictures (whole maps) start fitted to the page.
+    const [zoom, setZoom] = useState<number | 'fit'>(width > 900 ? 'fit' : width <= 160 ? 2 : 1);
 
     useEffect(() => {
         const el = canvas.current;
@@ -301,16 +305,16 @@ function PicturePreview({ width, height, rgba, fileName }: { width: number; heig
         <div className="row g-4">
             <div className="col-lg-8">
                 <div className="image-stage">
-                    <canvas ref={canvas} className="image-canvas" style={{ width: `calc(${zoom} * var(--w))`, ['--w' as string]: `${width}px` }} />
+                    <canvas ref={canvas} className="image-canvas" style={zoom === 'fit' ? { width: '100%' } : { width: `calc(${zoom} * var(--w))`, ['--w' as string]: `${width}px` }} />
                 </div>
             </div>
             <div className="col-lg-4">
                 <Form.Group className="mb-3">
                     <Form.Label className="small text-body-secondary mb-1">Zoom</Form.Label>
                     <ButtonGroup size="sm" className="d-flex">
-                        {[1, 2, 3, 4].map((z) => (
+                        {(['fit', 1, 2, 3, 4] as const).map((z) => (
                             <Button key={z} variant={zoom === z ? 'primary' : 'outline-light'} onClick={() => setZoom(z)}>
-                                {z}×
+                                {z === 'fit' ? 'Fit' : `${z}×`}
                             </Button>
                         ))}
                     </ButtonGroup>

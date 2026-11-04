@@ -73,6 +73,8 @@ export function sniffShpTs(data: Uint8Array): boolean {
     const width = b.u16(2);
     const height = b.u16(4);
     const frames = b.u16(6);
+    // An empty sprite: 0 × 0, with only blank frames (their offsets are leftover memory).
+    if (width === 0 && height === 0) return frames > 0 && data.length === 8 + frames * 24 && Array.from({ length: frames }, (_, i) => b.u32(8 + i * 24 + 4)).every((wh) => wh === 0);
     if (frames === 0 || width === 0 || height === 0 || width > 2048 || height > 2048 || 8 + frames * 24 > data.length) return false;
     for (let i = 0; i < frames; i++) {
         const at = 8 + i * 24;
@@ -343,4 +345,11 @@ export function sniffUnicodeFont(data: Uint8Array): boolean {
     const b = new Bytes(data);
     if (b.ascii(0, 4) === 'fonT') return data.length === 28 + 65536 * 2 + b.u32(20) * b.u32(24);
     return b.ascii(0, 4) === 'FoNt' && b.u32(44) >= b.u32(40) && data.length === 48 + (b.u32(44) - b.u32(40) + 1) * b.u32(24);
+}
+
+/** TS and RA2's voxel lighting tables (voxels.vpl): a header, a palette, then a 256-colour remap per lighting level. */
+export function sniffVpl(data: Uint8Array): boolean {
+    const b = new Bytes(data);
+    const [start, end, sections] = [b.u32(0), b.u32(4), b.u32(8)];
+    return start <= end && end < 256 && sections > 0 && sections <= 256 && data.length === 16 + 768 + sections * 256;
 }

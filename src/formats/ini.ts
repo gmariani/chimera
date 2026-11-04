@@ -1,12 +1,14 @@
 import type { Field, FormatParser, Preview } from '../core/types';
 import { Ini } from './ini-sections';
 import { missionPreviews, raMission, tdMission, TD_SIZE, type Mission } from './westwood/map';
+import { isoMapPreviews } from './westwood/map-iso';
 
 /**
  * INI files: sections of key=value lines. Red Alert missions also pack the
  * map into two sections, [MapPack] and [OverlayPack], which are decoded here.
  * Tiberian Dawn missions keep their map in a .bin file of the same name, which
- * is used when it's in an archive the user has opened.
+ * is used when it's in an archive the user has opened. TS and RA2 maps pack
+ * theirs into [IsoMapPack5] (see map-iso.ts).
  */
 
 const parser: FormatParser = {
@@ -33,7 +35,18 @@ const parser: FormatParser = {
 
         let mission: Mission | null = null;
         let title = 'Settings (INI)';
-        if (ini.section('MapPack')) {
+        if (ini.section('IsoMapPack5')) {
+            title = 'Map (TS/RA2)';
+            try {
+                const map = isoMapPreviews(ini, context.find, context.name);
+                summary.push(...map.summary);
+                warnings.push(...map.warnings);
+                previews.push(...map.items);
+                wanted = map.wanted;
+            } catch (e) {
+                warnings.push(`The map couldn't be decoded: ${e instanceof Error ? e.message : e}`);
+            }
+        } else if (ini.section('MapPack')) {
             title = 'Mission (RA INI with map)';
             try {
                 mission = raMission(ini);

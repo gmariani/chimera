@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Preview } from '../../core/types';
 import { detect } from '../index';
-import { namesFromText } from '../mix/names';
+import { Ini } from '../ini-sections';
+import { namesFromBinary, namesFromText } from '../mix/names';
+import { lzo1x } from './compression';
+import { isoMapPreviews, readIsoMap } from './map-iso';
 import pcx from '../pcx';
 import wavParser from '../wav';
 import csf from './csf';
@@ -90,9 +93,11 @@ describe('voxels', () => {
         expect(detect(data, null).id).toBe('vxl');
         const parsed = vxl.parse(data, context());
         expect(parsed.summary[0][1]).toBe('BODY (1 × 1 × 3, 1 voxels)');
-        if (parsed.preview?.kind !== 'images') throw new Error('expected images');
+        const [model, views] = stack(parsed.preview);
+        if (model.kind !== 'voxels' || views.kind !== 'images') throw new Error('expected 3D and images');
+        expect(model.parts[0].size).toEqual([1, 1, 3]);
         // Seen from the front: the top row is empty, the middle one is the voxel.
-        expect([...parsed.preview.frames[2].pixels]).toEqual([0, 4, 0]);
+        expect([...views.frames[2].pixels]).toEqual([0, 4, 0]);
     });
 
     it('reads an animation\'s matrices', () => {
@@ -243,5 +248,66 @@ describe('names from INIs', () => {
         expect(names).toEqual(expect.arrayContaining(['gapowr.shp', 'gtpowr.shp', 'gapowr.vxl', 'cliff01.tem', 'cliff02.urb']));
         // Maps are skipped: their packed sections are base64.
         expect(names).not.toContain('bm9pc2u.shp');
+    });
+});
+
+describe('LZO', () => {
+    it('copies literals, then a match from earlier output', () => {
+        // 4 literals; a 4-byte match from 4 back (M2: length (t >> 5) + 1, distance 1 + ((t >> 2) & 7) + (next << 3)); the end marker.
+        const src = Uint8Array.of(17 + 4, 97, 98, 99, 100, 0x6c, 0x00, 0x11, 0x00, 0x00);
+        const out = new Uint8Array(16);
+        const n = lzo1x(src, out);
+        expect(new TextDecoder().decode(out.subarray(0, n))).toBe('abcdabcd');
+    });
+});
+
+describe('TS and RA2 maps', () => {
+    it('reads cells from [IsoMapPack5] and draws them flat without the theater', () => {
+        // Two cells: (10, 5) at height 0, (11, 5) at height 3; packed as one LZO block of literals.
+        const cells = new Uint8Array(22);
+        const v = new DataView(cells.buffer);
+        [[10, 5, 0], [11, 5, 3]].forEach(([x, y, level], i) => {
+            v.setUint16(i * 11, x, true);
+            v.setUint16(i * 11 + 2, y, true);
+            v.setInt32(i * 11 + 4, -1, true);
+            cells[i * 11 + 9] = level;
+        });
+        const lzo = Uint8Array.of(17 + 22, ...cells, 0x11, 0, 0);
+        const block = Uint8Array.of(lzo.length, 0, 22, 0, ...lzo);
+        const text = `[Map]\nTheater=SNOW\nSize=0,0,10,10\n[IsoMapPack5]\n1=${btoa(String.fromCharCode(...block))}\n[Terrain]\n5010=TREE01\n`;
+        const ini = new Ini(text);
+        const map = readIsoMap(ini);
+        expect(map.cells.map((c) => [c.rx, c.ry, c.level])).toEqual([[10, 5, 0], [11, 5, 3]]);
+        expect(map.terrain).toEqual([[10, 5, 'TREE01']]);
+        const previews = isoMapPreviews(ini, () => [], 'test.map');
+        expect(previews.items[0].preview.kind).toBe('picture');
+        expect(previews.wanted).toMatch(/SNOW\.INI/);
+    });
+});
+
+describe('names from executables', () => {
+    it('finds file names and expands printf patterns', () => {
+        const exe = new TextEncoder().encode('\0\0MZ\0RULES.INI\0junk\0E%02dSC%02d.MIX\0ISO%s.PAL\0');
+        const names = namesFromBinary(exe);
+        expect(names).toEqual(expect.arrayContaining(['rules.ini', 'e01sc02.mix', 'e99sc99.mix', 'isotem.pal']));
+    });
+});
+
+describe('small leftovers', () => {
+    it('reads voxel lighting tables', () => {
+        const data = bytes(16 + 768 + 2 * 256, (v) => {
+            v.setUint32(0, 16, true);
+            v.setUint32(4, 31, true);
+            v.setUint32(8, 2, true);
+        });
+        expect(detect(data, null).id).toBe('vpl');
+    });
+
+    it('recognises an empty sprite', () => {
+        const data = bytes(8 + 24, (v) => {
+            v.setUint16(6, 1, true);
+            v.setUint32(8 + 20, 0x12fb00, true);
+        });
+        expect(detect(data, null).id).toBe('shp-ts');
     });
 });

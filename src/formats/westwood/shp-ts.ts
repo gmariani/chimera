@@ -1,5 +1,6 @@
 import { Bytes, bytesLabel, field } from '../../core/bytes';
 import type { Field, FormatParser, IndexedImage } from '../../core/types';
+import { decodeShpTs } from './shp-ts-frames';
 
 /**
  * Tiberian Sun / Red Alert 2 sprites. Each frame is a rectangle placed on a
@@ -23,37 +24,11 @@ const parser: FormatParser = {
         const headerFields: Field[] = [];
         const dataFields: Field[] = [];
 
+        const decoded = decodeShpTs(data);
         for (let i = 0; i < count; i++) {
             const at = 8 + i * 24;
-            const x = b.u16(at);
-            const y = b.u16(at + 2);
-            const w = b.u16(at + 4);
-            const h = b.u16(at + 6);
-            const compression = b.u8(at + 8);
-            const offset = b.u32(at + 20);
-            const canvas = new Uint8Array(width * height);
-
-            let s = offset;
-            if (offset !== 0 && w && h) {
-                for (let row = 0; row < h; row++) {
-                    let d = (y + row) * width + x;
-                    const end = d + w;
-                    if (compression === 2 || compression === 3) {
-                        const lineEnd = s + b.u16(s);
-                        s += 2;
-                        while (s < lineEnd && d < end) {
-                            const value = data[s++];
-                            if (compression === 3 && value === 0) d += data[s++];
-                            else canvas[d++] = value;
-                        }
-                        s = lineEnd;
-                    } else {
-                        canvas.set(data.subarray(s, s + w), d);
-                        s += w;
-                    }
-                }
-                dataFields.push(field(`Frame ${i + 1} data`, offset, s - offset, bytesLabel(s - offset), COMPRESSION[compression]));
-            }
+            const { x, y, width: w, height: h, compression, offset, end, pixels: canvas } = decoded.frames[i];
+            if (offset !== 0 && w && h) dataFields.push(field(`Frame ${i + 1} data`, offset, end - offset, bytesLabel(end - offset), COMPRESSION[compression]));
             frames.push({ width, height, pixels: canvas });
             headerFields.push({
                 name: `Frame ${i + 1}`,

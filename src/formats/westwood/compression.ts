@@ -86,3 +86,84 @@ export function format40(src: Uint8Array, dest: Uint8Array, srcStart = 0): void 
         }
     }
 }
+
+/**
+ * LZO1X (as minilzo writes it), which TS and RA2 use for the map cells in
+ * [IsoMapPack5]. Commands copy literal bytes or earlier output; a command's
+ * low two bits say how many literals follow it. Returns the bytes written.
+ */
+export function lzo1x(src: Uint8Array, dest: Uint8Array): number {
+    let ip = 0;
+    let op = 0;
+    const literals = (n: number) => {
+        for (let i = 0; i < n && op < dest.length; i++) dest[op++] = src[ip++];
+    };
+    const copy = (from: number, n: number) => {
+        for (let i = 0; i < n && op < dest.length; i++, from++) dest[op++] = from >= 0 ? dest[from] : 0;
+    };
+    /** A length that spills into extra bytes: each 0 adds 255, then the next byte. */
+    const long = (base: number) => {
+        let n = 0;
+        while (ip < src.length && src[ip] === 0) {
+            n += 255;
+            ip++;
+        }
+        return n + base + src[ip++];
+    };
+
+    let t: number;
+    // What to do next: read a literal run, read a match, or a match right after the first literal run.
+    let state: 'literals' | 'match' | 'first' = 'literals';
+    if (src[0] > 17) {
+        t = src[ip++] - 17;
+        literals(t);
+        state = t < 4 ? 'match' : 'first';
+    }
+    while (ip < src.length && op < dest.length) {
+        if (state === 'literals') {
+            t = src[ip++];
+            if (t >= 16) {
+                state = 'match';
+                ip--;
+                continue;
+            }
+            literals((t === 0 ? long(15) : t) + 3);
+            state = 'first';
+            continue;
+        }
+        t = src[ip++];
+        let after: number;
+        if (state === 'first' && t < 16) {
+            // A 3-byte match from at least 2 KB back, only possible right after a literal run.
+            copy(op - (1 + 0x0800) - (t >> 2) - (src[ip++] << 2), 3);
+            after = src[ip - 2] & 3;
+        } else if (t >= 64) {
+            copy(op - 1 - ((t >> 2) & 7) - (src[ip++] << 3), (t >> 5) + 1);
+            after = src[ip - 2] & 3;
+        } else if (t >= 32) {
+            const n = (t & 31) === 0 ? long(31) : t & 31;
+            copy(op - 1 - ((src[ip] >> 2) + (src[ip + 1] << 6)), n + 2);
+            ip += 2;
+            after = src[ip - 2] & 3;
+        } else if (t >= 16) {
+            const n = (t & 7) === 0 ? long(7) : t & 7;
+            let from = op - ((t & 8) << 11) - ((src[ip] >> 2) + (src[ip + 1] << 6));
+            ip += 2;
+            if (from === op) break; // End of the stream.
+            from -= 0x4000;
+            copy(from, n + 2);
+            after = src[ip - 2] & 3;
+        } else {
+            // A 2-byte match, only after a match's trailing literals.
+            copy(op - 1 - (t >> 2) - (src[ip++] << 2), 2);
+            after = src[ip - 2] & 3;
+        }
+        if (after === 0) {
+            state = 'literals';
+        } else {
+            literals(after);
+            state = 'match';
+        }
+    }
+    return op;
+}

@@ -52,6 +52,20 @@ export interface AudioClip {
 /** One frame of video: palette indexes and the 768-byte 8-bit RGB palette in force for it, or (high-colour movies) RGBA. */
 export type VideoFrame = { pixels: Uint8Array; palette: Uint8Array } | { rgba: Uint8Array };
 
+/** One part of a voxel model (a limb: a body, a turret), placed in the model's space. */
+export interface VoxelPart {
+    /** Which file and limb it's from, e.g. "htnktur.vxl › DUMMY01". */
+    name: string;
+    size: [number, number, number];
+    /** Palette index per voxel, x fastest, then y, then z; 0 is empty. */
+    colours: Uint8Array;
+    /** Where the box's corners go: voxel (0, 0, 0) at min, voxel (size) at max. */
+    min: [number, number, number];
+    max: [number, number, number];
+    /** For each animation frame, a 3 × 4 transform, row by row (none: it stays put). */
+    frames: Float32Array[];
+}
+
 export type Preview =
     | {
           kind: 'images';
@@ -81,6 +95,8 @@ export type Preview =
           audio?: AudioClip;
       }
     | { kind: 'text'; text: string }
+    /** A voxel model, to turn around in 3D. */
+    | { kind: 'voxels'; parts: VoxelPart[]; frameCount: number; /** 8-bit RGB, when the file brings a usable one. */ palette?: Uint8Array }
     /** Several previews of the same file, e.g. a mission's map and its text. */
     | { kind: 'stack'; items: { title: string; preview: Preview }[] };
 

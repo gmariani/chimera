@@ -428,6 +428,21 @@ body {
     background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
 
+/* The 3D voxel view. */
+.voxel-canvas {
+    display: block;
+    width: 100%;
+    height: min(65vh, 36rem);
+    border-radius: var(--bs-border-radius);
+    background: #2a2f35;
+    cursor: grab;
+    touch-action: none;
+}
+
+.voxel-canvas:active {
+    cursor: grabbing;
+}
+
 /* What the colours on a map stand for. */
 .legend li + li {
     margin-top: 0.25rem;
