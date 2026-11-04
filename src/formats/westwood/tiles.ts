@@ -1,7 +1,7 @@
 import { Bytes, bytesLabel, field } from '../../core/bytes';
 import type { Field, FormatParser, IndexedImage } from '../../core/types';
-import { tilesLayout } from './sniff';
 import { templateOf } from './templates';
+import { EMPTY_CELL as EMPTY, readTileSet } from './tileset';
 
 /**
  * Terrain tile sets (.tem, .des, .win, .sno, .int, and .icn). One file is one
@@ -14,26 +14,24 @@ import { templateOf } from './templates';
  * (TD keeps those in the game's code, so they come from a table here).
  */
 
-const EMPTY = 0xff;
-
 const parser: FormatParser = {
     parse(data, context) {
-        const layout = tilesLayout(data);
-        if (!layout) throw new Error('This isn\'t a tile set the app understands.');
+        const set = readTileSet(data);
+        if (!set) throw new Error('This isn\'t a tile set the app understands.');
         const b = new Bytes(data);
-        const { game, width, height, count, icons, map, trans, colorMap } = layout;
+        const { game, width, height, count, icons, map, trans, colorMap } = set.layout;
         const tileSize = width * height;
-        const physical = Math.floor((map - icons) / tileSize);
+        const physical = set.tiles.length;
         const warnings: string[] = [];
 
-        const tiles: IndexedImage[] = Array.from({ length: physical }, (_, i) => ({ width, height, pixels: data.slice(icons + i * tileSize, icons + (i + 1) * tileSize) }));
-        const cells = Array.from(data.subarray(map, map + count));
+        const tiles: IndexedImage[] = set.tiles.map((pixels) => ({ width, height, pixels }));
+        const { cells } = set;
         const missing = cells.filter((c) => c !== EMPTY && c >= physical);
         if (missing.length) warnings.push(`${missing.length} cells name tiles that aren't in the file.`);
 
         // How many cells wide the template is: RA says; for TD, the table of templates does, when the name is known.
         const template = templateOf(context.name, game);
-        const [columns, rows] = game === 'ra' ? [layout.mapWidth, layout.mapHeight] : [template?.width, template?.height];
+        const [columns, rows] = game === 'ra' ? [set.layout.mapWidth, set.layout.mapHeight] : [template?.width, template?.height];
         const sized = columns !== undefined && rows !== undefined;
         const variants = sized && columns * rows === 1 && count > 1;
         // Lay the cells out as the template looks in the game; otherwise just show each tile.
@@ -49,7 +47,7 @@ const parser: FormatParser = {
         ];
         let at = 8;
         if (game === 'ra') {
-            header.push(field('Template width', 8, 2, layout.mapWidth, 'In cells.'), field('Template height', 10, 2, layout.mapHeight, 'In cells.'));
+            header.push(field('Template width', 8, 2, set.layout.mapWidth, 'In cells.'), field('Template height', 10, 2, set.layout.mapHeight, 'In cells.'));
             at = 12;
         }
         header.push(

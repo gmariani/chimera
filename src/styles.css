@@ -428,6 +428,19 @@ body {
     background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
 
+/* What the colours on a map stand for. */
+.legend li + li {
+    margin-top: 0.25rem;
+}
+
+.legend-swatch {
+    flex: none;
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 0.2rem;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
 .image-canvas {
     flex: none;
     max-width: none;

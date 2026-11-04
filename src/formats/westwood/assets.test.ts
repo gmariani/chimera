@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { Preview } from '../../core/types';
 import { detect } from '../index';
 import font from './font';
+import lut from './lut';
+import mapTd from './map-td';
+import strings from './strings';
 import ini from '../ini';
 import { unpackSection } from './map';
 import pcx from '../pcx';
@@ -178,5 +181,69 @@ describe('VQA', () => {
         const { pixels, palette } = preview.frame(0);
         expect([...pixels]).toEqual([1, 2, 3, 4, 9, 9, 9, 9, 5, 6, 7, 8, 9, 9, 9, 9]);
         expect(palette[0]).toBe(255);
+    });
+});
+
+describe('string tables', () => {
+    it('reads each string from its offset', () => {
+        // Three offsets: "Hi" at 6, "" at 9, "Bye" at 10.
+        const table = Uint8Array.from([6, 0, 9, 0, 10, 0, 72, 105, 0, 0, 66, 121, 101, 0]);
+        expect(detect(table, null).id).toBe('strings');
+        const preview = strings.parse(table, context('conquer.eng')).preview;
+        expect(preview).toEqual({ kind: 'text', text: '0  Hi\n1  \n2  Bye' });
+    });
+
+    it('turns down binary data whose first word happens to be even', () => {
+        expect(detect(Uint8Array.from([4, 0, 1, 2, 3, 4, 5, 6]), null).id).not.toBe('strings');
+    });
+});
+
+describe('vortex frames', () => {
+    it('maps each pixel to where it comes from', () => {
+        const data = new Uint8Array(64 * 64 * 3);
+        for (let i = 0; i < 64 * 64; i++) data.set([i % 64, Math.floor(i / 64), 15], i * 3);
+        expect(detect(data, null).id).toBe('lut');
+        const preview = images(lut.parse(data, context('hole0020.lut')).preview);
+        // Unwarped: the test grid's 8 × 8 blocks come out as they went in.
+        expect(preview.frames[0].pixels[9 * 64 + 17]).toBe(1 * 8 + 2);
+    });
+});
+
+describe('maps with real tiles', () => {
+    // A TD CLEAR1 with a single 24 × 24 tile of one colour (the real one has 16 variants).
+    function tileSet(colour: number): Uint8Array {
+        const size = 32 + 576 + 1 + 1;
+        return bytes(size, (v, b) => {
+            v.setUint16(0, 24, true);
+            v.setUint16(2, 24, true);
+            v.setUint16(4, 1, true);
+            v.setUint32(8, size, true);
+            v.setUint32(12, 32, true);
+            v.setUint32(24, 32 + 576 + 1, true);
+            v.setUint32(28, 32 + 576, true);
+            b.fill(colour, 32, 32 + 576);
+        });
+    }
+
+    it('draws a TD mission from its .bin and the theater\'s tiles', () => {
+        const bin = new Uint8Array(8192).fill(0xff);
+        const text = '[MAP]\nTheater=DESERT\nX=1\nY=1\nWidth=2\nHeight=1\n';
+        const files: Record<string, Uint8Array> = { 'scg01ea.bin': bin, 'clear1.des': tileSet(7), 'desert.pal': new Uint8Array(768).fill(63) };
+        const find = (name: string) => (files[name] ? [{ data: files[name], source: 'X.MIX' }] : []);
+        const parsed = ini.parse(new TextEncoder().encode(text), { name: 'scg01ea.ini', names: [], find });
+        expect(parsed.title).toBe('Mission (TD INI)');
+        expect(parsed.wanted).toBeUndefined();
+        const preview = parsed.preview;
+        if (preview?.kind !== 'stack') throw new Error('expected a stack');
+        expect(preview.items.map((i) => i.title)).toEqual(['Map', 'Terrain kinds', 'Text']);
+        const map = images(preview.items[0].preview);
+        expect([map.frames[0].width, map.frames[0].height]).toEqual([48, 24]);
+        expect(map.frames[0].pixels.every((p) => p === 7)).toBe(true);
+        expect(images(preview.items[1].preview).legend).toEqual([{ label: 'Clear', index: 0 }]);
+    });
+
+    it('says which archive would draw it when the tiles aren\'t open', () => {
+        const parsed = mapTd.parse(new Uint8Array(8192).fill(0xff), { name: 'scg01ea.bin', names: [], find: () => [] });
+        expect(parsed.wanted).toMatch(/SCG01EA\.INI/);
     });
 });

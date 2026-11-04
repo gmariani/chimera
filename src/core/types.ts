@@ -66,6 +66,8 @@ export type Preview =
           shadowIndex?: number;
           /** Lay the frames out this many to a row with no gaps, when together they make one picture (a tile set's template). */
           columns?: number;
+          /** What some of the colours stand for, e.g. the terrain kinds on a map. */
+          legend?: { label: string; index: number }[];
       }
     | { kind: 'palette'; /** 256 colours as 8-bit RGB. */ colors: Uint8Array }
     | ({ kind: 'audio' } & AudioClip)
@@ -99,6 +101,8 @@ export interface Parsed {
     entries?: Entry[];
     preview?: Preview;
     overlays?: Overlay[];
+    /** Other files that would let this one show more, and what they'd add, e.g. "Open TEMPERAT.MIX as well to draw the real tiles." */
+    wanted?: string;
     warnings: string[];
 }
 
@@ -107,6 +111,18 @@ export interface ParseContext {
     name: string | null;
     /** Extra file names the user supplied, for archives that store hashes instead of names. */
     names: readonly string[];
+    /**
+     * Files the user has opened (and those inside them) under this name, the
+     * nearest to this file first. For formats that need a companion file: a
+     * map's tiles, or the mission INI next to a map.
+     */
+    find?(name: string): Companion[];
+}
+
+export interface Companion {
+    data: Uint8Array;
+    /** The archive it's in, as a path (e.g. "MAIN.MIX › temperat.mix"), or its own name if opened alone. */
+    source: string;
 }
 
 /** The part of a format that loads on demand. */
@@ -123,5 +139,7 @@ export interface FormatDescriptor {
     sniff(data: Uint8Array): boolean;
     /** False when the extension is shared by other files too (.dat, .bin), so it only counts alongside a sniff. */
     byNameAlone?: boolean;
+    /** The parser uses `find`, so its result can change when the user opens more files. */
+    companions?: boolean;
     load(): Promise<FormatParser>;
 }

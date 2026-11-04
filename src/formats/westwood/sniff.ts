@@ -234,3 +234,37 @@ export function sniffIni(data: Uint8Array): boolean {
     const head = new TextDecoder('latin1').decode(data.subarray(0, 4096));
     return /^\s*\[[^\]\r\n]+\]\s*$/m.test(head);
 }
+
+/**
+ * Westwood string tables (.eng, .ger, .fre): a 2-byte offset per string, then
+ * the strings, each ending in a NUL. The first offset says how many there are.
+ * Returns the offsets, or null if this isn't one.
+ */
+export function stringOffsets(data: Uint8Array): number[] | null {
+    if (data.length < 3) return null;
+    const first = data[0] | (data[1] << 8);
+    if (first < 2 || first % 2 || first >= data.length) return null;
+    const offsets: number[] = [];
+    for (let i = 0; i < first; i += 2) {
+        const offset = data[i] | (data[i + 1] << 8);
+        // In order, and each string starts right after the one before ends.
+        if (offset < (offsets.at(-1) ?? first) || offset >= data.length || (i > 0 && data[offset - 1] !== 0)) return null;
+        offsets.push(offset);
+    }
+    let text = 0;
+    for (let i = first; i < data.length; i++) if (data[i] === 0 || data[i] === 9 || data[i] === 10 || data[i] === 13 || data[i] >= 32) text++;
+    return text / (data.length - first) > 0.95 && data.indexOf(0, first) >= 0 ? offsets : null;
+}
+
+export function sniffStrings(data: Uint8Array): boolean {
+    return stringOffsets(data) !== null;
+}
+
+/** RA's chronal vortex frames (HOLE0000.LUT…): 64 × 64 pixels of source x, source y and a shade under 16. */
+export const VORTEX_SIZE = 64;
+
+export function sniffVortex(data: Uint8Array): boolean {
+    if (data.length !== VORTEX_SIZE * VORTEX_SIZE * 3) return false;
+    for (let i = 0; i < data.length; i += 3) if (data[i] >= VORTEX_SIZE || data[i + 1] >= VORTEX_SIZE || data[i + 2] >= 16) return false;
+    return true;
+}

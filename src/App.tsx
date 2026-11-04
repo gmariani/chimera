@@ -3,6 +3,7 @@ import { Inspector } from './components/Inspector';
 import { OpenPanel } from './components/OpenPanel';
 import { TopBar } from './components/TopBar';
 import type { OpenFile } from './lib/inspect';
+import { LibraryProvider } from './lib/library';
 import { PaletteProvider } from './lib/palettes';
 
 // File names the user loaded for MIX archives. Kept between visits; the files themselves never are.
@@ -42,31 +43,33 @@ export function App() {
 
     return (
         <PaletteProvider>
-            <TopBar onNew={current ? () => setTrail([]) : undefined} />
-            {current ? (
-                <main className="container-xxl bd-gutter mt-3 my-md-4 bd-content">
-                    {trail.length > 1 && (
-                        <nav aria-label="Where this file came from">
-                            <ol className="breadcrumb mb-3">
-                                {trail.map((file, i) => (
-                                    <li key={i} className={`breadcrumb-item ${i === trail.length - 1 ? 'active' : ''}`} aria-current={i === trail.length - 1 ? 'page' : undefined}>
-                                        {i === trail.length - 1 ? (
-                                            file.name
-                                        ) : (
-                                            <button type="button" className="btn btn-link p-0 align-baseline" onClick={() => setTrail((t) => t.slice(0, i + 1))}>
-                                                {file.name}
-                                            </button>
-                                        )}
-                                    </li>
-                                ))}
-                            </ol>
-                        </nav>
-                    )}
-                    <Inspector key={trail.length + current.name} file={current} root={trail.length === 1} names={names} onOpen={(file) => setTrail((t) => [...t, file])} onNames={updateNames} />
-                </main>
-            ) : (
-                <OpenPanel onOpen={(file) => setTrail([file])} />
-            )}
+            <LibraryProvider names={names}>
+                <TopBar onNew={current ? () => setTrail([]) : undefined} />
+                {current ? (
+                    <main className="container-xxl bd-gutter mt-3 my-md-4 bd-content">
+                        {trail.length > 1 && (
+                            <nav aria-label="Where this file came from">
+                                <ol className="breadcrumb mb-3">
+                                    {trail.map((file, i) => (
+                                        <li key={i} className={`breadcrumb-item ${i === trail.length - 1 ? 'active' : ''}`} aria-current={i === trail.length - 1 ? 'page' : undefined}>
+                                            {i === trail.length - 1 ? (
+                                                file.name
+                                            ) : (
+                                                <button type="button" className="btn btn-link p-0 align-baseline" onClick={() => setTrail((t) => t.slice(0, i + 1))}>
+                                                    {file.name}
+                                                </button>
+                                            )}
+                                        </li>
+                                    ))}
+                                </ol>
+                            </nav>
+                        )}
+                        <Inspector key={trail.length + current.name} file={current} root={trail.length === 1} near={trail.length > 1 ? trail.slice(0, -1).map((f) => f.name).join(' › ') : undefined} names={names} onOpen={(file) => setTrail((t) => [...t, file])} onNames={updateNames} />
+                    </main>
+                ) : (
+                    <OpenPanel onOpen={(file) => setTrail([file])} />
+                )}
+            </LibraryProvider>
         </PaletteProvider>
     );
 }

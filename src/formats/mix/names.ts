@@ -28,7 +28,16 @@ const SINGLES = [
     'temperat.pal', 'snow.pal', 'interior.pal', 'desert.pal', 'winter.pal', 'jungle.pal', 'unittem.pal', 'unitsno.pal',
     'isotem.pal', 'isosno.pal', 'anim.pal', 'cameo.pal', 'mousepal.pal', 'sidebar.pal', 'unittem.pal', 'unitdes.pal',
     'aftrmath.ini', 'mplayer.ini', 'scg01ea.ini', 'scu01ea.ini', 'scg01ea.bin', 'scu01ea.bin',
+    'conquer.eng', 'conquer.ger', 'conquer.fre', 'editor.eng', 'editor.ger', 'editor.fre', 'debug.eng', 'credits.eng', 'record.bin', 'expand.dat',
+    'temp_vtx.pal', 'snow_vtx.pal', 'intr_vtx.pal',
 ];
+
+/** TD's colour remap tables: the theater's first letter, then what the table is for (DISPLAY.CPP). */
+const REMAP_TABLES = ['green', 'yellow', 'red', 'mouse', 'trans', 'white', 'shadow', 'units', 'shade', 'light', 'clock'];
+const THEATER_LETTERS = ['t', 'd', 'w', 'j'];
+
+/** RA's chronal vortex: 16 frames each of growing, spinning and shrinking. */
+const VORTEX_FRAMES = 48;
 
 /** Unit, building and effect sprite names from TD and RA. */
 const SPRITES = [
@@ -55,6 +64,10 @@ const SPRITES = [
     'ore01', 'ore02', 'ore03', 'ore04', 'gem01', 'gem02', 'gem03', 'gem04', 'ti1', 'ti2', 'ti3', 'ti4', 'ti5', 'ti6',
     'ti7', 'ti8', 'ti9', 'ti10', 'ti11', 'ti12', 't01', 't02', 't03', 't05', 't06', 't07', 't08', 't10', 't11', 't12',
     't13', 't14', 't15', 't16', 't17', 'tc01', 'tc02', 'tc03', 'tc04', 'tc05', 'mine', 'boxes01', 'boxes02', 'ice01',
+    // Map overlays and terrain objects (ODATA.CPP, TDATA.CPP)
+    'gold01', 'gold02', 'gold03', 'gold04', 'gem01', 'gem02', 'gem03', 'gem04', 'fpls', 'wwcrate', 'squish', 'road', 'conc',
+    't04', 't09', 't18', 'split2', 'split3', 'rock1', 'rock2', 'rock3', 'rock4', 'rock5', 'rock6', 'rock7', 'boxes03', 'boxes04',
+    'boxes05', 'boxes06', 'boxes07', 'boxes08', 'boxes09', 'ice02', 'ice03', 'ice04', 'ice05',
 ];
 
 /** Sidebar build icons are the sprite name plus "icon". */
@@ -144,6 +157,8 @@ export function builtInNames(): string[] {
     for (const base of SOUNDS) for (const ext of SOUND_EXTENSIONS) names.add(`${base}.${ext}`);
     for (const base of [...MUSIC, ...TD_SPEECH]) names.add(`${base}.aud`);
     for (const base of MOVIES) names.add(`${base}.vqa`);
+    for (const letter of THEATER_LETTERS) for (const table of REMAP_TABLES) names.add(`${letter}${table}.mrf`);
+    for (let i = 0; i < VORTEX_FRAMES; i++) names.add(`hole${String(i).padStart(4, '0')}.lut`);
     for (const side of ['gdi', 'nod']) {
         for (let mission = 1; mission <= 15; mission++) for (const suffix of BRIEFING_SUFFIXES) names.add(`${side}${mission}${suffix}.vqa`);
     }

@@ -2,6 +2,7 @@ import { useRef, useState, type DragEvent } from 'react';
 import { Alert, Button } from 'react-bootstrap';
 import { FORMATS } from '../formats';
 import type { OpenFile } from '../lib/inspect';
+import { useLibrary } from '../lib/library';
 
 /** Where a file comes in: dropped or picked from disk. Everything is read in the browser. */
 export function OpenPanel({ onOpen }: { onOpen: (file: OpenFile) => void }) {
@@ -9,12 +10,16 @@ export function OpenPanel({ onOpen }: { onOpen: (file: OpenFile) => void }) {
     const [error, setError] = useState<string | null>(null);
     const [reading, setReading] = useState<string | null>(null);
     const input = useRef<HTMLInputElement>(null);
+    const library = useLibrary();
 
-    const load = async (file: File | undefined) => {
+    /** Opens the first file; any others are there for it to use, like a map's theater archive. */
+    const load = async (files: FileList | null | undefined) => {
+        const [file, ...others] = files ?? [];
         if (!file) return;
         setError(null);
         setReading(file.name);
         try {
+            for (const other of others) await library.add(other.name, new Uint8Array(await other.arrayBuffer()));
             onOpen({ name: file.name, knownName: file.name, data: new Uint8Array(await file.arrayBuffer()) });
         } catch (e) {
             setError(`Couldn't read ${file.name}: ${e instanceof Error ? e.message : String(e)}`);
@@ -26,7 +31,7 @@ export function OpenPanel({ onOpen }: { onOpen: (file: OpenFile) => void }) {
     const drop = (event: DragEvent) => {
         event.preventDefault();
         setDragging(false);
-        void load(event.dataTransfer.files[0]);
+        void load(event.dataTransfer.files);
     };
 
     return (
@@ -61,7 +66,7 @@ export function OpenPanel({ onOpen }: { onOpen: (file: OpenFile) => void }) {
                         Read in your browser. The file is never uploaded.
                     </span>
                 </div>
-                <input ref={input} type="file" hidden onChange={(e) => void load(e.target.files?.[0]).finally(() => (e.target.value = ''))} />
+                <input ref={input} type="file" multiple hidden onChange={(e) => void load(e.target.files).finally(() => (e.target.value = ''))} />
             </div>
 
             <div className="row g-4 mt-4">
@@ -74,7 +79,7 @@ export function OpenPanel({ onOpen }: { onOpen: (file: OpenFile) => void }) {
                             </li>
                         ))}
                     </ul>
-                    <p className="small text-body-secondary mb-0">Anything else opens in the hex view.</p>
+                    <p className="small text-body-secondary mb-0">Anything else opens in the hex view. Drop several files at once to open the first with the others alongside it, e.g. a map's archive and its theater's (GENERAL.MIX and TEMPERAT.MIX).</p>
                 </div>
             </div>
         </main>

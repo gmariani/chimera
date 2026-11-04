@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { Entry, FormatDescriptor, Parsed } from '../core/types';
+import { useEffect, useMemo, useState } from 'react';
+import type { Companion, Entry, FormatDescriptor, Parsed } from '../core/types';
 import { detect, extensionOf } from '../formats';
 
 /** A file being looked at: opened from disk, or pulled out of another file. */
@@ -16,9 +16,19 @@ export type ParseState =
     | { status: 'ready'; format: FormatDescriptor; parsed: Parsed }
     | { status: 'error'; format: FormatDescriptor; error: string };
 
-/** Detects the file's format, loads that parser, and parses. Re-parses when `names` changes. */
-export function useParsed(file: OpenFile, names: readonly string[]): ParseState {
+/** Other opened files, for formats that use companions; `version` changes when there are more. */
+export interface Companions {
+    find(name: string): Companion[];
+    version: number;
+}
+
+/** Detects the file's format, loads that parser, and parses. Re-parses when `names` changes, or the companions do and the format uses them. */
+export function useParsed(file: OpenFile, names: readonly string[], companions?: Companions): ParseState {
     const [state, setState] = useState<ParseState>(() => ({ status: 'loading', format: detect(file.data, file.knownName ?? file.name) }));
+
+    const usesCompanions = useMemo(() => detect(file.data, file.knownName ?? file.name).companions === true, [file]);
+    const find = usesCompanions ? companions?.find : undefined;
+    const version = usesCompanions ? companions?.version : undefined;
 
     useEffect(() => {
         let cancelled = false;
@@ -31,7 +41,7 @@ export function useParsed(file: OpenFile, names: readonly string[]): ParseState 
                 return new Promise<Parsed>((resolve, reject) =>
                     setTimeout(() => {
                         try {
-                            resolve(parser.parse(file.data, { name: file.knownName, names }));
+                            resolve(parser.parse(file.data, { name: file.knownName, names, find }));
                         } catch (e) {
                             reject(e);
                         }
@@ -49,7 +59,8 @@ export function useParsed(file: OpenFile, names: readonly string[]): ParseState 
         return () => {
             cancelled = true;
         };
-    }, [file, names]);
+        // `version` isn't read here, but a new one means `find` has more to give.
+    }, [file, names, find, version]);
 
     return state;
 }

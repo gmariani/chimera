@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Nav, Spinner, Tab } from 'react-bootstrap';
 import { bytesLabel, formatSize } from '../core/bytes';
 import { download, safeName } from '../lib/download';
 import { useParsed, type OpenFile } from '../lib/inspect';
+import { useLibrary } from '../lib/library';
 import { findPalettes, preferred } from '../lib/palette-sources';
 import { usePalettes } from '../lib/palettes';
 import { ContentsTab } from '../tabs/ContentsTab';
@@ -16,6 +17,7 @@ type TabKey = 'contents' | 'preview' | 'structure';
 export function Inspector({
     file,
     root,
+    near,
     names,
     onOpen,
     onNames,
@@ -23,13 +25,23 @@ export function Inspector({
     file: OpenFile;
     /** Opened from disk, rather than from inside another file. */
     root: boolean;
+    /** The archive it came out of, as a path ("MAIN.MIX › general.mix"). */
+    near?: string;
     names: readonly string[];
     onOpen: (file: OpenFile) => void;
     onNames: (names: string[]) => void;
 }) {
-    const state = useParsed(file, names);
+    const library = useLibrary();
+    const { find: findAnywhere, add: addToLibrary } = library;
+    const find = useCallback((name: string) => findAnywhere(name, near), [findAnywhere, near]);
+    const state = useParsed(file, names, { find, version: library.version });
     const [tab, setTab] = useState<TabKey | null>(null);
     const { add } = usePalettes();
+
+    // Files opened from disk, and what's in them, are there for other files to use (a map's tiles).
+    useEffect(() => {
+        if (root) void addToLibrary(file.name, file.data);
+    }, [root, file, addToLibrary]);
 
     // Palettes in an archive are what its sprites are meant to be seen with. A newly opened
     // file's own palette replaces one from an earlier file (Red Alert's differ from TD's).
@@ -83,6 +95,7 @@ export function Inspector({
                         </Alert>
                     ))}
                     {parsed.warnings.length > 5 && <Alert variant="warning" className="py-2 small">…and {parsed.warnings.length - 5} more problems.</Alert>}
+                    {parsed.wanted && <Wanted text={parsed.wanted} />}
 
                     <div className="summary mx-auto mb-4">
                         <Dl rows={parsed.summary.map(([k, v]) => [k, v])} labelCols={4} className="facts mb-0" />
@@ -117,5 +130,32 @@ export function Inspector({
 
             {state.status === 'error' && <StructureTab data={file.data} parsed={{ title: '', summary: [], fields: [], warnings: [] }} fileName={file.name} />}
         </>
+    );
+}
+
+/** A note that another file would show more, and a way to add it without leaving this one. */
+function Wanted({ text }: { text: string }) {
+    const { add } = useLibrary();
+    const input = useRef<HTMLInputElement>(null);
+    const [result, setResult] = useState<string | null>(null);
+
+    const load = async (files: FileList | null) => {
+        if (!files?.length) return;
+        let added = 0;
+        for (const f of files) added += await add(f.name, new Uint8Array(await f.arrayBuffer()));
+        setResult(`Added ${added.toLocaleString('en-US')} file${added === 1 ? '' : 's'}.`);
+    };
+
+    return (
+        <Alert variant="info" className="py-2 small d-flex flex-wrap align-items-center gap-2">
+            <span className="me-auto">
+                <i className="bi bi-info-circle me-1" />
+                {text} {result && <span className="text-body-secondary">{result}</span>}
+            </span>
+            <Button size="sm" variant="outline-light" onClick={() => input.current?.click()}>
+                <i className="bi bi-plus-lg me-1" /> Add files…
+            </Button>
+            <input ref={input} type="file" multiple hidden onChange={(e) => void load(e.target.files).finally(() => (e.target.value = ''))} />
+        </Alert>
     );
 }

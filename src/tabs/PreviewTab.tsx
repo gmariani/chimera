@@ -19,6 +19,7 @@ export function PreviewTab({ preview, fileName, names }: { preview: Preview; fil
                     transparentIndex={preview.transparentIndex}
                     shadowIndex={preview.shadowIndex}
                     columns={preview.columns}
+                    legend={preview.legend}
                     fileName={fileName}
                     names={names}
                 />
@@ -103,6 +104,7 @@ function ImagesPreview({
     transparentIndex,
     shadowIndex,
     columns,
+    legend,
     fileName,
     names,
 }: {
@@ -111,6 +113,7 @@ function ImagesPreview({
     transparentIndex?: number;
     shadowIndex?: number;
     columns?: number;
+    legend?: { label: string; index: number }[];
     fileName: string;
     names: readonly string[];
 }) {
@@ -224,6 +227,17 @@ function ImagesPreview({
                         ))}
                     </ButtonGroup>
                 </Form.Group>
+
+                {legend && (
+                    <ul className="list-unstyled small mb-3 legend">
+                        {legend.map(({ label, index }) => (
+                            <li key={index} className="d-flex align-items-center gap-2">
+                                <span className="legend-swatch" style={{ background: `rgb(${palette[index * 3]}, ${palette[index * 3 + 1]}, ${palette[index * 3 + 2]})` }} />
+                                {label}
+                            </li>
+                        ))}
+                    </ul>
+                )}
 
                 <Form.Group className="mb-3">
                     <Form.Label className="small text-body-secondary mb-1">Palette</Form.Label>

@@ -13,17 +13,22 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | WSA animations | headers, frame offsets | all frames, animation | PNG frame, sheet, all frames |
 | Terrain tile sets (.tem, .des, .win, .sno, .int, .icn) | header, tiles, cell map | the template assembled, each tile | PNG |
 | VQA video (TD/RA, version 2) | chunk map, VQHD | player with sound | PNG frame, all frames, WAV |
-| Map terrain (TD .bin, RA [MapPack] in mission INIs) | every cell | terrain kinds, ore and walls (RA) | PNG |
+| Maps (TD .bin with its mission INI, RA [MapPack] in mission INIs) | every cell | drawn with the game's tiles, ore, walls and trees once the theater archive is open; terrain kinds with a key | PNG |
 | Fonts (.fnt) | header, each character | every character | PNG |
 | PAL palettes | each colour | swatches, use for sprites | — |
+| String tables (.eng, .ger, .fre) | offsets, each string | numbered list | — |
+| Colour remap tables (TD .mrf) | each table | the palette through each table | PNG |
+| Chronal vortex frames (RA .lut) | every pixel | warp and shading | PNG |
 | VQP palette blending tables | tables | first table | — |
 | INI files | sections and entries | text | — |
 | XCC local mix database | names | list | — |
 | Other text | — | text | — |
 
-Template names, TD template sizes and RA overlay types come from the GPL source of the Remastered Collection (`DEFINES.H`, `CDATA.CPP`).
+Template names, TD template sizes, overlay and tree names, how ore and walls pick their frames, and the remap table and vortex layouts come from the GPL source of the Remastered Collection (`DEFINES.H`, `CDATA.CPP`, `ODATA.CPP`, `TDATA.CPP`, `CELL.CPP`, `DISPLAY.CPP`, `VORTEX.CPP`).
 
-Anything else opens in the hex view.
+Anything else opens in the hex view. The only files in the TD and RA Remastered data that still do are `record.bin` (a recorded game: TD writes its in-memory structures straight to disk, so the layout depends on the build) and two empty files.
+
+Some files need others: a map needs its theater's tiles and palette, and a TD map's `.bin` and `.ini` need each other. Every archive opened in a session (and the archives inside it) is kept, so files can find their companions there. Drop several files at once to open the first with the rest alongside it, or use **Add files…** on the note a file shows when it's missing one. For TD, that's GENERAL.MIX with TEMPERAT.MIX (or DESERT.MIX, WINTER.MIX) and CONQUER.MIX for walls; for RA, MAIN.MIX with REDALERT.MIX for the palettes.
 
 MIX archives store a hash of each file name, not the name. Names come from the archive's own `local mix database.dat` (if XCC added one), a built-in list of common C&C names, and any list you load with **Add names…** (XCC's `global mix database.dat`, or a text file with one name per line).
 
@@ -36,6 +41,9 @@ Each format is a plain TypeScript module that turns bytes into data. It never re
    - `entries` (optional): files held inside, which can be opened and extracted.
    - `preview` (optional): `images` (indexed pixels), `palette`, `audio` (WAV bytes) or `text`.
    - `overlays` (optional): bytes to show in place of the file's own, such as a decrypted header.
+   - `wanted` (optional): which other file would let it show more.
+
+   A parser that needs other files uses `context.find(name)`, and sets `companions: true` in the registry so it runs again when more files are opened.
 2. Add a cheap `sniff()` and register both in `src/formats/index.ts`. The parser is loaded on demand.
 
 ## Development
