@@ -299,6 +299,9 @@ class Canvas {
 }
 
 const MAX_SIDE = 4096;
+/** Theaters' letters and extensions, in the order the mission editor tries them after the map's own. */
+const THEATER_LETTERS = ['g', 't', 'a', 'u', 'n', 'd', 'l'];
+const THEATER_EXTENSIONS = ['tem', 'sno', 'urb', 'lun', 'des', 'ubn'];
 /** BRIDGE1, BRIDGE2, RAILBRDG1 and RAILBRDG2 in both games' [OverlayTypes], and RA2's BRIDGEB1 and BRIDGEB2. */
 const HIGH_BRIDGES = [0x18, 0x19, 0x3b, 0x3c, 0xed, 0xee];
 
@@ -402,11 +405,17 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const image = (name: string) => (rulesIni?.get(name, 'Image') ?? art?.get(name, 'Image') ?? name).trim().toUpperCase();
     const sprites = new Map<string, { width: number; height: number; frames: ShpTsFrame[] } | null>();
     /**
-     * An object's sprite, by its art's flags: Theater=yes art is the image name with the theater's
-     * extension (tib01.tem); NewTheater=yes art swaps the name's second letter for the theater's
-     * (GASAND is the snow sandbag, GTSAND the temperate, GGSAND the generic one); other art is a plain .shp.
+     * An object's sprite, found the way the TS/RA2 mission editor finds it (EA's GPL source): each
+     * candidate in turn, the first that exists wins.
+     *  1. Theater=yes art: the image name with a theater's extension (tib01.tem), this theater's first.
+     *  2. Names starting G, N, C or Y (GDI, Nod, civilian, Yuri), flagged NewTheater=yes or not: the
+     *     second letter swapped for a theater's, this one's, then G (generic), T, A, U, N, D, L.
+     *     GASAND is the snow sandbag and GTSAND the temperate; NARADR has no NewTheater=yes, yet
+     *     temperate maps draw the radar from NTRADR.
+     *  3. The plain name, then with each theater's extension.
+     *  4. The second-letter swap for any other name.
      */
-    const spriteFor = (name: string, role: string, building = false) => {
+    const spriteFor = (name: string, role: string) => {
         if (!sprites.has(name)) {
             const img = image(name);
             const n = img.toLowerCase();
@@ -416,18 +425,17 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 return null;
             }
             const yesFlag = (key: string) => /^(yes|true|1)$/i.test(art?.get(img, key) ?? art?.get(name, key) ?? '');
-            const lettered = (letter: string) => (n.length > 2 ? `${n[0]}${letter}${n.slice(2)}.shp` : '');
-            const candidates = (
-                yesFlag('Theater')
-                    ? [`${n}.${theater.ext}`, `${n}.shp`]
-                    : yesFlag('NewTheater')
-                      ? [lettered(theater.letter), lettered('g'), `${n}.shp`]
-                      : // A building's theater version wins, flagged or not: NARADR has no NewTheater=yes,
-                        // yet the game draws temperate maps' radar from NTRADR, not the snowy NARADR.
-                        building && n[1] === 'a'
-                        ? [lettered(theater.letter), `${n}.shp`, `${n}.${theater.ext}`]
-                        : [`${n}.shp`, `${n}.${theater.ext}`, lettered(theater.letter)]
-            ).filter(Boolean);
+            const extended = [theater.ext, ...THEATER_EXTENSIONS].map((e) => `${n}.${e}`);
+            const lettered = n.length > 2 ? [theater.letter, ...THEATER_LETTERS].map((l) => `${n[0]}${l}${n.slice(2)}.shp`) : [];
+            const candidates = [
+                ...new Set([
+                    ...(yesFlag('Theater') ? extended : []),
+                    ...(/^[gncy]/.test(n) ? lettered : []),
+                    `${n}.shp`,
+                    ...extended,
+                    ...lettered,
+                ]),
+            ];
             let found: Companion | undefined;
             for (const f of candidates) {
                 found = find?.(f).find((c) => sniffShpTs(c.data));
@@ -575,15 +583,15 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 const [cx, cy] = point(o.rx + fw / 2, o.ry + fh / 2);
                 const palette = artPalette(img, o.house);
                 const bib = art?.get(img, 'BibShape');
-                const bibShp = bib ? spriteFor(bib.toUpperCase(), 'Building foundation sprite', true) : null;
+                const bibShp = bib ? spriteFor(bib.toUpperCase(), 'Building foundation sprite') : null;
                 if (bibShp) drawFrame(bibShp, 0, cx, cy, palette, false);
-                const shp = spriteFor(o.type, 'Building sprite', true);
+                const shp = spriteFor(o.type, 'Building sprite');
                 // Its frames: whole, damaged (, rubble), then the same again as shadows.
                 if (shp) drawFrame(shp, damaged && shp.frames.length >= 4 ? 1 : 0, cx, cy, palette, true);
                 for (const key of ['ActiveAnim', 'ActiveAnimTwo', 'ActiveAnimThree', 'ActiveAnimFour', 'IdleAnim']) {
                     const anim = (damaged && art?.get(img, `${key}Damaged`)) || art?.get(img, key);
                     if (!anim) continue;
-                    const animShp = spriteFor(anim.toUpperCase(), 'Building animation sprite', true);
+                    const animShp = spriteFor(anim.toUpperCase(), 'Building animation sprite');
                     const dx = Number(art?.get(img, `${key}X`) ?? 0);
                     const dy = Number(art?.get(img, `${key}Y`) ?? 0);
                     // An animation in the terrain palette says so; otherwise it's drawn like its building.
@@ -608,7 +616,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                     const picture = voxelPictures.get(key);
                     if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(tx - picture.originX), Math.round(ty - picture.originY));
                 } else {
-                    const turretShp = spriteFor(turret.toUpperCase(), 'Defense turret sprite', true);
+                    const turretShp = spriteFor(turret.toUpperCase(), 'Defense turret sprite');
                     if (turretShp) drawFrame(turretShp, Math.round(((256 - o.facing) % 256) / 8) % 32, tx, ty, palette, false);
                 }
             } });
