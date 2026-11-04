@@ -11,6 +11,11 @@ export interface BinkWasm {
     /** How many 16-bit samples were written, or negative on error. */
     _audio_decode(decoder: number, data: number, size: number, out: number, max: number): number;
     _decoder_flush(decoder: number): void;
+    /** Keeps the decoder's reference frame, to carry on from later (0 if there's none yet). */
+    _video_save(decoder: number): number;
+    /** Makes a kept frame the reference again; negative on error. */
+    _video_restore(decoder: number, saved: number): number;
+    _video_forget(saved: number): void;
     _decoder_close(decoder: number): void;
 }
 

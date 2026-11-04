@@ -86,14 +86,30 @@ class Input {
         this.w.HEAPU8.set(bytes, this.pointer);
         return this.pointer;
     }
+    free() {
+        if (this.pointer) this.w._free(this.pointer);
+        this.pointer = this.size = 0;
+    }
 }
 
-/** Plays frames in order; going back, or far ahead, starts again from the keyframe before the one wanted. */
+/** How often to keep the decoder's state while playing, so a jump only decodes from the nearest one. */
+const SNAPSHOT_EVERY = 100;
+
+/** Only the most recently opened movie keeps its decoder and snapshots; the one before lets them go. */
+let current: Player | null = null;
+
+/**
+ * Plays frames in order. RA2's movies have one keyframe, at the start, so the
+ * decoder's state is kept every SNAPSHOT_EVERY frames as it goes: a jump starts
+ * from the nearest kept frame (or keyframe) before the one wanted.
+ */
 class Player {
     private decoder = 0;
-    private readonly rgba: number;
-    private readonly input: Input;
+    private rgba = 0;
+    private input: Input | null = null;
     private position = -1;
+    /** Frame number → the decoder's reference frame just after decoding it. */
+    private readonly snapshots = new Map<number, number>();
     errors = 0;
 
     constructor(
@@ -101,25 +117,57 @@ class Player {
         private readonly data: Uint8Array,
         private readonly l: Layout,
     ) {
-        this.decoder = w._video_open(l.tag, l.flags, l.width, l.height);
+        this.open();
+    }
+
+    private open() {
+        if (current && current !== this) current.close();
+        current = this;
+        if (this.decoder) return;
+        this.decoder = this.w._video_open(this.l.tag, this.l.flags, this.l.width, this.l.height);
         if (!this.decoder) throw new Error('The Bink decoder wouldn\'t open this video.');
-        this.rgba = w._malloc(l.width * l.height * 4);
-        this.input = new Input(w);
+        this.rgba = this.w._malloc(this.l.width * this.l.height * 4);
+        this.input = new Input(this.w);
+        this.position = -1;
+    }
+
+    /** Lets the decoder and snapshots go; opening again starts afresh. */
+    close() {
+        if (!this.decoder) return;
+        for (const saved of this.snapshots.values()) this.w._video_forget(saved);
+        this.snapshots.clear();
+        this.w._decoder_close(this.decoder);
+        this.w._free(this.rgba);
+        this.input?.free();
+        this.decoder = this.rgba = 0;
+        this.input = null;
     }
 
     private decode(i: number, draw: boolean) {
         const video = packets(this.data, this.l, i).video;
-        if (video.length && this.w._video_decode(this.decoder, this.input.put(video), video.length, draw ? this.rgba : 0) < 0) this.errors++;
+        if (video.length && this.w._video_decode(this.decoder, this.input!.put(video), video.length, draw ? this.rgba : 0) < 0) this.errors++;
         this.position = i;
+        if (i % SNAPSHOT_EVERY === 0 && i > 0 && !this.snapshots.has(i)) {
+            const saved = this.w._video_save(this.decoder);
+            if (saved) this.snapshots.set(i, saved);
+        }
     }
 
     frame(index: number): VideoFrame {
+        this.open();
+        // Where to start: the frame before this one, the nearest kept state, or the keyframe.
         let key = index;
         while (key > 0 && !this.l.frames[key].key) key--;
-        // Carry on from where we are when that's on the way; otherwise from the keyframe.
-        if (!(this.position >= key && this.position < index)) {
-            this.w._decoder_flush(this.decoder);
-            this.position = key - 1;
+        let snapshot = -1;
+        for (const at of this.snapshots.keys()) if (at < index && at >= key && at > snapshot) snapshot = at;
+        const best = Math.max(key - 1, snapshot);
+        if (!(this.position >= best && this.position < index)) {
+            if (snapshot >= key && this.w._video_restore(this.decoder, this.snapshots.get(snapshot)!) >= 0) {
+                this.position = snapshot;
+            } else {
+                this.w._decoder_flush(this.decoder);
+                this.position = key - 1;
+            }
         }
         while (this.position < index - 1) this.decode(this.position + 1, false);
         this.decode(index, true);
@@ -147,6 +195,7 @@ function sound(w: BinkWasm, data: Uint8Array, l: Layout): AudioClip | undefined 
         }
     } finally {
         w._free(out);
+        input.free();
         w._decoder_close(decoder);
     }
     const samples = new Int16Array(chunks.reduce((n, c) => n + c.length, 0));

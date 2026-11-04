@@ -349,11 +349,18 @@ function PalettePreview({ colors, fileName }: { colors: Uint8Array; fileName: st
     );
 }
 
+/** A blob URL for a WAV, made and revoked by the same effect, so it lives exactly as long as it's shown (seeking re-reads it). */
 function useWavUrl(wav: Uint8Array | undefined): string | undefined {
-    const url = useMemo(() => wav && URL.createObjectURL(new Blob([wav as Uint8Array<ArrayBuffer>], { type: 'audio/wav' })), [wav]);
-    useEffect(() => () => {
-        if (url) URL.revokeObjectURL(url);
-    }, [url]);
+    const [url, setUrl] = useState<string>();
+    useEffect(() => {
+        if (!wav) {
+            setUrl(undefined);
+            return;
+        }
+        const made = URL.createObjectURL(new Blob([wav as Uint8Array<ArrayBuffer>], { type: 'audio/wav' }));
+        setUrl(made);
+        return () => URL.revokeObjectURL(made);
+    }, [wav]);
     return url;
 }
 

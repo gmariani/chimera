@@ -77,7 +77,7 @@ Bink is decoded by FFmpeg's Bink video and audio decoders, compiled to WebAssemb
 ./wasm/bink/build.sh   # downloads FFmpeg (the release named in the script), builds in Emscripten's image
 ```
 
-Only libavcodec's Bink decoders are built; the container is read in TypeScript (`src/formats/westwood/bink.ts`), and `wasm/bink/wrapper.c` is the small C API between them. FFmpeg is LGPL 2.1+ (see `bink-wasm/LICENSE.ffmpeg.md`).
+Only libavcodec's Bink decoders are built; the container is read in TypeScript (`src/formats/westwood/bink.ts`), and `wasm/bink/wrapper.c` is the small C API between them. RA2's movies have a single keyframe, so while a movie plays the decoder's reference frame is kept every 100 frames, and a jump decodes only from the nearest one. To reach that frame, the build appends one accessor to FFmpeg's `bink.c` (`wasm/bink/bink-reference.c`). FFmpeg is LGPL 2.1+ (see `bink-wasm/LICENSE.ffmpeg.md`).
 
 ## References
 

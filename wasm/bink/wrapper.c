@@ -8,9 +8,14 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include <emscripten/emscripten.h>
 #include "libavcodec/avcodec.h"
 #include "libavutil/imgutils.h"
+#include "libavutil/samplefmt.h"
+
+/* From bink-reference.c, appended to libavcodec/bink.c by build.sh. */
+AVFrame *chimera_bink_reference(AVCodecContext *avctx);
 
 typedef struct {
     AVCodecContext *codec;
@@ -115,6 +120,25 @@ EMSCRIPTEN_KEEPALIVE int video_decode(Decoder *d, const uint8_t *data, int size,
 }
 
 /**
+ * Keeps the decoder's reference frame (the last picture decoded) so decoding
+ * can carry on from here later. Bink decodes each frame into a new buffer, so
+ * keeping a reference costs nothing and the picture is never written over.
+ */
+EMSCRIPTEN_KEEPALIVE AVFrame *video_save(Decoder *d) {
+    AVFrame *last = chimera_bink_reference(d->codec);
+    return last && last->data[0] ? av_frame_clone(last) : NULL;
+}
+
+/** Makes a saved frame the decoder's reference again: the next packet decodes as if it followed that frame. */
+EMSCRIPTEN_KEEPALIVE int video_restore(Decoder *d, AVFrame *saved) {
+    return av_frame_replace(chimera_bink_reference(d->codec), saved);
+}
+
+EMSCRIPTEN_KEEPALIVE void video_forget(AVFrame *saved) {
+    av_frame_free(&saved);
+}
+
+/**
  * Decodes one audio packet into out as interleaved 16-bit samples (at most
  * max of them). Returns how many were written, or negative on error.
  */
@@ -125,10 +149,13 @@ EMSCRIPTEN_KEEPALIVE int audio_decode(Decoder *d, const uint8_t *data, int size,
     while ((err = avcodec_receive_frame(d->codec, d->frame)) >= 0) {
         const AVFrame *f = d->frame;
         const int channels = f->ch_layout.nb_channels;
+        // The DCT decoder gives a plane per channel; the RDFT one, interleaved samples.
+        const int planar = av_sample_fmt_is_planar(f->format);
         for (int i = 0; i < f->nb_samples; i++) {
             for (int c = 0; c < channels && written < max; c++) {
-                // Bink audio decodes to planar float.
-                float s = ((const float *)f->extended_data[c])[i] * 32767.0f;
+                const float v = planar ? ((const float *)f->extended_data[c])[i] : ((const float *)f->data[0])[i * channels + c];
+                // As FFmpeg converts float to 16-bit: scaled by 2^15 and rounded.
+                const long s = lrintf(v * 32768.0f);
                 out[written++] = s > 32767 ? 32767 : s < -32768 ? -32768 : (int16_t)s;
             }
         }

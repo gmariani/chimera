@@ -4,7 +4,8 @@
 # the .wasm inside it, loaded only when a .bik file is opened.
 #
 # Needs Docker: it runs Emscripten's official image. FFmpeg is LGPL 2.1+; the
-# exact source used is the release below, downloaded into build/.
+# exact source used is the release below, downloaded into build/, with one
+# small addition appended to libavcodec/bink.c (bink-reference.c).
 set -euo pipefail
 
 FFMPEG_VERSION=7.1
@@ -30,7 +31,9 @@ fi
 inner=$(cat <<SCRIPT
 set -euo pipefail
 cd /src/build/ffmpeg-$FFMPEG_VERSION
-if [ ! -f libavcodec/libavcodec.a ]; then
+# The one addition to FFmpeg: an accessor for the decoder's reference frame (see bink-reference.c).
+grep -q chimera_bink_reference libavcodec/bink.c || cat /src/bink-reference.c >> libavcodec/bink.c
+if [ ! -f ffbuild/config.mak ]; then
     emconfigure ./configure \
         --cc=emcc --cxx=em++ --ar=emar --ranlib=emranlib --nm=emnm \
         --target-os=none --arch=x86_32 --enable-cross-compile \
@@ -40,12 +43,12 @@ if [ ! -f libavcodec/libavcodec.a ]; then
         --disable-runtime-cpudetect --disable-autodetect --disable-debug \
         --enable-decoder=bink --enable-decoder=binkaudio_rdft --enable-decoder=binkaudio_dct \
         --extra-cflags='-O3'
-    emmake make -j\$(nproc) libavcodec/libavcodec.a libavutil/libavutil.a
 fi
+emmake make -j\$(nproc) libavcodec/libavcodec.a libavutil/libavutil.a
 emcc -O3 -I. /src/wrapper.c libavcodec/libavcodec.a libavutil/libavutil.a \
     -s MODULARIZE=1 -s EXPORT_ES6=1 -s EXPORT_NAME=createBink -s SINGLE_FILE=1 \
     -s ENVIRONMENT=web,worker -s ALLOW_MEMORY_GROWTH=1 -s FILESYSTEM=0 \
-    -s EXPORTED_FUNCTIONS=_malloc,_free,_video_open,_audio_open,_video_decode,_audio_decode,_decoder_flush,_decoder_close \
+    -s EXPORTED_FUNCTIONS=_malloc,_free,_video_open,_audio_open,_video_decode,_audio_decode,_decoder_flush,_decoder_close,_video_save,_video_restore,_video_forget \
     -s EXPORTED_RUNTIME_METHODS=HEAPU8,HEAP16 \
     -o /out/bink.mjs
 SCRIPT
