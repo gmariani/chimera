@@ -299,6 +299,8 @@ class Canvas {
 }
 
 const MAX_SIDE = 4096;
+/** BRIDGE1, BRIDGE2, RAILBRDG1 and RAILBRDG2 in both games' [OverlayTypes], and RA2's BRIDGEB1 and BRIDGEB2. */
+const HIGH_BRIDGES = [0x18, 0x19, 0x3b, 0x3c, 0xed, 0xee];
 
 export interface IsoRender {
     image: { width: number; height: number; rgba: Uint8Array };
@@ -404,7 +406,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
      * extension (tib01.tem); NewTheater=yes art swaps the name's second letter for the theater's
      * (GASAND is the snow sandbag, GTSAND the temperate, GGSAND the generic one); other art is a plain .shp.
      */
-    const spriteFor = (name: string, role: string) => {
+    const spriteFor = (name: string, role: string, building = false) => {
         if (!sprites.has(name)) {
             const img = image(name);
             const n = img.toLowerCase();
@@ -420,7 +422,11 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                     ? [`${n}.${theater.ext}`, `${n}.shp`]
                     : yesFlag('NewTheater')
                       ? [lettered(theater.letter), lettered('g'), `${n}.shp`]
-                      : [`${n}.shp`, `${n}.${theater.ext}`, lettered(theater.letter)]
+                      : // A building's theater version wins, flagged or not: NARADR has no NewTheater=yes,
+                        // yet the game draws temperate maps' radar from NTRADR, not the snowy NARADR.
+                        building && n[1] === 'a'
+                        ? [lettered(theater.letter), `${n}.shp`, `${n}.${theater.ext}`]
+                        : [`${n}.shp`, `${n}.${theater.ext}`, lettered(theater.letter)]
             ).filter(Boolean);
             let found: Companion | undefined;
             for (const f of candidates) {
@@ -457,17 +463,17 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
         const f = shp.frames[Math.min(frame, shp.frames.length - 1)];
         if (f) canvas.draw(f.pixels, shp.width, shp.height, x, y, palette);
     };
-    const drawSprite = (rx: number, ry: number, name: string, frame: number, palette: Uint8Array, shadow = false) => {
+    const drawSprite = (rx: number, ry: number, name: string, frame: number, palette: Uint8Array, shadow = false, dy = 0) => {
         const shp = sprite(name);
         if (!shp) return;
         const [cx, cy] = point(rx + 0.5, ry + 0.5);
-        drawFrame(shp, frame, cx, cy, palette, shadow);
+        drawFrame(shp, frame, cx, cy + dy, palette, shadow);
     };
     // rules.ini marks walls (Wall=yes), which are drawn in the unit palette; their names don't say so (TS's sandbags are GASAND).
     const isWall = (name: string) => /^(yes|true|1)$/i.test(rulesIni?.get(name, 'Wall') ?? '') || overlayMark(name) === 'wall';
     /**
-     * TS draws Tiberium with entries 16–31 in its type's color (rules.ini [Tiberiums]: Riparius is
-     * NeonGreen). TIB01–TIB20 are type 1, TIB2_xx type 2 and so on; BTIB is type 2. RA2's ore and gems
+     * TS draws Tiberium in the unit palette, whose gray base the crystals sit on, with entries 16–31 in
+     * its type's color (rules.ini [Tiberiums]: Riparius is NeonGreen). TIB01–TIB20 are type 1, TIB2_xx type 2 and so on; BTIB is type 2. RA2's ore and gems
      * carry their own colors (its NeonGreen isn't even defined), so they're left as they are.
      */
     const tiberiumPalettes = new Map<number, Uint8Array>();
@@ -476,7 +482,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
         if (!tiberiumPalettes.has(image)) {
             const type = rulesIni?.entries('Tiberiums').map(([, v]) => v.trim()).find((t) => Number(rulesIni.get(t, 'Image')) === image);
             const hsv = type ? rulesIni?.get('Colors', rulesIni.get(type, 'Color') ?? '')?.split(',').map(Number) : undefined;
-            tiberiumPalettes.set(image, tw === 48 && hsv?.length === 3 && hsv[2] > 0 ? teamPalette(objPalette, TS_REMAP, hsvToRgb(hsv[0], hsv[1], hsv[2])) : objPalette);
+            tiberiumPalettes.set(image, tw === 48 && hsv?.length === 3 && hsv[2] > 0 ? teamPalette(unitPalette, TS_REMAP, hsvToRgb(hsv[0], hsv[1], hsv[2])) : objPalette);
         }
         return tiberiumPalettes.get(image)!;
     };
@@ -532,6 +538,12 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     };
     const voxelPictures = new Map<string, ReturnType<typeof drawVoxels>>();
 
+    /**
+     * High bridges (BRIDGE1/2 and RAILBRDG1/2, by their place in [OverlayTypes]) are drawn higher than
+     * other overlays so their deck meets the ramp tiles: half a cell, or a whole one for the frames
+     * running the other way (9–17). The offsets are the TS/RA2 mission editor's (EA's GPL source).
+     */
+    const overlayLift = (id: number, frame: number) => (HIGH_BRIDGES.includes(id) ? (frame >= 9 && frame <= 17 ? -th : -th / 2) : 0);
     const objects: { rx: number; ry: number; draw: () => void }[] = [];
     if (map.overlays) {
         for (let i = 0; i < map.overlays.length; i++) {
@@ -539,7 +551,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             if (id === 0xff) continue;
             const [rx, ry] = [i % 512, Math.floor(i / 512)];
             const name = overlayNames[id];
-            if (real && name) objects.push({ rx, ry, draw: () => drawSprite(rx, ry, name, map.overlayData?.[i] ?? 0, overlayPalette(name)) });
+            if (real && name) objects.push({ rx, ry, draw: () => drawSprite(rx, ry, name, map.overlayData?.[i] ?? 0, overlayPalette(name), false, overlayLift(id, map.overlayData?.[i] ?? 0)) });
             else {
                 const kind = name ? (isWall(name) ? 'wall' : overlayMark(name)) : null;
                 if (kind) objects.push({ rx, ry, draw: () => mark(rx, ry, MARK[kind]) });
@@ -563,15 +575,15 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 const [cx, cy] = point(o.rx + fw / 2, o.ry + fh / 2);
                 const palette = artPalette(img, o.house);
                 const bib = art?.get(img, 'BibShape');
-                const bibShp = bib ? spriteFor(bib.toUpperCase(), 'Building foundation sprite') : null;
+                const bibShp = bib ? spriteFor(bib.toUpperCase(), 'Building foundation sprite', true) : null;
                 if (bibShp) drawFrame(bibShp, 0, cx, cy, palette, false);
-                const shp = spriteFor(o.type, 'Building sprite');
+                const shp = spriteFor(o.type, 'Building sprite', true);
                 // Its frames: whole, damaged (, rubble), then the same again as shadows.
                 if (shp) drawFrame(shp, damaged && shp.frames.length >= 4 ? 1 : 0, cx, cy, palette, true);
                 for (const key of ['ActiveAnim', 'ActiveAnimTwo', 'ActiveAnimThree', 'ActiveAnimFour', 'IdleAnim']) {
                     const anim = (damaged && art?.get(img, `${key}Damaged`)) || art?.get(img, key);
                     if (!anim) continue;
-                    const animShp = spriteFor(anim.toUpperCase(), 'Building animation sprite');
+                    const animShp = spriteFor(anim.toUpperCase(), 'Building animation sprite', true);
                     const dx = Number(art?.get(img, `${key}X`) ?? 0);
                     const dy = Number(art?.get(img, `${key}Y`) ?? 0);
                     // An animation in the terrain palette says so; otherwise it's drawn like its building.
@@ -596,7 +608,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                     const picture = voxelPictures.get(key);
                     if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(tx - picture.originX), Math.round(ty - picture.originY));
                 } else {
-                    const turretShp = spriteFor(turret.toUpperCase(), 'Defense turret sprite');
+                    const turretShp = spriteFor(turret.toUpperCase(), 'Defense turret sprite', true);
                     if (turretShp) drawFrame(turretShp, Math.round(((256 - o.facing) % 256) / 8) % 32, tx, ty, palette, false);
                 }
             } });
