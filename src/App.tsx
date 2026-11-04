@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { FilesPanel } from './components/FilesPanel';
 import { Inspector } from './components/Inspector';
 import { OpenPanel } from './components/OpenPanel';
 import { TopBar } from './components/TopBar';
@@ -30,6 +31,7 @@ export function App() {
     /** The opened file, then each file opened from inside the one before. */
     const [trail, setTrail] = useState<OpenFile[]>([]);
     const [names, setNames] = useState<string[]>(storedNames);
+    const [showFiles, setShowFiles] = useState(false);
     const current = trail.at(-1);
     // Each opened file's page settings, so going back to it restores them.
     const memories = useRef(new WeakMap<OpenFile, ViewMemory>());
@@ -51,7 +53,8 @@ export function App() {
     return (
         <PaletteProvider>
             <LibraryProvider names={names}>
-                <TopBar onNew={current ? () => setTrail([]) : undefined} />
+                <TopBar onNew={current ? () => setTrail([]) : undefined} onShowFiles={() => setShowFiles(true)} />
+                <FilesPanel show={showFiles} onHide={() => setShowFiles(false)} />
                 {current ? (
                     <main className="container-xxl bd-gutter mt-3 my-md-4 bd-content">
                         {trail.length > 1 && (
@@ -71,7 +74,7 @@ export function App() {
                                 </ol>
                             </nav>
                         )}
-                        <Inspector key={trail.length + current.name} file={current} root={trail.length === 1} near={trail.length > 1 ? trail.slice(0, -1).map((f) => f.name).join(' › ') : undefined} names={names} memory={memoryOf(current)} onOpen={(file) => setTrail((t) => [...t, file])} onNames={updateNames} />
+                        <Inspector key={trail.length + current.name} file={current} root={trail.length === 1} near={trail.length > 1 ? trail.slice(0, -1).map((f) => f.name).join(' › ') : undefined} names={names} memory={memoryOf(current)} onShowFiles={() => setShowFiles(true)} onOpen={(file) => setTrail((t) => [...t, file])} onNames={updateNames} />
                     </main>
                 ) : (
                     <OpenPanel onOpen={(file) => setTrail([file])} />

@@ -1,5 +1,6 @@
 import type { Field, FormatParser, Preview } from '../core/types';
 import { Ini } from './ini-sections';
+import { Links } from './links';
 import { missionPreviews, raMission, tdMission, TD_SIZE, type Mission } from './westwood/map';
 import { isoMapPreviews } from './westwood/map-iso';
 
@@ -32,13 +33,14 @@ const parser: FormatParser = {
         ];
         const previews: { title: string; preview: Preview }[] = [];
         let wanted: string | undefined;
+        const links = new Links();
 
         let mission: Mission | null = null;
         let title = 'Settings (INI)';
         if (ini.section('IsoMapPack5')) {
             title = 'Map (TS/RA2)';
             try {
-                const map = isoMapPreviews(ini, context.find, context.name);
+                const map = isoMapPreviews(ini, context.find, context.name, links);
                 summary.push(...map.summary);
                 warnings.push(...map.warnings);
                 previews.push(...map.items);
@@ -57,11 +59,16 @@ const parser: FormatParser = {
             title = 'Mission (TD INI)';
             const bin = `${context.name.replace(/\.[^.]+$/, '')}.bin`;
             const map = context.find?.(bin).find((c) => c.data.length === TD_SIZE * TD_SIZE * 2);
-            if (map) mission = tdMission(map.data, ini);
-            else wanted = `The map is in ${bin.toUpperCase()}, next to this file. Open the archive that has it to see the map here.`;
+            if (map) {
+                links.use(bin, map, 'Map cells');
+                mission = tdMission(map.data, ini);
+            } else {
+                links.miss(bin, 'Map cells (next to this file)');
+                wanted = `The map is in ${bin.toUpperCase()}, next to this file. Open the archive that has it to see the map here.`;
+            }
         }
         if (mission) {
-            const map = missionPreviews(mission, context.find);
+            const map = missionPreviews(mission, context.find, links);
             summary.push(...map.summary);
             warnings.push(...map.warnings);
             previews.push(...map.items);
@@ -75,6 +82,7 @@ const parser: FormatParser = {
             fields,
             preview: previews.length === 1 ? previews[0].preview : { kind: 'stack', items: previews },
             wanted,
+            links: links.list.length ? links.list : undefined,
             warnings,
         };
     },

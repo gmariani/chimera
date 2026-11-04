@@ -4,6 +4,7 @@ import { detect } from '../index';
 import { Ini } from '../ini-sections';
 import { namesFromBinary, namesFromText } from '../mix/names';
 import { lzo1x } from './compression';
+import { Links } from '../links';
 import { isoMapPreviews, readIsoMap } from './map-iso';
 import pcx from '../pcx';
 import wavParser from '../wav';
@@ -279,9 +280,12 @@ describe('TS and RA2 maps', () => {
         const map = readIsoMap(ini);
         expect(map.cells.map((c) => [c.rx, c.ry, c.level])).toEqual([[10, 5, 0], [11, 5, 3]]);
         expect(map.terrain).toEqual([[10, 5, 'TREE01']]);
-        const previews = isoMapPreviews(ini, () => [], 'test.map');
+        const links = new Links();
+        const previews = isoMapPreviews(ini, () => [], 'test.map', links);
         expect(previews.items[0].preview.kind).toBe('picture');
         expect(previews.wanted).toMatch(/SNOW\.INI/);
+        // What it looked for and didn't find is listed, so the user can see what to add.
+        expect(links.missed.map((l) => l.name)).toEqual(expect.arrayContaining(['snow.ini', 'isosno.pal']));
     });
 });
 

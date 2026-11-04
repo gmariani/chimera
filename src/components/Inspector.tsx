@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Alert, Button, Nav, Spinner, Tab } from 'react-bootstrap';
 import { bytesLabel, formatSize } from '../core/bytes';
 import { download, safeName } from '../lib/download';
@@ -9,10 +9,12 @@ import { findPalettes, preferred } from '../lib/palette-sources';
 import { usePalettes } from '../lib/palettes';
 import { ContentsTab } from '../tabs/ContentsTab';
 import { PreviewTab } from '../tabs/PreviewTab';
+import { LinksTab } from '../tabs/LinksTab';
 import { StructureTab } from '../tabs/StructureTab';
+import { AddFilesButton } from './AddFiles';
 import { Dl } from './ui';
 
-type TabKey = 'contents' | 'preview' | 'structure';
+type TabKey = 'contents' | 'preview' | 'links' | 'structure';
 
 /** One file, whatever it is: what it holds, what it looks like, and how its bytes are laid out. */
 export function Inspector({
@@ -23,6 +25,7 @@ export function Inspector({
     memory,
     onOpen,
     onNames,
+    onShowFiles,
 }: {
     file: OpenFile;
     /** Opened from disk, rather than from inside another file. */
@@ -34,6 +37,8 @@ export function Inspector({
     names: readonly string[];
     onOpen: (file: OpenFile) => void;
     onNames: (names: string[]) => void;
+    /** Opens the list of files in use this session. */
+    onShowFiles: () => void;
 }) {
     const library = useLibrary();
     const { find: findAnywhere, add: addToLibrary } = library;
@@ -45,8 +50,12 @@ export function Inspector({
     const { add } = usePalettes();
 
     // Files opened from disk, and what's in them, are there for other files to use (a map's tiles).
+    // Once per file: if the user removes it from the files in use, it stays removed.
+    const registered = useRef<OpenFile | null>(null);
     useEffect(() => {
-        if (root) void addToLibrary(file.name, file.data);
+        if (!root || registered.current === file) return;
+        registered.current = file;
+        void addToLibrary(file.name, file.data, 'opened');
     }, [root, file, addToLibrary]);
 
     // Palettes in an archive are what its sprites are meant to be seen with. A newly opened
@@ -78,7 +87,9 @@ export function Inspector({
         memory?.set('scroll', window.scrollY);
         onOpen(inner);
     };
-    const available: TabKey[] = parsed ? [...(parsed.entries ? ['contents' as const] : []), ...(parsed.preview ? ['preview' as const] : []), 'structure'] : [];
+    const links = parsed?.links ?? [];
+    const missing = links.filter((l) => !l.source).length;
+    const available: TabKey[] = parsed ? [...(parsed.entries ? ['contents' as const] : []), ...(parsed.preview ? ['preview' as const] : []), ...(links.length ? ['links' as const] : []), 'structure'] : [];
     const active = tab && available.includes(tab) ? tab : available[0];
 
     return (
@@ -115,6 +126,17 @@ export function Inspector({
                     ))}
                     {parsed.warnings.length > 5 && <Alert variant="warning" className="py-2 small">…and {parsed.warnings.length - 5} more problems.</Alert>}
                     {parsed.wanted && <Wanted text={parsed.wanted} />}
+                    {missing > 0 && !parsed.wanted && (
+                        <Alert variant="info" className="py-2 small d-flex flex-wrap align-items-center gap-2">
+                            <span className="me-auto">
+                                <i className="bi bi-link-45deg me-1" />
+                                {missing} file{missing === 1 ? '' : 's'} this would use {missing === 1 ? 'isn\'t' : 'aren\'t'} in the files in use, so {missing === 1 ? 'it isn\'t' : 'they aren\'t'} shown.
+                            </span>
+                            <Button size="sm" variant="outline-light" onClick={() => setTab('links')}>
+                                See which
+                            </Button>
+                        </Alert>
+                    )}
 
                     <div className="summary mx-auto mb-4">
                         <Dl rows={parsed.summary.map(([k, v]) => [k, v])} labelCols={4} className="facts mb-0" />
@@ -124,7 +146,14 @@ export function Inspector({
                         <Nav variant="pills" className="mb-3 justify-content-center" role="tablist">
                             {available.map((key) => (
                                 <Nav.Item key={key}>
-                                    <Nav.Link eventKey={key}>{{ contents: `Contents (${parsed.entries?.length ?? 0})`, preview: 'Preview', structure: 'Structure' }[key]}</Nav.Link>
+                                    <Nav.Link eventKey={key}>
+                                        {{ contents: `Contents (${parsed.entries?.length ?? 0})`, preview: 'Preview', links: `Linked files (${links.length})`, structure: 'Structure' }[key]}
+                                        {key === 'links' && missing > 0 && (
+                                            <span className="badge text-bg-warning ms-1" title={`${missing} not found`}>
+                                                {missing} missing
+                                            </span>
+                                        )}
+                                    </Nav.Link>
                                 </Nav.Item>
                             ))}
                         </Nav>
@@ -137,6 +166,11 @@ export function Inspector({
                             {parsed.preview && (
                                 <Tab.Pane eventKey="preview">
                                     <PreviewTab preview={parsed.preview} fileName={file.name} names={allNames} />
+                                </Tab.Pane>
+                            )}
+                            {links.length > 0 && (
+                                <Tab.Pane eventKey="links">
+                                    <LinksTab links={links} onShowFiles={onShowFiles} />
                                 </Tab.Pane>
                             )}
                             <Tab.Pane eventKey="structure">
@@ -154,27 +188,13 @@ export function Inspector({
 
 /** A note that another file would show more, and a way to add it without leaving this one. */
 function Wanted({ text }: { text: string }) {
-    const { add } = useLibrary();
-    const input = useRef<HTMLInputElement>(null);
-    const [result, setResult] = useState<string | null>(null);
-
-    const load = async (files: FileList | null) => {
-        if (!files?.length) return;
-        let added = 0;
-        for (const f of files) added += await add(f.name, new Uint8Array(await f.arrayBuffer()));
-        setResult(`Added ${added.toLocaleString('en-US')} file${added === 1 ? '' : 's'}.`);
-    };
-
     return (
         <Alert variant="info" className="py-2 small d-flex flex-wrap align-items-center gap-2">
             <span className="me-auto">
                 <i className="bi bi-info-circle me-1" />
-                {text} {result && <span className="text-body-secondary">{result}</span>}
+                {text}
             </span>
-            <Button size="sm" variant="outline-light" onClick={() => input.current?.click()}>
-                <i className="bi bi-plus-lg me-1" /> Add files…
-            </Button>
-            <input ref={input} type="file" multiple hidden onChange={(e) => void load(e.target.files).finally(() => (e.target.value = ''))} />
+            <AddFilesButton />
         </Alert>
     );
 }

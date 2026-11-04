@@ -1,6 +1,7 @@
 import { field } from '../../core/bytes';
 import type { FormatParser } from '../../core/types';
 import { Ini } from '../ini-sections';
+import { Links } from '../links';
 import { missionPreviews, tdMission, TD_SIZE } from './map';
 import { TD_TEMPLATES } from './templates';
 
@@ -16,9 +17,13 @@ const parser: FormatParser = {
         if (data.length !== TD_SIZE * TD_SIZE * 2) throw new Error(`A TD map is ${TD_SIZE * TD_SIZE * 2} bytes; this is ${data.length}.`);
         const iniName = context.name ? `${context.name.replace(/\.[^.]+$/, '')}.ini` : null;
         // RA has missions of the same names; TD's are the ones without a packed map.
-        const companion = iniName ? context.find?.(iniName).map((c) => Ini.of(c.data)).find((ini) => !ini.section('MapPack') && ini.section('Map')) : undefined;
+        const links = new Links();
+        const found = iniName ? context.find?.(iniName).find((c) => ((ini) => !ini.section('MapPack') && ini.section('Map'))(Ini.of(c.data))) : undefined;
+        const companion = found ? Ini.of(found.data) : undefined;
+        if (found) links.use(iniName!, found, 'Mission (playable area, theater, Tiberium, trees)');
+        else if (iniName) links.miss(iniName, 'Mission (next to this file)');
         const mission = tdMission(data, companion ?? null);
-        const map = missionPreviews(mission, companion ? context.find : undefined);
+        const map = missionPreviews(mission, companion ? context.find : undefined, links);
         const used = new Set(Array.from(mission.templates).filter((t) => t !== 0xff));
 
         return {
@@ -38,6 +43,7 @@ const parser: FormatParser = {
             wanted: companion
                 ? map.wanted
                 : `${iniName ? iniName.toUpperCase() : 'The mission\'s INI'} says which part of the map is playable, its theater, and where the Tiberium and trees are. Open the archive it's in to see them here.`,
+            links: links.list,
             warnings: map.warnings,
         };
     },

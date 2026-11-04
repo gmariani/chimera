@@ -1,5 +1,6 @@
 import type { Companion, IndexedImage, Preview } from '../../core/types';
 import type { Ini } from '../ini-sections';
+import type { Links } from '../links';
 import { lcw } from './compression';
 import { decodeShp, type Shp } from './shp-frames';
 import { sniffShpTd } from './sniff';
@@ -282,18 +283,18 @@ function shadeTable(palette: Uint8Array): Uint8Array {
 const identityTable = Uint8Array.from({ length: 256 }, (_, i) => i);
 
 export type TileRender =
-    | { status: 'drawn'; image: IndexedImage; palette?: Uint8Array; missing: string[]; wanted?: string }
+    | { status: 'drawn'; image: IndexedImage; palette?: Uint8Array; wanted?: string }
     | { status: 'needs'; wanted: string };
 
 const GAME_NAMES = { td: 'Tiberian Dawn', ra: 'Red Alert' };
 
-/** The map drawn the way the game draws it, from the theater's tile sets and sprites. */
-export function renderTiles(m: Mission, find: Finder): TileRender {
+/** The map drawn the way the game draws it, from the theater's tile sets and sprites; what it used goes in `links`. */
+export function renderTiles(m: Mission, find: Finder, links: Links): TileRender {
     const theater = THEATERS[m.game][(m.theater ?? 'TEMPERATE').toUpperCase()];
     if (!theater) return { status: 'needs', wanted: `This map's theater, ${m.theater}, isn't one the app knows how to draw.` };
     const { size, templates, icons, overlays, terrain, area = wholeMap(size) } = m;
     const table = m.game === 'td' ? TD_TEMPLATES : RA_TEMPLATES;
-    const missing = new Set<string>();
+    const archive = `${theater.root.toUpperCase()}.MIX`;
 
     // Tile sets of the right game; the palette from the same archive as the first one found.
     const tileSets = new Map<number, TileSet | null>();
@@ -304,14 +305,17 @@ export function renderTiles(m: Mission, find: Finder): TileRender {
             // Expansions can keep extra templates in another archive, so the same one is only a preference.
             const candidates = find(file).filter((c) => readTileSet(c.data)?.layout.game === m.game);
             const found = candidates.find((c) => c.source === source) ?? candidates[0];
-            if (found) source ??= found.source;
-            else if (table[id]) missing.add(file);
+            if (found) {
+                source ??= found.source;
+                links.use(file, found, `Tile set (in ${archive})`);
+            } else if (table[id]) {
+                links.miss(file, `Tile set (in ${archive})`);
+            }
             tileSets.set(id, found ? readTileSet(found.data) : null);
         }
         return tileSets.get(id)!;
     };
     const clear = tileSet(0);
-    const archive = `${theater.root.toUpperCase()}.MIX`;
     if (!clear) return { status: 'needs', wanted: `Open ${archive} from ${GAME_NAMES[m.game]} as well to draw this map with the game's own tiles${m.game === 'ra' ? ` (it's inside MAIN.MIX, so opening MAIN.MIX does it)` : ''}.` };
     // Without the theater's palette the map is still drawn, in whichever palette the app has picked.
     // Both games have a TEMPERAT.PAL; one from an archive holding the other game's tiles is the wrong one.
@@ -320,6 +324,8 @@ export function renderTiles(m: Mission, find: Finder): TileRender {
         .filter((c) => c.data.length === 768 && !otherGame.has(c.source))
         .sort((a, b) => Number(b.source === source) - Number(a.source === source))[0];
     const palette = pal ? expandPalette(pal.data) : undefined;
+    if (pal) links.use(`${theater.root}.pal`, pal, 'Palette');
+    else links.miss(`${theater.root}.pal`, `Palette (in ${m.game === 'ra' ? 'REDALERT.MIX' : archive})`);
     const wanted = pal ? undefined : `The colours need ${theater.root.toUpperCase()}.PAL, which is in ${m.game === 'ra' ? 'REDALERT.MIX' : archive}. Open that as well, or pick the palette beside the map.`;
     const shade = palette ? shadeTable(palette) : identityTable;
 
@@ -360,7 +366,9 @@ export function renderTiles(m: Mission, find: Finder): TileRender {
         if (!sprites.has(file)) {
             const candidates = find(file).filter((c) => sniffShpTd(c.data));
             const found = candidates.find((c) => c.source === source) ?? candidates[0];
-            if (!found) missing.add(file);
+            const role = theaterArt ? `Sprite (in ${archive})` : `Sprite (walls and crates are in CONQUER.MIX${m.game === 'ra' ? ', inside MAIN.MIX' : ''})`;
+            if (found) links.use(file, found, role);
+            else links.miss(file, role);
             sprites.set(file, found ? decodeShp(found.data) : null);
         }
         return sprites.get(file)!;
@@ -393,11 +401,11 @@ export function renderTiles(m: Mission, find: Finder): TileRender {
         if (image) blit(image.pixels, image.width, image.height, (x - area.x) * TILE, (y - area.y) * TILE, true);
     }
 
-    return { status: 'drawn', image: { width, height, pixels }, palette, missing: [...missing], wanted };
+    return { status: 'drawn', image: { width, height, pixels }, palette, wanted };
 }
 
 /** A mission's map as previews (real tiles when they're available, and terrain kinds), with summary rows. */
-export function missionPreviews(m: Mission, find: Finder | undefined): { items: { title: string; preview: Preview }[]; summary: [string, string][]; warnings: string[]; wanted?: string } {
+export function missionPreviews(m: Mission, find: Finder | undefined, links: Links): { items: { title: string; preview: Preview }[]; summary: [string, string][]; warnings: string[]; wanted?: string } {
     const { image, counts, unknown } = renderMap(m);
     const summary: [string, string][] = [['Map', `${m.size} × ${m.size} cells${m.area ? `, playable ${m.area.width} × ${m.area.height} at ${m.area.x}, ${m.area.y} (shown)` : ''}`]];
     if (m.theater) summary.push(['Theater', m.theater]);
@@ -406,9 +414,8 @@ export function missionPreviews(m: Mission, find: Finder | undefined): { items: 
 
     const legend = counts.map(([label]) => ({ label, index: KIND[label as KindLabel] }));
     const kinds: Preview = { kind: 'images', frames: [image], palette: terrainPalette(), legend };
-    const tiles = find ? renderTiles(m, find) : null;
+    const tiles = find ? renderTiles(m, find, links) : null;
     if (tiles?.status !== 'drawn') return { items: [{ title: 'Terrain kinds', preview: kinds }], summary, warnings, wanted: tiles?.wanted };
-    if (tiles.missing.length) warnings.push(`Not found in the opened archives, so not drawn: ${tiles.missing.join(', ')}.${tiles.missing.some((f) => f.endsWith('.shp')) ? ` Walls and crates are in CONQUER.MIX${m.game === 'ra' ? ' (inside MAIN.MIX)' : ''}.` : ''}`);
     return {
         wanted: tiles.wanted,
         items: [

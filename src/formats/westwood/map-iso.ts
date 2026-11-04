@@ -1,5 +1,6 @@
 import type { Companion, Preview } from '../../core/types';
 import { Ini } from '../ini-sections';
+import type { Links } from '../links';
 import { lcw, lzo1x } from './compression';
 import { decodeShpTs, type ShpTsFrame } from './shp-ts-frames';
 import { sniffShpTs, tmpLayout } from './sniff';
@@ -213,7 +214,6 @@ const MAX_SIDE = 4096;
 export interface IsoRender {
     image: { width: number; height: number; rgba: Uint8Array };
     real: boolean;
-    missing: string[];
     wanted?: string;
 }
 
@@ -221,39 +221,42 @@ export interface IsoRender {
  * The map, drawn with the theater's tiles, overlays and trees when they're in
  * the opened archives; otherwise each cell as a flat diamond coloured by height.
  */
-export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolean): IsoRender {
+export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolean, links: Links): IsoRender {
     const theater = THEATERS[map.theater] ?? THEATERS.TEMPERATE;
-    const missing = new Set<string>();
-    const pick = (names: string[]) => {
+    const archive = `ISO${theater.ext.toUpperCase()}.MIX`;
+    /** The first of these names that's in the session; recorded as used, or the first name as missing. */
+    const pick = (names: string[], role: string) => {
         for (const n of names) {
             const found = find?.(n)[0];
-            if (found) return found;
+            if (found) {
+                links.use(n, found, role);
+                return found;
+            }
         }
+        if (find) links.miss(names[0], role);
         return undefined;
     };
 
     // The theater INI (Yuri's Revenge has its own), its palettes, and a first tile to learn the size from.
     const iniNames = yuri ? [`${theater.ini}md.ini`, `${theater.ini}.ini`] : [`${theater.ini}.ini`, `${theater.ini}md.ini`];
-    const theaterIni = pick(iniNames);
+    const theaterIni = pick(iniNames, 'Tile list (which file each tile number is)');
     const files = theaterIni ? tileFiles(Ini.of(theaterIni.data)) : [];
-    const isoPal = pick([`${theater.isoPal}.pal`, `${theater.isoPal}md.pal`]);
-    const objPal = pick([`${theater.pal}.pal`, `${theater.pal}md.pal`]);
-    const unitPal = pick([`unit${theater.ext}.pal`, `unit${theater.ext}md.pal`]);
+    const isoPal = pick([`${theater.isoPal}.pal`, `${theater.isoPal}md.pal`], 'Palette for tiles and trees');
+    const objPal = pick([`${theater.pal}.pal`, `${theater.pal}md.pal`], 'Palette for ore and Tiberium');
+    const unitPal = pick([`unit${theater.ext}.pal`, `unit${theater.ext}md.pal`], 'Palette for walls');
     const tiles = new Map<number, Tile | null>();
     const tile = (index: number): Tile | null => {
         const i = index < 0 || index >= files.length ? 0 : index;
         if (!tiles.has(i)) {
             const f = files[i];
             const name = f ? `${f.stem}${String(f.n).padStart(2, '0')}.${theater.ext}` : '';
-            const found = f && pick([name, `${f.stem}${String(f.n).padStart(2, '0')}a.${theater.ext}`]);
-            if (f && !found) missing.add(name);
+            const found = f ? pick([name, `${f.stem}${String(f.n).padStart(2, '0')}a.${theater.ext}`], `Tile (in ${archive})`) : undefined;
             tiles.set(i, found ? readTile(found.data) : null);
         }
         return tiles.get(i)!;
     };
     const first = files.length ? tile(0) : null;
     const real = !!(first && isoPal);
-    const archive = `ISO${theater.ext.toUpperCase()}.MIX`;
     const wanted = real
         ? undefined
         : `Open the game's main archive as well (RA2's RA2.MIX, or TS's TIBSUN.MIX) to draw this map with its tiles: it needs ${iniNames[0].toUpperCase()}, ${theater.isoPal.toUpperCase()}.PAL and ${archive}.`;
@@ -299,20 +302,32 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     }
 
     // Overlays and trees: sprites centred on their cell when drawing for real, otherwise a mark.
-    const rules = pick(yuri ? ['rulesmd.ini', 'rules.ini'] : ['rules.ini', 'rulesmd.ini']);
+    const rules = pick(yuri ? ['rulesmd.ini', 'rules.ini'] : ['rules.ini', 'rulesmd.ini'], 'Rules (what each overlay is)');
     const rulesIni = rules ? Ini.of(rules.data) : null;
     const overlayNames = rulesIni?.entries('OverlayTypes').map(([, v]) => v.trim().toUpperCase()) ?? [];
     // art.ini can point an object at another's art (Image=).
-    const artFile = pick(yuri ? ['artmd.ini', 'art.ini'] : ['art.ini', 'artmd.ini']);
+    const artFile = pick(yuri ? ['artmd.ini', 'art.ini'] : ['art.ini', 'artmd.ini'], 'Art (which picture each object uses)');
     const art = artFile ? Ini.of(artFile.data) : null;
     const image = (name: string) => (rulesIni?.get(name, 'Image') ?? art?.get(name, 'Image') ?? name).trim().toUpperCase();
     const sprites = new Map<string, { width: number; height: number; frames: ShpTsFrame[] } | null>();
     const sprite = (name: string) => {
         if (!sprites.has(name)) {
             const n = image(name).toLowerCase();
-            const candidates = [`${n}.${theater.ext}`, `${n}.shp`, n.length > 2 ? `${n[0]}${theater.letter}${n.slice(2)}.shp` : ''];
-            const found = candidates.map((f) => f && find?.(f).find((c) => sniffShpTs(c.data))).find(Boolean);
-            if (!found) missing.add(`${n}.shp`);
+            // Image=none: the object has no picture (an invisible marker), so there's nothing to find.
+            if (n === 'none') {
+                sprites.set(name, null);
+                return null;
+            }
+            const candidates = [`${n}.${theater.ext}`, `${n}.shp`, n.length > 2 ? `${n[0]}${theater.letter}${n.slice(2)}.shp` : ''].filter(Boolean);
+            let found: Companion | undefined;
+            for (const f of candidates) {
+                found = find?.(f).find((c) => sniffShpTs(c.data));
+                if (found) {
+                    links.use(f, found, 'Sprite (overlay or tree)');
+                    break;
+                }
+            }
+            if (!found) links.miss(`${n}.shp`, 'Sprite (overlay or tree)');
             sprites.set(name, found ? decodeShpTs(found.data) : null);
         }
         return sprites.get(name)!;
@@ -354,7 +369,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     objects.sort((a, b) => a.rx + a.ry - (b.rx + b.ry));
     for (const o of objects) o.draw();
 
-    return { image: { width: canvas.width, height: canvas.height, rgba: canvas.rgba }, real, missing: [...missing], wanted };
+    return { image: { width: canvas.width, height: canvas.height, rgba: canvas.rgba }, real, wanted };
 }
 
 /** The map's own preview picture, as RGBA. */
@@ -365,14 +380,14 @@ function previewPicture(p: NonNullable<IsoMap['preview']>): Preview {
 }
 
 /** The previews and summary rows for a TS or RA2 map. */
-export function isoMapPreviews(ini: Ini, find: Finder | undefined, fileName: string | null): { items: { title: string; preview: Preview }[]; summary: [string, string][]; warnings: string[]; wanted?: string } {
+export function isoMapPreviews(ini: Ini, find: Finder | undefined, fileName: string | null, links: Links): { items: { title: string; preview: Preview }[]; summary: [string, string][]; warnings: string[]; wanted?: string } {
     const map = readIsoMap(ini);
     const yuri = /\.yrm$/i.test(fileName ?? '') || /^(YR|MD)/i.test(ini.get('Basic', 'RequiredAddOn') ?? '') || ini.get('Basic', 'RequiredAddOn') === '1';
-    const render = renderIsoMap(map, find, yuri);
+    const render = renderIsoMap(map, find, yuri, links);
     const items: { title: string; preview: Preview }[] = [{ title: render.real ? 'Map' : 'Map (height and objects; open the theater archives for tiles)', preview: { kind: 'picture', ...render.image } }];
     if (map.preview) items.push({ title: 'The map\'s own preview', preview: previewPicture(map.preview) });
     const levels = map.cells.map((c) => c.level);
-    const warnings = render.missing.length ? [`Not found in the opened archives, so not drawn: ${render.missing.slice(0, 12).join(', ')}${render.missing.length > 12 ? `, and ${render.missing.length - 12} more` : ''}.`] : [];
+    const warnings: string[] = [];
     return {
         items,
         summary: [

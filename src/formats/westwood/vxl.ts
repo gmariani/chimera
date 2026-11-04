@@ -1,5 +1,6 @@
 import { Bytes, bytesLabel, field } from '../../core/bytes';
 import type { Field, FormatParser, IndexedImage, ParseContext, VoxelPart } from '../../core/types';
+import { Links } from '../links';
 import { decodeVxl, LIMB_HEADER, readHva, VXL_HEADER, type Limb } from './voxel-data';
 
 /**
@@ -50,10 +51,13 @@ function views(l: Limb): IndexedImage[] {
 }
 
 /** A model's limbs as 3D parts, placed and animated by its .hva when there is one. */
-function parts(file: string, data: Uint8Array, find: ParseContext['find']): { parts: VoxelPart[]; frames: number; animated: boolean } {
+function parts(file: string, data: Uint8Array, find: ParseContext['find'], links: Links): { parts: VoxelPart[]; frames: number; animated: boolean } {
     const vxl = decodeVxl(data);
     const hvaFile = file.replace(/\.vxl$/i, '.hva');
-    const hva = find?.(hvaFile).map((c) => readHva(c.data)).find((h) => h && h.names.length === vxl.limbs.length) ?? null;
+    const found = find?.(hvaFile).find((c) => readHva(c.data)?.names.length === vxl.limbs.length);
+    const hva = found ? readHva(found.data) : null;
+    if (found) links.use(hvaFile, found, `Animation of ${file} (places its limbs)`);
+    else if (find) links.miss(hvaFile, `Animation of ${file} (places its limbs)`);
     return {
         parts: vxl.limbs.map((l, i) => ({
             name: `${file} › ${l.name}`,
@@ -85,13 +89,17 @@ const parser: FormatParser = {
 
         // This model, then its turret and barrel if they're separate files.
         const name = context.name ?? 'model.vxl';
-        const own = parts(name, data, context.find);
+        const links = new Links();
+        const own = parts(name, data, context.find, links);
         const all = [own];
         const stem = name.replace(/\.vxl$/i, '');
         if (!/(tur|barl)$/i.test(stem)) {
-            for (const extra of [`${stem}tur.vxl`, `${stem}barl.vxl`]) {
+            // Not every unit has these, so they're only listed when found.
+            for (const [extra, role] of [[`${stem}tur.vxl`, 'Turret'], [`${stem}barl.vxl`, 'Barrel']]) {
                 const found = context.find?.(extra)[0];
-                if (found) all.push(parts(extra, found.data, context.find));
+                if (!found) continue;
+                links.use(extra, found, role);
+                all.push(parts(extra, found.data, context.find, links));
             }
         }
 
@@ -155,6 +163,7 @@ const parser: FormatParser = {
                     { title: 'Each limb, from four sides', preview: { kind: 'images', frames: limbs.flatMap(views), palette: ownPalette, transparentIndex: 0 } },
                 ],
             },
+            links: links.list,
             wanted: own.animated || !context.find ? undefined : `${stem.toUpperCase()}.HVA places this model's limbs and animates them. Open the archive it's in (usually the same one) to use it.`,
             warnings,
         };

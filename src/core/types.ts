@@ -107,6 +107,15 @@ export interface Overlay {
     label: string;
 }
 
+/** Another file this one drew on (or looked for): a map's tile set, a model's animation. */
+export interface Link {
+    name: string;
+    /** What it's for, e.g. "Tile set" or "Palette". */
+    role: string;
+    /** Where it was found (an archive path); absent when it wasn't. */
+    source?: string;
+}
+
 export interface Parsed {
     /** A short description of what was found, e.g. "Red Alert MIX, encrypted header". */
     title: string;
@@ -118,6 +127,8 @@ export interface Parsed {
     overlays?: Overlay[];
     /** Other files that would let this one show more, and what they'd add, e.g. "Open TEMPERAT.MIX as well to draw the real tiles." */
     wanted?: string;
+    /** The other files it used, and those it looked for but didn't find. */
+    links?: Link[];
     warnings: string[];
 }
 

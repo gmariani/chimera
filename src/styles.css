@@ -296,6 +296,8 @@ body {
     padding: 0.75rem 1rem;
     border: 1px solid var(--bs-border-color);
     border-radius: var(--bs-border-radius);
+    /* Notes can carry long unbroken values, like a Blowfish key in hex. */
+    overflow-wrap: anywhere;
 }
 
 .field-value {
@@ -481,4 +483,19 @@ body {
 
 .audio-player {
     width: min(100%, 28rem);
+}
+
+/* Linked files: groups that fold open. */
+.links summary {
+    cursor: pointer;
+    padding: 0.25rem 0;
+}
+
+.links-table {
+    margin-left: 1rem;
+    width: calc(100% - 1rem);
+}
+
+.files-panel {
+    width: min(32rem, 100vw) !important;
 }

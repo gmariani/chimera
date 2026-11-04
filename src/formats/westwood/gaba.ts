@@ -19,7 +19,9 @@ const parser: FormatParser = {
         const [version, count] = [b.u32(4), b.u32(8)];
         const size = version === 2 ? 36 : 32;
         const bagName = `${(context.name ?? 'audio.idx').replace(/\.[^.]+$/, '')}.bag`;
-        const bag = context.find?.(bagName)[0]?.data;
+        const bagFile = context.find?.(bagName)[0];
+        const bag = bagFile?.data;
+        const link = bagFile ? { name: bagName, role: 'Sound data', source: bagFile.source } : { name: bagName, role: 'Sound data (next to this file)' };
         const warnings: string[] = [];
 
         const sounds = Array.from({ length: count }, (_, i) => {
@@ -74,6 +76,7 @@ const parser: FormatParser = {
                 })),
             ],
             entries,
+            links: context.find ? [link] : undefined,
             wanted: bag ? undefined : `The sounds themselves are in ${bagName.toUpperCase()}, next to this file. Open the archive it's in (or the file) to play and save them.`,
             warnings,
         };
