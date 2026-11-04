@@ -168,8 +168,8 @@ describe('VQA', () => {
         return [...id].map((c) => c.charCodeAt(0)).concat([size >>> 24, (size >> 16) & 255, (size >> 8) & 255, size & 255], body, size & 1 ? [0] : []);
     }
 
-    it('draws blocks from the codebook and solid colours', () => {
-        // 8 × 2 pixels: two 4 × 2 blocks. Codebook entry 0 counts 1..8; the second block is solid colour 9.
+    it('draws blocks from the codebook and solid colors', () => {
+        // 8 × 2 pixels: two 4 × 2 blocks. Codebook entry 0 counts 1..8; the second block is solid color 9.
         const header = new Array(42).fill(0);
         Object.assign(header, { 0: 2, 4: 1, 6: 8, 8: 2, 10: 4, 11: 2, 12: 15, 13: 8 });
         const frame = [...chunk('CBF0', [1, 2, 3, 4, 5, 6, 7, 8]), ...chunk('CPL0', new Array(768).fill(63)), ...chunk('VPT0', [0, 9, 0, 0x0f])];
@@ -212,8 +212,8 @@ describe('vortex frames', () => {
 });
 
 describe('maps with real tiles', () => {
-    // A TD CLEAR1 with a single 24 × 24 tile of one colour (the real one has 16 variants).
-    function tileSet(colour: number): Uint8Array {
+    // A TD CLEAR1 with a single 24 × 24 tile of one color (the real one has 16 variants).
+    function tileSet(color: number): Uint8Array {
         const size = 32 + 576 + 1 + 1;
         return bytes(size, (v, b) => {
             v.setUint16(0, 24, true);
@@ -223,7 +223,7 @@ describe('maps with real tiles', () => {
             v.setUint32(12, 32, true);
             v.setUint32(24, 32 + 576 + 1, true);
             v.setUint32(28, 32 + 576, true);
-            b.fill(colour, 32, 32 + 576);
+            b.fill(color, 32, 32 + 576);
         });
     }
 
@@ -247,5 +247,16 @@ describe('maps with real tiles', () => {
     it('says which archive would draw it when the tiles aren\'t open', () => {
         const parsed = mapTd.parse(new Uint8Array(8192).fill(0xff), { name: 'scg01ea.bin', names: [], find: () => [] });
         expect(parsed.wanted).toMatch(/SCG01EA\.INI/);
+    });
+});
+
+describe('objects on TD and RA maps', () => {
+    it('reads units, infantry, buildings and smudges, and marks them on the terrain view', () => {
+        const bin = new Uint8Array(8192).fill(0xff);
+        const text = '[MAP]\nTheater=DESERT\nX=0\nY=0\nWidth=4\nHeight=2\n[UNITS]\n0=BadGuy,MTNK,256,65,64,Guard,None\n[INFANTRY]\n0=GoodGuy,E1,256,66,2,Guard,0,None\n[STRUCTURES]\n0=GoodGuy,FACT,256,1,0,None\n[SMUDGE]\n2=CR1,2,0\n';
+        const files: Record<string, Uint8Array> = { 'scg01ea.bin': bin };
+        const parsed = ini.parse(new TextEncoder().encode(text), { name: 'scg01ea.ini', names: [], find: (n) => (files[n] ? [{ data: files[n], source: 'X.MIX' }] : []) });
+        expect(parsed.summary).toContainEqual(['Building', '1 cells']);
+        expect(parsed.summary).toContainEqual(['Unit or infantry', '2 cells']);
     });
 });

@@ -27,11 +27,11 @@ export function pathAt(fields: Field[], offset: number): FieldPath | null {
     return deeper ? [index, ...deeper] : [index];
 }
 
-/** Fields with no children, in byte order: these are what the hex view colours. */
+/** Fields with no children, in byte order: these are what the hex view colors. */
 export interface Leaf {
     offset: number;
     end: number;
-    /** Alternating colour for neighbouring fields. */
+    /** Alternating color for neighboring fields. */
     tone: number;
 }
 

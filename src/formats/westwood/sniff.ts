@@ -5,7 +5,7 @@ import { Bytes } from '../../core/bytes';
  * archive whose name isn't known, so each one only reads a header.
  */
 
-/** 256 colours of 6-bit RGB: 768 bytes, every value under 64. */
+/** 256 colors of 6-bit RGB: 768 bytes, every value under 64. */
 export function sniffPal(data: Uint8Array): boolean {
     return data.length === 768 && data.every((v) => v < 64);
 }
@@ -149,13 +149,21 @@ export function sniffTiles(data: Uint8Array): boolean {
     return tilesLayout(data) !== null;
 }
 
-/** TD map grids: 64 × 64 cells of template and tile; 0xFF is clear ground. */
+/** TD defines templates 0 to 215 (TemplateType in its DEFINES.H). */
+const TD_TEMPLATE_COUNT = 216;
+
+/**
+ * TD map grids: 64 × 64 cells of template and tile; 0xFF (or template 0) is
+ * clear ground. Every cell must name a template TD has, and a tile within reach
+ * of one; 4,096 of those in a row don't happen by chance.
+ */
 export function sniffMapTd(data: Uint8Array): boolean {
     if (data.length !== 8192) return false;
-    // Clear cells are FF 00 (the tile byte is ignored for them); the map's edges are almost always clear.
-    let clear = 0;
-    for (let i = 0; i < 128; i += 2) if (data[i] === 0xff) clear++;
-    return clear > 8;
+    for (let i = 0; i < data.length; i += 2) {
+        const template = data[i];
+        if (template !== 0xff && (template >= TD_TEMPLATE_COUNT || data[i + 1] >= 64)) return false;
+    }
+    return true;
 }
 
 /**
@@ -287,7 +295,7 @@ export function tmpLayout(data: Uint8Array, allowEmpty = false): { across: numbe
     if (table > data.length) return null;
     const offsets = Array.from({ length: across * down }, (_, i) => b.u32(16 + i * 4));
     const tile = 52 + (width * height) / 2;
-    // An empty one is valid (the editor's marble.mix has a few), but too plain to recognise by content.
+    // An empty one is valid (the editor's marble.mix has a few), but too plain to recognize by content.
     if ((!allowEmpty && offsets.every((o) => o === 0)) || offsets.some((o) => o !== 0 && (o < table || o + tile > data.length))) return null;
     return { across, down, width, height, offsets };
 }
@@ -347,7 +355,7 @@ export function sniffUnicodeFont(data: Uint8Array): boolean {
     return b.ascii(0, 4) === 'FoNt' && b.u32(44) >= b.u32(40) && data.length === 48 + (b.u32(44) - b.u32(40) + 1) * b.u32(24);
 }
 
-/** TS and RA2's voxel lighting tables (voxels.vpl): a header, a palette, then a 256-colour remap per lighting level. */
+/** TS and RA2's voxel lighting tables (voxels.vpl): a header, a palette, then a 256-color remap per lighting level. */
 export function sniffVpl(data: Uint8Array): boolean {
     const b = new Bytes(data);
     const [start, end, sections] = [b.u32(0), b.u32(4), b.u32(8)];

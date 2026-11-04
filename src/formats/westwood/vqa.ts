@@ -7,12 +7,12 @@ import { expandPalette } from './vga';
 /**
  * Westwood's VQA video: an IFF file of big-endian chunks. TD and RA use
  * version 2: each frame is a grid of small blocks (4 × 2 pixels, or 4 × 4),
- * and each block is either one colour or an entry in a codebook of blocks.
+ * and each block is either one color or an entry in a codebook of blocks.
  * A full codebook comes first; after that, each frame carries a slice of the
  * next one, which replaces the current codebook once all its slices are in
  * (every "codebook interval" frames). Sound is interleaved, chunk by chunk.
  *
- * Tiberian Sun's movies are version 3 in high colour (flag 0x10): the codebook
+ * Tiberian Sun's movies are version 3 in high color (flag 0x10): the codebook
  * holds 15-bit RGB pixels, and each frame is a list of 16-bit commands (VPRZ,
  * VPTR) that skip blocks (keeping the last frame's) or write codebook blocks,
  * one or many times.
@@ -36,8 +36,8 @@ const CHUNKS: Record<string, string> = {
     CPLZ: 'Palette, LCW-compressed.',
     VPTZ: 'Block pointers, LCW-compressed.',
     VPT0: 'Block pointers.',
-    VPTR: 'Block pointers; in high-colour movies, block commands.',
-    VPRZ: 'Block commands, LCW-compressed (high-colour movies).',
+    VPTR: 'Block pointers; in high-color movies, block commands.',
+    VPRZ: 'Block commands, LCW-compressed (high-color movies).',
     CINF: 'Codebook info.',
     CINH: 'Codebook info header.',
 };
@@ -76,7 +76,7 @@ class Decoder {
     private position = -1;
     private readonly blockSize: number;
     private readonly pointers: Uint8Array;
-    /** A block pointer's high byte that means "one colour: the low byte" instead of a codebook entry. */
+    /** A block pointer's high byte that means "one color: the low byte" instead of a codebook entry. */
     private readonly solid: number;
 
     constructor(
@@ -179,8 +179,8 @@ class Decoder {
     }
 }
 
-/** Version 3 high-colour movies: a 15-bit codebook and run-length block commands, drawn over the last frame. */
-class HighColourDecoder {
+/** Version 3 high-color movies: a 15-bit codebook and run-length block commands, drawn over the last frame. */
+class HighColorDecoder {
     private codebook = new Uint16Array(0);
     private screen: Uint16Array;
     private position = -1;
@@ -386,8 +386,8 @@ const parser: FormatParser = {
         const flags = h >= 0 ? b.u16(h + 2) : 0;
         if (vqhd) {
             listed.find((c) => c.name === 'VQHD')!.children = [
-                field('Version', h, 2, b.u16(h), '2 for TD and RA; 3 for Tiberian Sun\'s high-colour movies.'),
-                field('Flags', h + 2, 2, `0x${flags.toString(16)}`, 'Bit 0: has sound. Bit 4: high colour (15-bit codebook, no palette).'),
+                field('Version', h, 2, b.u16(h), '2 for TD and RA; 3 for Tiberian Sun\'s high-color movies.'),
+                field('Flags', h + 2, 2, `0x${flags.toString(16)}`, 'Bit 0: has sound. Bit 4: high color (15-bit codebook, no palette).'),
                 field('Frames', h + 4, 2, b.u16(h + 4)),
                 field('Width', h + 6, 2, b.u16(h + 6)),
                 field('Height', h + 8, 2, b.u16(h + 8)),
@@ -395,7 +395,7 @@ const parser: FormatParser = {
                 field('Block height', h + 11, 1, b.u8(h + 11)),
                 field('Frame rate', h + 12, 1, `${fps} fps`),
                 field('Codebook interval', h + 13, 1, b.u8(h + 13), 'A new codebook every this many frames, sent in that many slices.'),
-                field('Colours', h + 14, 2, b.u16(h + 14)),
+                field('Colors', h + 14, 2, b.u16(h + 14)),
                 field('Largest codebook', h + 16, 2, b.u16(h + 16), 'In blocks.'),
                 field('Unknown', h + 18, 6),
                 field('Sample rate', h + 24, 2, `${b.u16(h + 24)} Hz`),
@@ -406,10 +406,10 @@ const parser: FormatParser = {
         }
 
         const warnings: string[] = [];
-        const highColour = header.version === 3 && (flags & 0x10) !== 0;
+        const highColor = header.version === 3 && (flags & 0x10) !== 0;
         const fits = header.width > 0 && header.blockWidth > 0 && header.blockHeight > 0 && header.width % header.blockWidth === 0 && header.height % header.blockHeight === 0;
-        const drawable = fits && ((header.version === 2 && [2, 4].includes(header.blockHeight)) || highColour);
-        if (!drawable) warnings.push(`Version ${header.version} movies${header.version === 3 ? ' in 256 colours' : ''} aren't decoded yet; the chunks are still listed.`);
+        const drawable = fits && ((header.version === 2 && [2, 4].includes(header.blockHeight)) || highColor);
+        if (!drawable) warnings.push(`Version ${header.version} movies${header.version === 3 ? ' in 256 colors' : ''} aren't decoded yet; the chunks are still listed.`);
         if (listed.length >= MAX_LISTED) warnings.push(`Only the first ${MAX_LISTED} chunks are listed (${frameChunks.length} frames).`);
 
         let sound: AudioClip | undefined;
@@ -418,14 +418,14 @@ const parser: FormatParser = {
         } catch (e) {
             warnings.push(`The sound couldn't be decoded: ${e instanceof Error ? e.message : e}`);
         }
-        const decoder = !drawable ? null : highColour ? new HighColourDecoder(data, header, frameChunks) : new Decoder(data, header, frameChunks);
+        const decoder = !drawable ? null : highColor ? new HighColorDecoder(data, header, frameChunks) : new Decoder(data, header, frameChunks);
 
         return {
             title: 'Video (VQA)',
             summary: [
                 ['Size', `${header.width} × ${header.height}`],
                 ['Frames', `${frameChunks.length}${fps ? `, ${(frameChunks.length / fps).toFixed(1)} s at ${fps} fps` : ''}`],
-                ['Blocks', `${header.blockWidth} × ${header.blockHeight}${highColour ? ', high colour (15-bit)' : `, a new codebook every ${header.interval} frames`}`],
+                ['Blocks', `${header.blockWidth} × ${header.blockHeight}${highColor ? ', high color (15-bit)' : `, a new codebook every ${header.interval} frames`}`],
                 ['Sound', sound ? `${sound.sampleRate} Hz, ${sound.channels === 2 ? 'stereo' : 'mono'}, ${top.find((c) => c.id.startsWith('SND'))?.id}` : 'None'],
             ],
             fields: [

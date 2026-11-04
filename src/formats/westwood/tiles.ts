@@ -80,11 +80,11 @@ const parser: FormatParser = {
                 name: 'Transparency',
                 offset: trans,
                 length: physical,
-                note: 'One byte per tile: 1 means colour 0 shows what\'s underneath (for overlays like trans.icn).',
+                note: 'One byte per tile: 1 means color 0 shows what\'s underneath (for overlays like trans.icn).',
                 children: tiles.map((_, i) => field(`Tile ${i}`, trans + i, 1, b.u8(trans + i))),
             },
         ];
-        if (game === 'ra' && colorMap) fields.push(field('Land types', colorMap, data.length - colorMap, Array.from(data.subarray(colorMap)).join(' '), 'The kind of ground in each tile (clear, water, rock…), which also sets its colour on the radar.'));
+        if (game === 'ra' && colorMap) fields.push(field('Land types', colorMap, data.length - colorMap, Array.from(data.subarray(colorMap)).join(' '), 'The kind of ground in each tile (clear, water, rock…), which also sets its color on the radar.'));
 
         return {
             title: `Tile set (${game === 'ra' ? 'RA' : 'TD'})`,

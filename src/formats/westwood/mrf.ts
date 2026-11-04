@@ -2,24 +2,24 @@ import { field } from '../../core/bytes';
 import type { Field, FormatParser, IndexedImage } from '../../core/types';
 
 /**
- * Colour remap tables (.mrf) from TD's theater archives, which the game builds
+ * Color remap tables (.mrf) from TD's theater archives, which the game builds
  * from the theater's palette (DISPLAY.CPP, Init_Theater). The name is the
  * theater's first letter and what the table is for: TGREEN.MRF.
  *
- * A fading table is 256 bytes: the colour to draw in place of each colour. A
+ * A fading table is 256 bytes: the color to draw in place of each color. A
  * translucency table is 256 bytes saying which of the tables after it each
- * colour uses (0xFF: none, it's drawn as it is), then one 256-byte table per
- * translucent colour: what each colour behind it turns into.
+ * color uses (0xFF: none, it's drawn as it is), then one 256-byte table per
+ * translucent color: what each color behind it turns into.
  */
 
 const PURPOSES: Record<string, string> = {
-    GREEN: 'Every colour faded toward green',
-    YELLOW: 'Every colour faded toward yellow',
-    RED: 'Every colour faded toward red',
-    SHADE: 'Every colour darkened',
-    LIGHT: 'Every colour lightened',
-    MOUSE: 'Translucent colours for the mouse cursor',
-    TRANS: 'Translucent colours for effects',
+    GREEN: 'Every color faded toward green',
+    YELLOW: 'Every color faded toward yellow',
+    RED: 'Every color faded toward red',
+    SHADE: 'Every color darkened',
+    LIGHT: 'Every color lightened',
+    MOUSE: 'Translucent colors for the mouse cursor',
+    TRANS: 'Translucent colors for effects',
     WHITE: 'Translucent white',
     SHADOW: 'Shadows',
     UNITS: 'Unit shadows',
@@ -29,7 +29,7 @@ const THEATERS: Record<string, string> = { T: 'Temperate', D: 'Desert', W: 'Wint
 
 const SWATCH = 8;
 
-/** A table as a 16 × 16 grid of swatches: for each colour, the one it becomes. */
+/** A table as a 16 × 16 grid of swatches: for each color, the one it becomes. */
 function swatches(table: ArrayLike<number>): IndexedImage {
     const size = 16 * SWATCH;
     const pixels = new Uint8Array(size * size);
@@ -55,21 +55,21 @@ const parser: FormatParser = {
         let fields: Field[];
         let frames: IndexedImage[];
         if (count === 1) {
-            summary.push(['Kind', 'Fading: each colour is replaced by another']);
-            fields = [{ name: 'Remap', offset: 0, length: 256, children: identity.map((i) => field(`Colour ${i}`, i, 1, data[i])) }];
+            summary.push(['Kind', 'Fading: each color is replaced by another']);
+            fields = [{ name: 'Remap', offset: 0, length: 256, children: identity.map((i) => field(`Color ${i}`, i, 1, data[i])) }];
             frames = [swatches(identity), swatches(data)];
         } else {
             const [selector, ...blends] = tables;
             const users = blends.map((_, t) => identity.filter((c) => selector[c] === t));
-            summary.push(['Kind', 'Translucency: colours that let the one behind show through'], ['Translucent colours', String(identity.filter((c) => selector[c] !== 0xff).length)]);
+            summary.push(['Kind', 'Translucency: colors that let the one behind show through'], ['Translucent colors', String(identity.filter((c) => selector[c] !== 0xff).length)]);
             fields = [
-                { name: 'Which table each colour uses', offset: 0, length: 256, note: '0xFF: none, the colour is drawn as it is.', children: identity.map((i) => field(`Colour ${i}`, i, 1, selector[i] === 0xff ? 'None' : `Table ${selector[i] + 1}`)) },
+                { name: 'Which table each color uses', offset: 0, length: 256, note: '0xFF: none, the color is drawn as it is.', children: identity.map((i) => field(`Color ${i}`, i, 1, selector[i] === 0xff ? 'None' : `Table ${selector[i] + 1}`)) },
                 ...blends.map((t, i) => ({
                     name: `Table ${i + 1}`,
                     offset: (i + 1) * 256,
                     length: 256,
-                    value: users[i].length ? `for colour ${users[i].join(', ')}` : 'unused',
-                    note: 'What each colour behind turns into.',
+                    value: users[i].length ? `for color ${users[i].join(', ')}` : 'unused',
+                    note: 'What each color behind turns into.',
                     children: identity.map((c) => field(`Behind: ${c}`, (i + 1) * 256 + c, 1, t[c])),
                 })),
             ];
@@ -77,7 +77,7 @@ const parser: FormatParser = {
         }
 
         return {
-            title: 'Colour remap tables (MRF)',
+            title: 'Color remap tables (MRF)',
             summary: [...summary, ['Tables', String(count)], ['Preview', 'The palette, then each table applied to it; pick the theater\'s palette']],
             fields,
             preview: { kind: 'images', frames },

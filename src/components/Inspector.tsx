@@ -62,14 +62,14 @@ export function Inspector({
     // file's own palette replaces one from an earlier file (Red Alert's differ from TD's).
     useEffect(() => {
         if (state.status !== 'ready' || state.format.id !== 'mix') return;
-        let cancelled = false;
+        let canceled = false;
         void findPalettes(file.name, file.data, allNames).then((found) => {
-            if (cancelled || !found.length) return;
+            if (canceled || !found.length) return;
             const best = preferred(found)!;
             add([best, ...found.filter((p) => p !== best)], root);
         });
         return () => {
-            cancelled = true;
+            canceled = true;
         };
     }, [state, file, allNames, add, root]);
 
@@ -86,6 +86,17 @@ export function Inspector({
     const openInside = (inner: OpenFile) => {
         memory?.set('scroll', window.scrollY);
         onOpen(inner);
+    };
+    /** Opens the first of these files found among the files in use (a unit's sprite, from a rules table). */
+    const openName = (candidates: string[]) => {
+        for (const name of candidates) {
+            const found = find(name)[0];
+            if (found) {
+                openInside({ name, knownName: name, data: found.data });
+                return true;
+            }
+        }
+        return false;
     };
     const links = parsed?.links ?? [];
     const missing = links.filter((l) => !l.source).length;
@@ -165,7 +176,7 @@ export function Inspector({
                             )}
                             {parsed.preview && (
                                 <Tab.Pane eventKey="preview">
-                                    <PreviewTab preview={parsed.preview} fileName={file.name} names={allNames} />
+                                    <PreviewTab preview={parsed.preview} fileName={file.name} names={allNames} onOpenName={openName} />
                                 </Tab.Pane>
                             )}
                             {links.length > 0 && (

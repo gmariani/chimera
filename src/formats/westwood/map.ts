@@ -5,6 +5,7 @@ import { lcw } from './compression';
 import { decodeShp, type Shp } from './shp-frames';
 import { sniffShpTd } from './sniff';
 import { RA_TEMPLATES, TD_TEMPLATES, type Template } from './templates';
+import { RA_REMAP, TD_REMAP, TEAM_COLORS, teamRemap } from './team-colors';
 import { EMPTY_CELL, readTileSet, type TileSet } from './tileset';
 import { expandPalette } from './vga';
 
@@ -15,7 +16,7 @@ import { expandPalette } from './vga';
  * and walls in [OverlayPack]. TD lists its overlays in the INI's [OVERLAY], and
  * both list trees and rocks in [TERRAIN].
  *
- * Every map gets a picture coloured by the kind of terrain in each cell. When
+ * Every map gets a picture colored by the kind of terrain in each cell. When
  * the theater's archive has been opened too, it's also drawn with the game's
  * own tiles and sprites.
  */
@@ -23,7 +24,7 @@ import { expandPalette } from './vga';
 export const CELL_PIXELS = 4;
 const TILE = 24;
 
-/** Terrain kinds: preview palette index, label, colour. */
+/** Terrain kinds: preview palette index, label, color. */
 const KINDS = [
     ['Clear', [92, 112, 56]],
     ['Water', [36, 72, 140]],
@@ -42,6 +43,8 @@ const KINDS = [
     ['Wall or fence', [235, 235, 235]],
     ['Crate or flag', [220, 60, 60]],
     ['Trees and rocks', [36, 70, 30]],
+    ['Building', [170, 96, 210]],
+    ['Unit or infantry', [240, 70, 70]],
 ] as const;
 type KindLabel = (typeof KINDS)[number][0];
 const KIND = Object.fromEntries(KINDS.map(([label], i) => [label, i])) as Record<KindLabel, number>;
@@ -138,11 +141,67 @@ export interface Mission {
     overlays: (string | null)[];
     /** Trees and rocks: cell → name. */
     terrain: Map<number, string>;
+    /** Units, infantry, buildings, ships and smudges (craters, scorch marks), from the INI. */
+    objects: MapObject[];
     /** The playable part, from the INI's [Map]. */
     area?: Area;
     /** The INI's Theater= value. */
     theater?: string;
 }
+
+export interface MapObject {
+    kind: 'unit' | 'infantry' | 'building' | 'ship' | 'smudge';
+    house: string;
+    /** Its type, which is also its sprite's name (MTNK, E1, FACT, CR1). */
+    type: string;
+    cell: number;
+    /** 0–255, clockwise from north. */
+    facing: number;
+    /** Infantry: where in the cell (0 middle, then the four quarters); smudges: which frame. */
+    sub: number;
+}
+
+/**
+ * Objects from a mission INI. Each line is "House,Type,Strength,Cell,Facing,…";
+ * infantry put a sub-cell before their mission and facing; smudges are
+ * "Type,Cell,Frame" (UNIT.CPP, INFANTRY.CPP, BUILDING.CPP, SMUDGE.CPP).
+ */
+function readObjects(ini: Ini, size: number): MapObject[] {
+    const out: MapObject[] = [];
+    const sections: [MapObject['kind'], string][] = [['building', 'STRUCTURES'], ['unit', 'UNITS'], ['ship', 'SHIPS'], ['infantry', 'INFANTRY']];
+    for (const [kind, section] of sections) {
+        for (const [, value] of ini.entries(section)) {
+            const v = value.split(',').map((x) => x.trim());
+            const cell = Number(v[3]);
+            if (!Number.isInteger(cell) || cell < 0 || cell >= size * size) continue;
+            out.push({ kind, house: v[0].toUpperCase(), type: (v[1] ?? '').toUpperCase(), cell, facing: Number(kind === 'infantry' ? v[6] : v[4]) || 0, sub: kind === 'infantry' ? Number(v[4]) || 0 : 0 });
+        }
+    }
+    for (const [, value] of ini.entries('SMUDGE')) {
+        const v = value.split(',').map((x) => x.trim());
+        const cell = Number(v[1]);
+        if (Number.isInteger(cell) && cell >= 0 && cell < size * size) out.push({ kind: 'smudge', house: '', type: v[0].toUpperCase(), cell, facing: 0, sub: Number(v[2]) || 0 });
+    }
+    return out;
+}
+
+/** Each side's color, as the games give them by default (GDI and Spain keep the art's own gold). */
+const HOUSE_COLORS: Record<string, string | null> = {
+    GOODGUY: null, BADGUY: 'Red', NEUTRAL: null, SPECIAL: null, JP: null,
+    MULTI1: 'Teal', MULTI2: 'Light blue', MULTI3: 'Red', MULTI4: 'Green', MULTI5: 'Orange', MULTI6: 'Blue', MULTI7: 'Gray', MULTI8: 'Brown',
+    SPAIN: null, GREECE: 'Light blue', USSR: 'Red', ENGLAND: 'Green', UKRAINE: 'Orange', GERMANY: 'Gray', FRANCE: 'Blue', TURKEY: 'Brown',
+};
+/** In RA, GoodGuy is the Allies' light blue. */
+const RA_HOUSE_COLORS: Record<string, string | null> = { ...HOUSE_COLORS, GOODGUY: 'Light blue' };
+
+/** TD's and RA's vehicles turn through 32 frames counterclockwise from north (TECHNO.CPP, BodyShape). */
+const bodyFrame = (facing: number) => (32 - (((facing + 4) >> 3) & 31)) % 32;
+/** Infantry stand in 8 directions (INFANTRY.CPP, HumanShape). */
+const HUMAN_SHAPE = [0, 0, 7, 7, 7, 7, 6, 6, 6, 6, 5, 5, 5, 5, 5, 4, 4, 4, 3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1, 1, 0];
+/** Where in a cell infantry stand, in 1/256ths: middle, then the four quarters (CONST.CPP, StoppingCoordAbs). */
+const SUB_CELLS = [[128, 128], [64, 64], [192, 64], [64, 192], [192, 192]];
+/** Vehicles whose turret is a second set of 32 frames after the body's. */
+const TURRETED = new Set(['JEEP', 'BGGY', 'LTNK', 'MTNK', 'HTNK', 'MSAM', '1TNK', '2TNK', '3TNK', '4TNK']);
 
 /**
  * Cells with nothing on them. RA's own maps still say 255 (TD's value) for clear
@@ -152,9 +211,11 @@ const isClear = (id: number) => id === 0 || id === 0xff || id === 0xffff;
 
 const wholeMap = (size: number): Area => ({ x: 0, y: 0, width: size, height: size });
 
-/** Each cell as a CELL_PIXELS square in its terrain kind's colour, plus how many cells of each kind. */
+/** Each cell as a CELL_PIXELS square in its terrain kind's color, plus how many cells of each kind. */
 export function renderMap(m: Mission): { image: IndexedImage; counts: [string, number][]; unknown: number } {
     const { size, templates, overlays, terrain, area = wholeMap(size) } = m;
+    const marks = new Map<number, number>();
+    for (const o of m.objects) if (o.kind !== 'smudge') marks.set(o.cell, o.kind === 'building' ? KIND.Building : KIND['Unit or infantry']);
     const table = m.game === 'td' ? TD_TEMPLATES : RA_TEMPLATES;
     const width = area.width * CELL_PIXELS;
     const pixels = new Uint8Array(width * area.height * CELL_PIXELS);
@@ -169,6 +230,7 @@ export function renderMap(m: Mission): { image: IndexedImage; counts: [string, n
             const overlay = overlays[cell] ? overlayKind(overlays[cell]) : null;
             if (overlay !== null) kind = overlay;
             if (terrain.has(cell)) kind = KIND['Trees and rocks'];
+            kind = marks.get(cell) ?? kind;
             counts[kind]++;
             for (let dy = 0; dy < CELL_PIXELS; dy++) {
                 const row = (cy * CELL_PIXELS + dy) * width + cx * CELL_PIXELS;
@@ -231,6 +293,7 @@ export function raMission(ini: Ini): Mission {
         icons: raw.subarray(cells * 2),
         overlays: Array.from({ length: cells }, (_, i) => (packed && packed[i] !== 0xff ? (RA_OVERLAYS[packed[i]] ?? null) : null)),
         terrain: cellNames(ini, 'TERRAIN', RA_SIZE),
+        objects: readObjects(ini, RA_SIZE),
         area: playableArea(ini, RA_SIZE),
         theater: ini.get('Map', 'Theater'),
     };
@@ -247,6 +310,7 @@ export function tdMission(bin: Uint8Array, ini: Ini | null): Mission {
         icons: Array.from({ length: cells }, (_, i) => bin[i * 2 + 1]),
         overlays: Array.from({ length: cells }, (_, i) => overlays.get(i) ?? null),
         terrain: ini ? cellNames(ini, 'TERRAIN', TD_SIZE) : new Map(),
+        objects: ini ? readObjects(ini, TD_SIZE) : [],
         area: ini ? playableArea(ini, TD_SIZE) : undefined,
         theater: ini?.get('Map', 'Theater'),
     };
@@ -264,7 +328,7 @@ export type Finder = (name: string) => Companion[];
 const ORE_FRAMES = [0, 1, 3, 4, 6, 7, 8, 10, 11];
 const GEM_FRAMES = [0, 0, 0, 1, 1, 1, 2, 2, 2];
 
-/** For each colour, the nearest one at about half its brightness: how the game darkens what's under a shadow. */
+/** For each color, the nearest one at about half its brightness: how the game darkens what's under a shadow. */
 function shadeTable(palette: Uint8Array): Uint8Array {
     const out = new Uint8Array(256);
     for (let i = 0; i < 256; i++) {
@@ -326,13 +390,13 @@ export function renderTiles(m: Mission, find: Finder, links: Links): TileRender 
     const palette = pal ? expandPalette(pal.data) : undefined;
     if (pal) links.use(`${theater.root}.pal`, pal, 'Palette');
     else links.miss(`${theater.root}.pal`, `Palette (in ${m.game === 'ra' ? 'REDALERT.MIX' : archive})`);
-    const wanted = pal ? undefined : `The colours need ${theater.root.toUpperCase()}.PAL, which is in ${m.game === 'ra' ? 'REDALERT.MIX' : archive}. Open that as well, or pick the palette beside the map.`;
+    const wanted = pal ? undefined : `The colors need ${theater.root.toUpperCase()}.PAL, which is in ${m.game === 'ra' ? 'REDALERT.MIX' : archive}. Open that as well, or pick the palette beside the map.`;
     const shade = palette ? shadeTable(palette) : identityTable;
 
     const width = area.width * TILE;
     const height = area.height * TILE;
     const pixels = new Uint8Array(width * height);
-    const blit = (src: Uint8Array, srcWidth: number, srcHeight: number, x: number, y: number, sprite: boolean) => {
+    const blit = (src: Uint8Array, srcWidth: number, srcHeight: number, x: number, y: number, sprite: boolean, remap?: Uint8Array) => {
         for (let sy = 0; sy < srcHeight; sy++) {
             const dy = y + sy;
             if (dy < 0 || dy >= height) continue;
@@ -341,8 +405,8 @@ export function renderTiles(m: Mission, find: Finder, links: Links): TileRender 
                 if (dx < 0 || dx >= width) continue;
                 const p = src[sy * srcWidth + sx];
                 if (sprite && p === 0) continue;
-                // Sprites mark shadow with colour 4.
-                pixels[dy * width + dx] = sprite && p === 4 ? shade[pixels[dy * width + dx]] : p;
+                // Sprites mark shadow with color 4.
+                pixels[dy * width + dx] = sprite && p === 4 ? shade[pixels[dy * width + dx]] : remap ? remap[p] : p;
             }
         }
     };
@@ -361,18 +425,44 @@ export function renderTiles(m: Mission, find: Finder, links: Links): TileRender 
 
     // Sprites: theater-specific ones share the tile sets' extension; the rest are plain SHPs.
     const sprites = new Map<string, Shp | null>();
-    const sprite = (name: string, theaterArt: boolean): Shp | null => {
-        const file = `${name.toLowerCase()}.${theaterArt ? theater.ext : 'shp'}`;
-        if (!sprites.has(file)) {
-            const candidates = find(file).filter((c) => sniffShpTd(c.data));
-            const found = candidates.find((c) => c.source === source) ?? candidates[0];
-            const role = theaterArt ? `Sprite (in ${archive})` : `Sprite (walls and crates are in CONQUER.MIX${m.game === 'ra' ? ', inside MAIN.MIX' : ''})`;
+    const conquer = `CONQUER.MIX${m.game === 'ra' ? ', inside MAIN.MIX' : ''}`;
+    /** The first of these files that's there (theater art, or plain .shp), recorded under the role. */
+    const spriteFrom = (name: string, exts: string[], role: string): Shp | null => {
+        const key = `${name}:${exts.join(',')}`;
+        if (!sprites.has(key)) {
+            let found: Companion | undefined;
+            let file = '';
+            for (const ext of exts) {
+                file = `${name.toLowerCase()}.${ext}`;
+                const candidates = find(file).filter((c) => sniffShpTd(c.data));
+                found = candidates.find((c) => c.source === source) ?? candidates[0];
+                if (found) break;
+            }
             if (found) links.use(file, found, role);
-            else links.miss(file, role);
-            sprites.set(file, found ? decodeShp(found.data) : null);
+            else links.miss(`${name.toLowerCase()}.${exts[0]}`, role);
+            sprites.set(key, found ? decodeShp(found.data) : null);
         }
-        return sprites.get(file)!;
+        return sprites.get(key)!;
     };
+    const sprite = (name: string, theaterArt: boolean) => spriteFrom(name, [theaterArt ? theater.ext : 'shp'], theaterArt ? `Sprite (in ${archive})` : `Sprite (walls and crates are in ${conquer})`);
+    // Each side's color, as a remap of the art's own range to the palette's nearest shades.
+    const range = m.game === 'td' ? TD_REMAP : RA_REMAP;
+    const houseColors = m.game === 'td' ? HOUSE_COLORS : RA_HOUSE_COLORS;
+    const remaps = new Map<string, Uint8Array | undefined>();
+    const remapFor = (house: string) => {
+        if (!remaps.has(house)) {
+            const color = TEAM_COLORS.find((c) => c.name === houseColors[house]);
+            remaps.set(house, color && palette ? teamRemap(palette, range, color.rgb) : undefined);
+        }
+        return remaps.get(house);
+    };
+    // Craters and scorch marks lie on the ground, under everything else.
+    for (const o of m.objects) {
+        if (o.kind !== 'smudge') continue;
+        const [x, y] = [o.cell % size, Math.floor(o.cell / size)];
+        const image = spriteFrom(o.type, [theater.ext, 'shp'], `Crater or scorch mark (in ${archive})`)?.frames[o.sub];
+        if (image) blit(image.pixels, image.width, image.height, (x - area.x) * TILE, (y - area.y) * TILE, true);
+    }
     const at = (x: number, y: number) => (x >= 0 && y >= 0 && x < size && y < size ? overlays[y * size + x] : null);
     const inArea = (x: number, y: number) => x >= area.x && y >= area.y && x < area.x + area.width && y < area.y + area.height;
 
@@ -386,7 +476,7 @@ export function renderTiles(m: Mission, find: Finder, links: Links): TileRender 
             for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if ((dx || dy) && ((n) => n && (isOre(n) || isGems(n)))(at(x + dx, y + dy))) count++;
             frame = (isGems(name) ? GEM_FRAMES : ORE_FRAMES)[count];
         } else if (WALLS.has(name)) {
-            // Wall_Update: a bit for each neighbour of the same wall, N E S W.
+            // Wall_Update: a bit for each neighbor of the same wall, N E S W.
             frame = [at(x, y - 1), at(x + 1, y), at(x, y + 1), at(x - 1, y)].reduce((bits, n, i) => bits | (n === name ? 1 << i : 0), 0);
         }
         const shp = sprite(name, theaterSpecific(name));
@@ -394,12 +484,45 @@ export function renderTiles(m: Mission, find: Finder, links: Links): TileRender 
         if (image) blit(image.pixels, image.width, image.height, (x - area.x) * TILE, (y - area.y) * TILE, true);
     }
 
-    // Trees and rocks are drawn from their cell's top left, and can reach into the cells below and right.
-    for (const [cell, name] of [...terrain].sort(([a], [b]) => a - b)) {
+    // Trees, buildings, units and infantry, back to front. Trees and buildings are drawn from their
+    // cell's top left; units and infantry are centered on where they stand.
+    const standing: { y: number; draw: () => void }[] = [];
+    for (const [cell, name] of terrain) {
         const [x, y] = [cell % size, Math.floor(cell / size)];
-        const image = sprite(name, true)?.frames[0];
-        if (image) blit(image.pixels, image.width, image.height, (x - area.x) * TILE, (y - area.y) * TILE, true);
+        standing.push({ y: y * 256, draw: () => {
+            const image = sprite(name, true)?.frames[0];
+            if (image) blit(image.pixels, image.width, image.height, (x - area.x) * TILE, (y - area.y) * TILE, true);
+        } });
     }
+    for (const o of m.objects) {
+        if (o.kind === 'smudge') continue;
+        const [x, y] = [o.cell % size, Math.floor(o.cell / size)];
+        if (!inArea(x, y)) continue;
+        const remap = remapFor(o.house);
+        if (o.kind === 'building') {
+            standing.push({ y: y * 256, draw: () => {
+                const shp = spriteFrom(o.type, [theater.ext, 'shp'], `Building sprite (in ${conquer}, or the theater's)`);
+                const image = shp?.frames[0];
+                if (image) blit(image.pixels, image.width, image.height, (x - area.x) * TILE, (y - area.y) * TILE, true, remap);
+            } });
+            continue;
+        }
+        const [sx, sy] = o.kind === 'infantry' ? SUB_CELLS[o.sub] ?? SUB_CELLS[0] : SUB_CELLS[0];
+        standing.push({ y: y * 256 + sy, draw: () => {
+            const shp = spriteFrom(o.type, ['shp'], o.kind === 'infantry' ? `Infantry sprite (in ${conquer})` : `Unit sprite (in ${conquer})`);
+            if (!shp) return;
+            const dir32 = ((o.facing + 4) >> 3) & 31;
+            const frames = o.kind === 'infantry' ? [HUMAN_SHAPE[dir32]] : shp.frames.length >= 32 ? [bodyFrame(o.facing), ...(TURRETED.has(o.type) ? [32 + bodyFrame(o.facing)] : [])] : [Math.floor((bodyFrame(o.facing) * shp.frames.length) / 32)];
+            for (const f of frames) {
+                const image = shp.frames[f];
+                if (!image) continue;
+                const px = (x - area.x) * TILE + Math.round((sx * TILE) / 256) - (image.width >> 1);
+                const py = (y - area.y) * TILE + Math.round((sy * TILE) / 256) - (image.height >> 1);
+                blit(image.pixels, image.width, image.height, px, py, true, remap);
+            }
+        } });
+    }
+    for (const o of standing.sort((a, b) => a.y - b.y)) o.draw();
 
     return { status: 'drawn', image: { width, height, pixels }, palette, wanted };
 }

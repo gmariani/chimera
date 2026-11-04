@@ -1,6 +1,7 @@
 import type { Field, FormatParser, Preview } from '../core/types';
 import { Ini } from './ini-sections';
 import { Links } from './links';
+import { rulesTable } from './rules-table';
 import { missionPreviews, raMission, tdMission, TD_SIZE, type Mission } from './westwood/map';
 import { isoMapPreviews } from './westwood/map-iso';
 
@@ -65,6 +66,15 @@ const parser: FormatParser = {
             } else {
                 links.miss(bin, 'Map cells (next to this file)');
                 wanted = `The map is in ${bin.toUpperCase()}, next to this file. Open the archive that has it to see the map here.`;
+            }
+        }
+        // A rules INI: its units and buildings as a table.
+        if (!mission && !ini.section('IsoMapPack5')) {
+            const table = rulesTable(ini, context.name, context.find, links);
+            if (table) {
+                title = 'Rules (INI)';
+                summary.push(...table.summary);
+                previews.push({ title: 'Units and buildings', preview: table.preview });
             }
         }
         if (mission) {

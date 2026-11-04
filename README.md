@@ -9,10 +9,10 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Westwood MIX (TD, RA, TS, RA2, and RA2's .mmx/.yro maps), plain or Blowfish-encrypted | full structure, names from hashes | — | single files, all as ZIP, nested MIX |
 | SHP sprites (TD/RA, TS/RA2, and the Dune II-style cursors) | headers, frame table | all frames, animation, any palette | PNG frame, sheet, all frames |
 | AUD audio (IMA and Westwood ADPCM) | headers, chunks | player | WAV |
-| CPS and PCX pictures (256-colour and 24-bit) | headers | image | PNG |
+| CPS and PCX pictures (256-color and 24-bit) | headers | image | PNG |
 | WSA animations | headers, frame offsets | all frames, animation | PNG frame, sheet, all frames |
 | Terrain tile sets (.tem, .des, .win, .sno, .int, .icn) | header, tiles, cell map | the template assembled, each tile | PNG |
-| VQA video (TD/RA version 2; TS's high-colour version 3) | chunk map, VQHD | player with sound | PNG frame, all frames, WAV |
+| VQA video (TD/RA version 2; TS's high-color version 3) | chunk map, VQHD | player with sound | PNG frame, all frames, WAV |
 | Isometric tiles (TS/RA2 .tem, .sno, .urb, .des, .lun, .ubn) | header, every cell | assembled, each cell | PNG |
 | Voxel models (.vxl) and animations (.hva) | headers, limbs, matrices | 3D viewer (turn, zoom, animate; turret and barrel included), each limb from four sides | PNG |
 | Voxel lighting tables (voxels.vpl) | header, tables | the palette at each light level | PNG |
@@ -20,17 +20,19 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | RA2 sound banks (audio.idx with audio.bag) | every sound | each sound as a WAV | WAV |
 | CSF string tables (RA2) | every label | text | — |
 | Bink video (RA2's movies) | header, frame index | player with sound, decoded by FFmpeg's Bink decoders compiled to WebAssembly | PNG frame, all frames, WAV |
-| Maps (TD .bin with its mission INI, RA [MapPack] in mission INIs) | every cell | drawn with the game's tiles, ore, walls and trees once the theater archive is open; terrain kinds with a key | PNG |
-| TS and RA2 maps (.map, .mpr, .yrm; inside .mmx/.yro) | sections, cells, overlays | drawn with the game's tiles, ore, walls, bridges and trees once the main archive is open (otherwise by height); the map's own preview | PNG |
+| Maps (TD .bin with its mission INI, RA [MapPack] in mission INIs) | every cell, every object | drawn with the game's tiles, ore, walls, trees, craters, buildings, units and infantry (in each side's color) once the theater archive is open; terrain kinds with a key | PNG |
+| TS and RA2 maps (.map, .mpr, .yrm; inside .mmx/.yro) | sections, cells, overlays, objects | drawn with the game's tiles, ore, walls, bridges, trees, buildings, infantry and voxel vehicles (in each side's color) once the main archive is open (otherwise by height); the map's own preview | PNG |
 | Fonts (.fnt: TD/RA 4-bit, TS 8-bit, TS/RA2 1-bit and Unicode) | header, each character | every character | PNG |
-| PAL palettes | each colour | swatches, use for sprites | — |
+| PAL palettes | each color | swatches, use for sprites | — |
 | String tables (.eng, .ger, .fre) | offsets, each string | numbered list | — |
-| Colour remap tables (TD .mrf) | each table | the palette through each table | PNG |
+| Color remap tables (TD .mrf) | each table | the palette through each table | PNG |
 | Chronal vortex frames (RA .lut) | every pixel | warp and shading | PNG |
 | VQP palette blending tables | tables | first table | — |
-| INI files | sections and entries | text | — |
+| INI files | sections and entries | text; for rules.ini, a table of every unit and building (name, cost, strength, art) linking to its sprite or voxel model | — |
 | XCC local mix database | names | list | — |
 | Other text | — | text | — |
+
+Sprites and voxels have a **Team color** picker: the games recolor 16 palette entries for the owner (176–191 in TD, 80–95 in RA, 16–31 in TS and RA2); the shades here are close to the games', not exact.
 
 Template names, TD template sizes, overlay and tree names, how ore and walls pick their frames, and the remap table and vortex layouts come from the GPL source of the Remastered Collection (`DEFINES.H`, `CDATA.CPP`, `ODATA.CPP`, `TDATA.CPP`, `CELL.CPP`, `DISPLAY.CPP`, `VORTEX.CPP`).
 
@@ -45,7 +47,7 @@ MIX archives store a hash of each file name, not the name. Names come from the a
 Each format is a plain TypeScript module that turns bytes into data. It never renders anything, so the UI stays generic:
 
 1. Write a parser in `src/formats/` that exports a `FormatParser` (`src/core/types.ts`). `parse()` returns:
-   - `fields`: a tree of `{ name, offset, length, value, note }`. This drives the structure tree and the hex colouring.
+   - `fields`: a tree of `{ name, offset, length, value, note }`. This drives the structure tree and the hex coloring.
    - `entries` (optional): files held inside, which can be opened and extracted.
    - `preview` (optional): `images` (indexed pixels), `palette`, `audio` (WAV bytes) or `text`.
    - `overlays` (optional): bytes to show in place of the file's own, such as a decrypted header.

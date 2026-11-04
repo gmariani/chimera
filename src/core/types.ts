@@ -1,13 +1,13 @@
 /**
  * The contract between the app and a file format. A format turns bytes into
- * plain data: a tree of labelled byte ranges (what each part of the file is),
+ * plain data: a tree of labeled byte ranges (what each part of the file is),
  * the files stored inside it (if it's an archive), and a preview of what it
  * holds. Formats never render anything, so the same parser can sit behind any
  * UI, or be loaded at runtime from elsewhere. (Video is the one exception to
  * plain data: its preview decodes frames when asked.)
  */
 
-/** A labelled range of bytes, like one row of a 010 Editor template. */
+/** A labeled range of bytes, like one row of a 010 Editor template. */
 export interface Field {
     name: string;
     offset: number;
@@ -32,7 +32,7 @@ export interface Entry {
     meta?: Record<string, string>;
 }
 
-/** Indexed-colour pictures; the app supplies the palette unless the file carries one. */
+/** Indexed-color pictures; the app supplies the palette unless the file carries one. */
 export interface IndexedImage {
     width: number;
     height: number;
@@ -49,7 +49,7 @@ export interface AudioClip {
     seconds: number;
 }
 
-/** One frame of video: palette indexes and the 768-byte 8-bit RGB palette in force for it, or (high-colour movies) RGBA. */
+/** One frame of video: palette indexes and the 768-byte 8-bit RGB palette in force for it, or (high-color movies) RGBA. */
 export type VideoFrame = { pixels: Uint8Array; palette: Uint8Array } | { rgba: Uint8Array };
 
 /** One part of a voxel model (a limb: a body, a turret), placed in the model's space. */
@@ -58,12 +58,26 @@ export interface VoxelPart {
     name: string;
     size: [number, number, number];
     /** Palette index per voxel, x fastest, then y, then z; 0 is empty. */
-    colours: Uint8Array;
+    colors: Uint8Array;
     /** Where the box's corners go: voxel (0, 0, 0) at min, voxel (size) at max. */
     min: [number, number, number];
     max: [number, number, number];
     /** For each animation frame, a 3 × 4 transform, row by row (none: it stays put). */
     frames: Float32Array[];
+}
+
+export interface TableColumn {
+    key: string;
+    label: string;
+    /** Sorts as numbers. */
+    numeric?: boolean;
+}
+
+export interface TableRow {
+    group: string;
+    cells: Record<string, string>;
+    /** For a column, the files its cell can open: the first one found among the files in use. */
+    files?: Record<string, string[]>;
 }
 
 export type Preview =
@@ -73,15 +87,17 @@ export type Preview =
           /** 768 bytes of 8-bit RGB, when the file brings its own. */
           palette?: Uint8Array;
           transparentIndex?: number;
-          /** An index the game draws as darkening rather than as its palette colour. */
+          /** An index the game draws as darkening rather than as its palette color. */
           shadowIndex?: number;
           /** Lay the frames out this many to a row with no gaps, when together they make one picture (a tile set's template). */
           columns?: number;
-          /** What some of the colours stand for, e.g. the terrain kinds on a map. */
+          /** What some of the colors stand for, e.g. the terrain kinds on a map. */
           legend?: { label: string; index: number }[];
+          /** The palette entries the game recolors for the owner's team, first and last. */
+          remap?: [number, number];
       }
-    | { kind: 'palette'; /** 256 colours as 8-bit RGB. */ colors: Uint8Array }
-    /** A true-colour picture. */
+    | { kind: 'palette'; /** 256 colors as 8-bit RGB. */ colors: Uint8Array }
+    /** A true-color picture. */
     | { kind: 'picture'; width: number; height: number; /** 8-bit RGBA, row by row. */ rgba: Uint8Array }
     | ({ kind: 'audio' } & AudioClip)
     | {
@@ -95,8 +111,10 @@ export type Preview =
           audio?: AudioClip;
       }
     | { kind: 'text'; text: string }
+    /** Rows of values in groups, to filter and sort; a cell can name files to open. */
+    | { kind: 'table'; columns: TableColumn[]; groups: string[]; rows: TableRow[] }
     /** A voxel model, to turn around in 3D. */
-    | { kind: 'voxels'; parts: VoxelPart[]; frameCount: number; /** 8-bit RGB, when the file brings a usable one. */ palette?: Uint8Array }
+    | { kind: 'voxels'; parts: VoxelPart[]; frameCount: number; /** 8-bit RGB, when the file brings a usable one. */ palette?: Uint8Array; /** The owner's color range, first and last. */ remap?: [number, number] }
     /** Several previews of the same file, e.g. a mission's map and its text. */
     | { kind: 'stack'; items: { title: string; preview: Preview }[] };
 

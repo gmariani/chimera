@@ -1,6 +1,7 @@
 import { Bytes, bytesLabel, field } from '../../core/bytes';
 import type { Field, FormatParser, IndexedImage } from '../../core/types';
 import { decodeShpTs } from './shp-ts-frames';
+import { TS_REMAP } from './team-colors';
 
 /**
  * Tiberian Sun / Red Alert 2 sprites. Each frame is a rectangle placed on a
@@ -42,7 +43,7 @@ const parser: FormatParser = {
                     field('Height', at + 6, 2, h),
                     field('Compression', at + 8, 1, compression, COMPRESSION[compression] ?? 'Unknown'),
                     field('Unknown', at + 9, 3),
-                    field('Radar colour', at + 12, 4, `#${b.u32(at + 12).toString(16).padStart(6, '0').slice(-6)}`, 'Used for the minimap.'),
+                    field('Radar color', at + 12, 4, `#${b.u32(at + 12).toString(16).padStart(6, '0').slice(-6)}`, 'Used for the minimap.'),
                     field('Reserved', at + 16, 4),
                     field('Data offset', at + 20, 4, offset, offset ? undefined : 'Zero: the frame is empty.'),
                 ],
@@ -65,7 +66,7 @@ const parser: FormatParser = {
                 { name: 'Frame headers', offset: 8, length: count * 24, children: headerFields },
                 ...dataFields,
             ],
-            preview: { kind: 'images', frames, transparentIndex: 0 },
+            preview: { kind: 'images', frames, transparentIndex: 0, remap: TS_REMAP },
             warnings: [],
         };
     },

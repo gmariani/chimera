@@ -5,8 +5,8 @@ import { VQP_TABLE } from './sniff';
 /**
  * VQA palette blending tables (.vqp), one per movie in RA. To play a 320-wide
  * movie at 640 wide, the game fills each gap between two pixels with the
- * palette colour closest to their average; these tables hold the answers.
- * Each is triangular: the colour for (a, b) is the same as for (b, a), so only
+ * palette color closest to their average; these tables hold the answers.
+ * Each is triangular: the color for (a, b) is the same as for (b, a), so only
  * a ≥ b is stored, row by row.
  */
 const parser: FormatParser = {
@@ -28,11 +28,11 @@ const parser: FormatParser = {
             title: 'Palette blending tables (VQP)',
             summary: [
                 ['Tables', String(count)],
-                ['Each', '256 × 256 colour pairs, stored as a triangle'],
+                ['Each', '256 × 256 color pairs, stored as a triangle'],
             ],
             fields: [
                 field('Table count', 0, 4, count, 'One per palette the movie uses.'),
-                ...tables.map((offset, i) => field(`Table ${i + 1}`, offset, VQP_TABLE, '32,896 entries', 'Row a has a + 1 entries: the blend of colour a with colours 0 to a.')),
+                ...tables.map((offset, i) => field(`Table ${i + 1}`, offset, VQP_TABLE, '32,896 entries', 'Row a has a + 1 entries: the blend of color a with colors 0 to a.')),
             ],
             preview: { kind: 'images', frames: [{ width: 256, height: 256, pixels }] },
             warnings: [],

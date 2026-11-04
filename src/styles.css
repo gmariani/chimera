@@ -381,7 +381,7 @@ body {
     text-align: center;
 }
 
-/* Neighbouring fields alternate tints, like a 010 Editor template. */
+/* Neighboring fields alternate tints, like a 010 Editor template. */
 .hx-tone-0 { background: rgba(110, 168, 254, 0.14); }
 .hx-tone-1 { background: rgba(32, 201, 151, 0.14); }
 .hx-tone-2 { background: rgba(255, 193, 7, 0.13); }
@@ -445,7 +445,7 @@ body {
     cursor: grabbing;
 }
 
-/* What the colours on a map stand for. */
+/* What the colors on a map stand for. */
 .legend li + li {
     margin-top: 0.25rem;
 }

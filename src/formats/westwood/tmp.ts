@@ -115,7 +115,7 @@ const parser: FormatParser = {
                 field('Height', c.offset + 40, 1, c.height, 'In levels; each lifts the cell half a cell.'),
                 field('Terrain', c.offset + 41, 1, `${c.terrain} (${TERRAIN[c.terrain] ?? 'unknown'})`),
                 field('Ramp', c.offset + 42, 1, c.ramp, 'Which way the ground slopes, 0 for flat.'),
-                field('Radar colours', c.offset + 43, 6, `left ${[...data.subarray(c.offset + 43, c.offset + 46)].join(',')}; right ${[...data.subarray(c.offset + 46, c.offset + 49)].join(',')}`),
+                field('Radar colors', c.offset + 43, 6, `left ${[...data.subarray(c.offset + 43, c.offset + 46)].join(',')}; right ${[...data.subarray(c.offset + 46, c.offset + 49)].join(',')}`),
                 field('Pixels', c.offset + HEADER, size, `${width} × ${height} diamond`),
             ],
         }));

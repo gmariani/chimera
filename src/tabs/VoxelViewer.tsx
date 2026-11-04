@@ -4,9 +4,10 @@ import type { VoxelPart } from '../core/types';
 import { Muted } from '../components/ui';
 import { download, safeName } from '../lib/download';
 import { usePalettes } from '../lib/palettes';
+import { TeamColorSelect, useTeamColor } from '../components/TeamColor';
 
 /**
- * A voxel model in 3D (WebGL2): each voxel's visible faces as a mesh, coloured
+ * A voxel model in 3D (WebGL2): each voxel's visible faces as a mesh, colored
  * through the palette in the shader so switching palettes is instant, and lit
  * from two directions. Drag to turn it, scroll to zoom, double-click to reset.
  */
@@ -51,19 +52,19 @@ const FACES: { normal: [number, number, number]; corners: [number, number, numbe
     { normal: [0, 0, -1], corners: [[0, 1, 0], [1, 1, 0], [1, 0, 0], [0, 0, 0]] },
 ];
 
-/** The faces of a part's voxels that nothing covers: position, normal and colour index per vertex, two triangles a face. */
+/** The faces of a part's voxels that nothing covers: position, normal and color index per vertex, two triangles a face. */
 function buildMesh(part: VoxelPart): Float32Array {
     const [sx, sy, sz] = part.size;
-    const at = (x: number, y: number, z: number) => (x < 0 || y < 0 || z < 0 || x >= sx || y >= sy || z >= sz ? 0 : part.colours[x + sx * (y + sy * z)]);
+    const at = (x: number, y: number, z: number) => (x < 0 || y < 0 || z < 0 || x >= sx || y >= sy || z >= sz ? 0 : part.colors[x + sx * (y + sy * z)]);
     const out: number[] = [];
     for (let z = 0; z < sz; z++) {
         for (let y = 0; y < sy; y++) {
             for (let x = 0; x < sx; x++) {
-                const colour = at(x, y, z);
-                if (!colour) continue;
+                const color = at(x, y, z);
+                if (!color) continue;
                 for (const { normal, corners } of FACES) {
                     if (at(x + normal[0], y + normal[1], z + normal[2])) continue;
-                    for (const k of [0, 1, 2, 0, 2, 3]) out.push(x + corners[k][0], y + corners[k][1], z + corners[k][2], ...normal, colour);
+                    for (const k of [0, 1, 2, 0, 2, 3]) out.push(x + corners[k][0], y + corners[k][1], z + corners[k][2], ...normal, color);
                 }
             }
         }
@@ -74,28 +75,28 @@ function buildMesh(part: VoxelPart): Float32Array {
 const VERTEX = `#version 300 es
 in vec3 aPos;
 in vec3 aNormal;
-in float aColour;
+in float aColor;
 uniform mat4 uProjection;
 uniform mat4 uView;
 uniform mat4 uModel;
 uniform mat3 uNormal;
 uniform sampler2D uPalette;
-out vec3 vColour;
+out vec3 vColor;
 out float vLight;
 void main() {
     gl_Position = uProjection * uView * uModel * vec4(aPos, 1.0);
     vec3 n = normalize(uNormal * aNormal);
     vLight = 0.42 + 0.62 * max(dot(n, normalize(vec3(-0.45, -0.55, 0.7))), 0.0) + 0.18 * max(dot(n, normalize(vec3(0.6, 0.5, 0.25))), 0.0);
-    vColour = texelFetch(uPalette, ivec2(int(aColour), 0), 0).rgb;
+    vColor = texelFetch(uPalette, ivec2(int(aColor), 0), 0).rgb;
 }`;
 
 const FRAGMENT = `#version 300 es
 precision mediump float;
-in vec3 vColour;
+in vec3 vColor;
 in float vLight;
-out vec4 colour;
+out vec4 color;
 void main() {
-    colour = vec4(min(vColour * vLight, 1.0), 1.0);
+    color = vec4(min(vColor * vLight, 1.0), 1.0);
 }`;
 
 function compile(gl: WebGL2RenderingContext): WebGLProgram {
@@ -112,8 +113,8 @@ function compile(gl: WebGL2RenderingContext): WebGLProgram {
     return program;
 }
 
-/** The model's centre and size across all parts at the first frame, for the camera. */
-function bounds(parts: VoxelPart[]): { centre: [number, number, number]; radius: number } {
+/** The model's center and size across all parts at the first frame, for the camera. */
+function bounds(parts: VoxelPart[]): { center: [number, number, number]; radius: number } {
     const lo = [Infinity, Infinity, Infinity];
     const hi = [-Infinity, -Infinity, -Infinity];
     for (const part of parts) {
@@ -127,8 +128,8 @@ function bounds(parts: VoxelPart[]): { centre: [number, number, number]; radius:
             }
         }
     }
-    if (!Number.isFinite(lo[0])) return { centre: [0, 0, 0], radius: 1 };
-    return { centre: [0, 1, 2].map((i) => (lo[i] + hi[i]) / 2) as [number, number, number], radius: Math.max(1, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2) };
+    if (!Number.isFinite(lo[0])) return { center: [0, 0, 0], radius: 1 };
+    return { center: [0, 1, 2].map((i) => (lo[i] + hi[i]) / 2) as [number, number, number], radius: Math.max(1, Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2) };
 }
 
 interface Camera {
@@ -140,10 +141,11 @@ interface Camera {
 /** The games' view: from the south-east, looking down. */
 const GAME_VIEW: Camera = { yaw: -Math.PI / 4 - Math.PI / 2, pitch: 0.6, zoom: 1 };
 
-export function VoxelViewer({ parts, frameCount, ownPalette, fileName }: { parts: VoxelPart[]; frameCount: number; ownPalette?: Uint8Array; fileName: string }) {
+export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: { parts: VoxelPart[]; frameCount: number; ownPalette?: Uint8Array; remap?: [number, number]; fileName: string }) {
     const { palettes, current, select } = usePalettes();
     const [useOwn, setUseOwn] = useState(false);
-    const palette = ownPalette && useOwn ? ownPalette : current.colors;
+    const team = useTeamColor(ownPalette && useOwn ? ownPalette : current.colors, remap);
+    const palette = team.palette;
     const [camera, setCamera] = useState<Camera>(GAME_VIEW);
     const [perspective, setPerspective] = useState(false);
     const [spin, setSpin] = useState(false);
@@ -153,7 +155,7 @@ export function VoxelViewer({ parts, frameCount, ownPalette, fileName }: { parts
     const [error, setError] = useState<string | null>(null);
     const canvas = useRef<HTMLCanvasElement>(null);
     const gpu = useRef<{ gl: WebGL2RenderingContext; program: WebGLProgram; meshes: { vao: WebGLVertexArrayObject; count: number }[]; palette: WebGLTexture } | null>(null);
-    const { centre, radius } = useMemo(() => bounds(parts), [parts]);
+    const { center, radius } = useMemo(() => bounds(parts), [parts]);
 
     // Set up WebGL and upload each part's mesh once.
     useEffect(() => {
@@ -178,7 +180,7 @@ export function VoxelViewer({ parts, frameCount, ownPalette, fileName }: { parts
                 };
                 attribute('aPos', 3, 0);
                 attribute('aNormal', 3, 12);
-                attribute('aColour', 1, 24);
+                attribute('aColor', 1, 24);
                 return { vao, count: data.length / 7 };
             });
             const texture = gl.createTexture()!;
@@ -220,7 +222,7 @@ export function VoxelViewer({ parts, frameCount, ownPalette, fileName }: { parts
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
         gl.uniform1i(gl.getUniformLocation(program, 'uPalette'), 0);
 
-        // Orbit the model's centre, z up.
+        // Orbit the model's center, z up.
         const distance = radius * 3;
         const eye = [Math.cos(cam.pitch) * Math.cos(cam.yaw), Math.cos(cam.pitch) * Math.sin(cam.yaw), Math.sin(cam.pitch)];
         const forward = eye.map((v) => -v);
@@ -228,7 +230,7 @@ export function VoxelViewer({ parts, frameCount, ownPalette, fileName }: { parts
         const rl = Math.hypot(rightRaw[0], rightRaw[1]) || 1;
         const right = rightRaw.map((v) => v / rl);
         const up = [right[1] * forward[2] - right[2] * forward[1], right[2] * forward[0] - right[0] * forward[2], right[0] * forward[1] - right[1] * forward[0]];
-        const pos = centre.map((c, i) => c + eye[i] * distance);
+        const pos = center.map((c, i) => c + eye[i] * distance);
         const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
         const view = Float32Array.of(right[0], up[0], -forward[0], 0, right[1], up[1], -forward[1], 0, right[2], up[2], -forward[2], 0, -dot(right, pos), -dot(up, pos), dot(forward, pos), 1);
         const aspect = w / h;
@@ -393,6 +395,8 @@ export function VoxelViewer({ parts, frameCount, ownPalette, fileName }: { parts
                         ))}
                     </Form.Group>
                 )}
+
+                {remap && <TeamColorSelect team={team.team} onChange={team.setTeam} range={remap} />}
 
                 <Form.Group className="mb-3">
                     <Form.Label className="small text-body-secondary mb-1">Palette</Form.Label>

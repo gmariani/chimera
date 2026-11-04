@@ -45,7 +45,7 @@ const parser: FormatParser = {
             let start = at + 10;
             let remap: Uint8Array | null = null;
             const children: Field[] = [
-                field('Flags', at, 2, `0x${hex(flags, 4)}`, 'Bit 0: a colour remap table follows. Bit 1: not LCW-compressed. Bit 2: the table has its own length.'),
+                field('Flags', at, 2, `0x${hex(flags, 4)}`, 'Bit 0: a color remap table follows. Bit 1: not LCW-compressed. Bit 2: the table has its own length.'),
                 field('Slices', at + 2, 1, b.u8(at + 2), 'Usually the height again.'),
                 field('Width', at + 3, 2, width),
                 field('Height', at + 5, 1, height),
@@ -55,7 +55,7 @@ const parser: FormatParser = {
             if (flags & FLAG_REMAP) {
                 const length = flags & FLAG_VARIABLE_REMAP ? b.u8(start++) : 16;
                 remap = data.slice(start, start + length);
-                children.push(field('Remap table', start, length, `${length} colours`, 'Frame pixels index this table, which indexes the palette (team colours).'));
+                children.push(field('Remap table', start, length, `${length} colors`, 'Frame pixels index this table, which indexes the palette (team colors).'));
                 start += length;
             }
             const compressed = data.subarray(start, at + frameSize);

@@ -7,7 +7,7 @@ import { hvaLayout } from './sniff';
  *
  * A model is limbs (body, turret…), each a box of voxels stored column by
  * column: for every x, y, a list of spans up the z axis, each a skip, a count,
- * that many colour and normal pairs, then the count again.
+ * that many color and normal pairs, then the count again.
  */
 
 export const VXL_HEADER = 802;
@@ -18,8 +18,8 @@ const EMPTY = 0xffffffff;
 export interface Limb {
     name: string;
     size: [number, number, number];
-    /** Colour per voxel, x fastest then y then z; 0 for empty (colour 0 is stored as 1 so it shows). */
-    colours: Uint8Array;
+    /** Color per voxel, x fastest then y then z; 0 for empty (color 0 is stored as 1 so it shows). */
+    colors: Uint8Array;
     count: number;
     tailer: number;
     scale: number;
@@ -50,7 +50,7 @@ export function decodeVxl(data: Uint8Array): Vxl {
         const t = tailers + i * TAILER;
         const size: [number, number, number] = [b.u8(t + 88), b.u8(t + 89), b.u8(t + 90)];
         const [sx, sy, sz] = size;
-        const colours = new Uint8Array(sx * sy * sz);
+        const colors = new Uint8Array(sx * sy * sz);
         const starts = body + b.u32(t);
         const ends = body + b.u32(t + 4);
         const spans = body + b.u32(t + 8);
@@ -66,7 +66,7 @@ export function decodeVxl(data: Uint8Array): Vxl {
                 const n = b.u8(at++);
                 for (let k = 0; k < n && at < data.length; k++, z++, at += 2) {
                     if (z < sz) {
-                        colours[col + sx * sy * z] = data[at] || 1;
+                        colors[col + sx * sy * z] = data[at] || 1;
                         count++;
                     }
                 }
@@ -77,7 +77,7 @@ export function decodeVxl(data: Uint8Array): Vxl {
         limbs.push({
             name: b.asciiz(VXL_HEADER + i * LIMB_HEADER).text.slice(0, 16),
             size,
-            colours,
+            colors,
             count,
             tailer: t,
             scale: b.f32(t + 12),

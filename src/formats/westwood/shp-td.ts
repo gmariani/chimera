@@ -1,6 +1,7 @@
 import { Bytes, bytesLabel, field, hex } from '../../core/bytes';
 import type { Field, FormatParser } from '../../core/types';
 import { decodeShp } from './shp-frames';
+import { guessRemap } from './team-colors';
 import { SHP_FORMAT_LCW, SHP_FORMAT_XOR_LCW, SHP_FORMAT_XOR_PREV } from './sniff';
 import { expandPalette } from './vga';
 
@@ -78,7 +79,7 @@ const parser: FormatParser = {
                 ...(embedded ? [field('Palette', table, 768)] : []),
                 ...dataFields,
             ],
-            preview: { kind: 'images', frames, palette: embedded && expandPalette(embedded), transparentIndex: 0, shadowIndex: 4 },
+            preview: { kind: 'images', frames, palette: embedded && expandPalette(embedded), transparentIndex: 0, shadowIndex: 4, remap: guessRemap(frames) },
             warnings,
         };
     },

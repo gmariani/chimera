@@ -35,7 +35,7 @@ const parser: FormatParser = {
                         field('Palette size', 8, 2, paletteSize),
                     ],
                 },
-                ...(palette ? [field('Palette', 10, 768, '256 colours, 6-bit')] : []),
+                ...(palette ? [field('Palette', 10, 768, '256 colors, 6-bit')] : []),
                 field('Picture data', start, data.length - start, bytesLabel(data.length - start)),
             ],
             preview: { kind: 'images', frames: [{ width: 320, height: Math.floor(size / 320), pixels }], palette },

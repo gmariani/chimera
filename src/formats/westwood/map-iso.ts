@@ -5,7 +5,10 @@ import { lcw, lzo1x } from './compression';
 import { decodeShpTs, type ShpTsFrame } from './shp-ts-frames';
 import { sniffShpTs, tmpLayout } from './sniff';
 import { unpackDiamond } from './tmp-diamond';
+import { TEAM_COLORS, teamPalette, TS_REMAP } from './team-colors';
 import { expandPalette } from './vga';
+import { decodeVxl, readHva, type Hva, type Vxl } from './voxel-data';
+import { drawVoxels, VOXELS_PER_CELL, type VoxelPartInput } from './voxel-sprite';
 
 /**
  * TS and RA2 maps: INIs (.map, .mpr, .yrm, and inside RA2's .mmx and .yro)
@@ -40,7 +43,41 @@ export interface IsoMap {
     overlayData: Uint8Array | null;
     /** Trees and the like: [rx, ry, name]. */
     terrain: [number, number, string][];
+    /** Buildings, vehicles, infantry and aircraft. */
+    objects: IsoObject[];
+    /** Each house's color name, where the map sets one ([GDI] Color=Gold). */
+    houseColors: Map<string, string>;
     preview: { width: number; height: number; rgb: Uint8Array } | null;
+}
+
+export interface IsoObject {
+    kind: 'building' | 'unit' | 'infantry' | 'aircraft';
+    house: string;
+    type: string;
+    rx: number;
+    ry: number;
+    /** 0–255, clockwise from north. */
+    facing: number;
+    /** Infantry: where in the cell (0 middle, then the four quarters). */
+    sub: number;
+}
+
+/**
+ * Objects in a TS or RA2 map: "House,Type,Health,X,Y,Facing,…" for buildings,
+ * vehicles and aircraft; infantry put a sub-cell before their mission and facing.
+ */
+function readObjects(ini: Ini): IsoObject[] {
+    const out: IsoObject[] = [];
+    const sections: [IsoObject['kind'], string][] = [['building', 'Structures'], ['unit', 'Units'], ['aircraft', 'Aircraft'], ['infantry', 'Infantry']];
+    for (const [kind, section] of sections) {
+        for (const [, value] of ini.entries(section)) {
+            const v = value.split(',').map((x) => x.trim());
+            const [rx, ry] = [Number(v[3]), Number(v[4])];
+            if (!Number.isInteger(rx) || !Number.isInteger(ry)) continue;
+            out.push({ kind, house: v[0], type: (v[1] ?? '').toUpperCase(), rx, ry, facing: Number(kind === 'infantry' ? v[7] : v[5]) || 0, sub: kind === 'infantry' ? Number(v[5]) || 0 : 0 });
+        }
+    }
+    return out;
 }
 
 const OVERLAY_CELLS = 512 * 512;
@@ -78,6 +115,11 @@ export function readIsoMap(ini: Ini): IsoMap {
         const n = Number(key);
         return Number.isInteger(n) ? [[n % 1000, Math.floor(n / 1000), value.trim().toUpperCase()] as [number, number, string]] : [];
     });
+    const houseColors = new Map<string, string>();
+    for (const section of ini.sections) {
+        const color = section.entries.find((e) => e.key.toLowerCase() === 'color')?.value;
+        if (color) houseColors.set(section.name.toLowerCase(), color);
+    }
     let preview: IsoMap['preview'] = null;
     const [, , pw, ph] = (ini.get('Preview', 'Size') ?? '').split(',').map(Number);
     if (pw > 0 && ph > 0 && pw * ph < 1 << 22) {
@@ -91,6 +133,8 @@ export function readIsoMap(ini: Ini): IsoMap {
         overlays: unpack(ini, 'OverlayPack', OVERLAY_CELLS, lcw),
         overlayData: unpack(ini, 'OverlayDataPack', OVERLAY_CELLS, lcw),
         terrain,
+        objects: readObjects(ini),
+        houseColors,
         preview,
     };
 }
@@ -157,10 +201,25 @@ function readTile(data: Uint8Array): Tile | null {
     };
 }
 
-/** Colours for the flat view: ground by height, and what's on it. */
+/** Colors for the flat view: ground by height, and what's on it. */
 const HEIGHT_LOW = [72, 104, 52];
 const HEIGHT_HIGH = [176, 168, 128];
-const MARK: Record<string, [number, number, number]> = { ore: [216, 180, 40], gems: [64, 200, 220], wall: [235, 235, 235], tree: [30, 66, 26] };
+const MARK: Record<string, [number, number, number]> = { ore: [216, 180, 40], gems: [64, 200, 220], wall: [235, 235, 235], tree: [30, 66, 26], building: [170, 96, 210], unit: [240, 70, 70] };
+
+/** Where in a cell infantry stand, in 1/256ths: middle, then the four quarters. */
+const SUB_CELLS = [[128, 128], [64, 64], [192, 64], [64, 192], [192, 192]];
+
+/** TS's and RA2's [Colors] are hue, saturation and value, each 0–255. */
+function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
+    const hue = ((h / 256) * 6) % 6;
+    const sat = s / 255;
+    const val = v / 255;
+    const c = val * sat;
+    const x = c * (1 - Math.abs((hue % 2) - 1));
+    const [r, g, b] = hue < 1 ? [c, x, 0] : hue < 2 ? [x, c, 0] : hue < 3 ? [0, c, x] : hue < 4 ? [0, x, c] : hue < 5 ? [x, 0, c] : [c, 0, x];
+    const m = val - c;
+    return [r, g, b].map((n) => Math.round((n + m) * 255)) as [number, number, number];
+}
 
 function overlayMark(name: string): keyof typeof MARK | null {
     if (/^(TIB|GOLD|ORE|RIPARIUS|CRUENTUS|VINIFERA|ABOREUS)/i.test(name)) return 'ore';
@@ -207,6 +266,34 @@ class Canvas {
             }
         }
     }
+    /** Darkens what's already there wherever pixels aren't 0: a sprite's shadow frame. */
+    shadow(pixels: ArrayLike<number>, w: number, h: number, x: number, y: number) {
+        const s = this.step;
+        for (let sy = 0; sy < h; sy++) {
+            const my = y + sy - this.top;
+            if (my % s || my < 0 || my / s >= this.height) continue;
+            for (let sx = 0; sx < w; sx++) {
+                const mx = x + sx - this.left;
+                if (!pixels[sy * w + sx] || mx % s || mx < 0 || mx / s >= this.width) continue;
+                const at = ((my / s) * this.width + mx / s) * 4;
+                for (let c = 0; c < 3; c++) this.rgba[at + c] >>= 1;
+            }
+        }
+    }
+    /** Draws an RGBA picture (transparent where alpha is 0) with its top left at x, y in map pixels. */
+    picture(rgba: Uint8Array, w: number, h: number, x: number, y: number) {
+        const s = this.step;
+        for (let sy = 0; sy < h; sy++) {
+            const my = y + sy - this.top;
+            if (my % s || my < 0 || my / s >= this.height) continue;
+            for (let sx = 0; sx < w; sx++) {
+                const mx = x + sx - this.left;
+                const from = (sy * w + sx) * 4;
+                if (!rgba[from + 3] || mx % s || mx < 0 || mx / s >= this.width) continue;
+                this.rgba.set(rgba.subarray(from, from + 4), ((my / s) * this.width + mx / s) * 4);
+            }
+        }
+    }
 }
 
 const MAX_SIDE = 4096;
@@ -219,7 +306,7 @@ export interface IsoRender {
 
 /**
  * The map, drawn with the theater's tiles, overlays and trees when they're in
- * the opened archives; otherwise each cell as a flat diamond coloured by height.
+ * the opened archives; otherwise each cell as a flat diamond colored by height.
  */
 export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolean, links: Links): IsoRender {
     const theater = THEATERS[map.theater] ?? THEATERS.TEMPERATE;
@@ -301,7 +388,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
         }
     }
 
-    // Overlays and trees: sprites centred on their cell when drawing for real, otherwise a mark.
+    // Overlays and trees: sprites centered on their cell when drawing for real, otherwise a mark.
     const rules = pick(yuri ? ['rulesmd.ini', 'rules.ini'] : ['rules.ini', 'rulesmd.ini'], 'Rules (what each overlay is)');
     const rulesIni = rules ? Ini.of(rules.data) : null;
     const overlayNames = rulesIni?.entries('OverlayTypes').map(([, v]) => v.trim().toUpperCase()) ?? [];
@@ -310,7 +397,8 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const art = artFile ? Ini.of(artFile.data) : null;
     const image = (name: string) => (rulesIni?.get(name, 'Image') ?? art?.get(name, 'Image') ?? name).trim().toUpperCase();
     const sprites = new Map<string, { width: number; height: number; frames: ShpTsFrame[] } | null>();
-    const sprite = (name: string) => {
+    /** An object's sprite: its theater's art, its plain .shp, or (NewTheater) its name with the theater's letter. */
+    const spriteFor = (name: string, role: string) => {
         if (!sprites.has(name)) {
             const n = image(name).toLowerCase();
             // Image=none: the object has no picture (an invisible marker), so there's nothing to find.
@@ -323,33 +411,84 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             for (const f of candidates) {
                 found = find?.(f).find((c) => sniffShpTs(c.data));
                 if (found) {
-                    links.use(f, found, 'Sprite (overlay or tree)');
+                    links.use(f, found, role);
                     break;
                 }
             }
-            if (!found) links.miss(`${n}.shp`, 'Sprite (overlay or tree)');
+            if (!found) links.miss(`${n}.shp`, role);
             sprites.set(name, found ? decodeShpTs(found.data) : null);
         }
         return sprites.get(name)!;
     };
-    const mark = (rx: number, ry: number, colour: [number, number, number]) => {
+    const sprite = (name: string) => spriteFor(name, 'Sprite (overlay or tree)');
+    const mark = (rx: number, ry: number, color: [number, number, number]) => {
         const [x, y] = place({ rx, ry, level: levels.get(ry * 1024 + rx) ?? 0 });
         const pal = new Uint8Array(768);
-        pal.set(colour, 3);
+        pal.set(color, 3);
         const small = unpackDiamond(new Uint8Array((tw * th) / 2).fill(1), tw, th);
         canvas.draw(small, tw, th, x, y, pal);
     };
-    const drawSprite = (rx: number, ry: number, name: string, frame: number, palette: Uint8Array) => {
+    /** Where a point in cells (fractions allowed) falls on the screen, at a cell's height. */
+    const point = (fx: number, fy: number) => {
+        const level = levels.get(Math.floor(fy) * 1024 + Math.floor(fx)) ?? 0;
+        return [((fx - fy) * tw) / 2 + tw / 2, ((fx + fy) * th) / 2 - (level * th) / 2];
+    };
+    /** A sprite frame centered on a point, its shadow (the second half of the frames) under it. */
+    const drawFrame = (shp: { width: number; height: number; frames: ShpTsFrame[] }, frame: number, cx: number, cy: number, palette: Uint8Array, shadow: boolean) => {
+        const x = Math.round(cx - shp.width / 2);
+        const y = Math.round(cy - shp.height / 2);
+        const half = shp.frames.length >> 1;
+        if (shadow && shp.frames.length > 1 && shp.frames.length % 2 === 0 && frame < half) canvas.shadow(shp.frames[frame + half].pixels, shp.width, shp.height, x, y);
+        const f = shp.frames[Math.min(frame, shp.frames.length - 1)];
+        if (f) canvas.draw(f.pixels, shp.width, shp.height, x, y, palette);
+    };
+    const drawSprite = (rx: number, ry: number, name: string, frame: number, palette: Uint8Array, shadow = false) => {
         const shp = sprite(name);
-        const f = shp?.frames[Math.min(frame, shp.frames.length - 1)];
-        if (!shp || !f) return;
-        const [x, y] = place({ rx, ry, level: levels.get(ry * 1024 + rx) ?? 0 });
-        canvas.draw(f.pixels, shp.width, shp.height, Math.round(x + tw / 2 - shp.width / 2), Math.round(y + th / 2 - shp.height / 2), palette);
+        if (!shp) return;
+        const [cx, cy] = point(rx + 0.5, ry + 0.5);
+        drawFrame(shp, frame, cx, cy, palette, shadow);
     };
     const overlayPalette = (name: string) => {
         const kind = overlayMark(name);
         return kind === 'ore' || kind === 'gems' ? objPalette : kind === 'wall' ? unitPalette : isoPalette;
     };
+
+    // Each side's color: the map's own ([GDI] Color=Gold), else rules.ini's, from the game's [Colors] (hue, saturation, value).
+    const teams = new Map<string, Uint8Array>();
+    const teamPaletteFor = (house: string, base: Uint8Array) => {
+        const key = `${house}:${base === unitPalette ? 'unit' : 'other'}`;
+        if (!teams.has(key)) {
+            const name = map.houseColors.get(house.toLowerCase()) ?? rulesIni?.get(house, 'Color') ?? rulesIni?.get(rulesIni.get(house, 'Country') ?? '', 'Color');
+            const hsv = name ? rulesIni?.get('Colors', name)?.split(',').map(Number) : undefined;
+            const rgb = hsv && hsv.length === 3 ? hsvToRgb(hsv[0], hsv[1], hsv[2]) : TEAM_COLORS.find((c) => c.name === 'Gold')!.rgb;
+            teams.set(key, teamPalette(base, TS_REMAP, rgb));
+        }
+        return teams.get(key)!;
+    };
+
+    // Voxel models (and their animations), by file.
+    const models = new Map<string, { vxl: Vxl; hva: Hva | null } | null>();
+    const model = (file: string, role: string) => {
+        if (!models.has(file)) {
+            const found = find?.(`${file}.vxl`)[0];
+            let entry: { vxl: Vxl; hva: Hva | null } | null = null;
+            if (found) {
+                try {
+                    const hvaFile = find?.(`${file}.hva`)[0];
+                    entry = { vxl: decodeVxl(found.data), hva: hvaFile ? readHva(hvaFile.data) : null };
+                    links.use(`${file}.vxl`, found, role);
+                    if (hvaFile) links.use(`${file}.hva`, hvaFile, `${role} (animation)`);
+                } catch {
+                    entry = null;
+                }
+            } else if (role === 'Vehicle model') {
+                links.miss(`${file}.vxl`, role);
+            }
+            models.set(file, entry);
+        }
+        return models.get(file)!;
+    };
+    const voxelPictures = new Map<string, ReturnType<typeof drawVoxels>>();
 
     const objects: { rx: number; ry: number; draw: () => void }[] = [];
     if (map.overlays) {
@@ -365,7 +504,66 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             }
         }
     }
-    for (const [rx, ry, name] of map.terrain) objects.push({ rx, ry, draw: () => (real ? drawSprite(rx, ry, name, 0, isoPalette) : mark(rx, ry, MARK.tree)) });
+    for (const [rx, ry, name] of map.terrain) objects.push({ rx, ry, draw: () => (real ? drawSprite(rx, ry, name, 0, isoPalette, true) : mark(rx, ry, MARK.tree)) });
+
+    for (const o of map.objects) {
+        if (!real) {
+            objects.push({ rx: o.rx, ry: o.ry, draw: () => mark(o.rx, o.ry, MARK[o.kind === 'building' ? 'building' : 'unit']) });
+            continue;
+        }
+        const img = image(o.type);
+        if (o.kind === 'building') {
+            // Drawn centered on its footprint, its foundation slab (bib) first.
+            const [fw, fh] = (art?.get(img, 'Foundation') ?? art?.get(o.type, 'Foundation') ?? '1x1').split(/x/i).map((n) => Number(n) || 1);
+            objects.push({ rx: o.rx + fw - 1, ry: o.ry + fh - 1, draw: () => {
+                const [cx, cy] = point(o.rx + fw / 2, o.ry + fh / 2);
+                const palette = teamPaletteFor(o.house, unitPalette);
+                const bib = art?.get(img, 'BibShape');
+                const bibShp = bib ? spriteFor(bib.toUpperCase(), 'Building foundation sprite') : null;
+                if (bibShp) drawFrame(bibShp, 0, cx, cy, palette, false);
+                const shp = spriteFor(o.type, 'Building sprite');
+                if (shp) drawFrame(shp, 0, cx, cy, palette, true);
+            } });
+            continue;
+        }
+        if (o.kind === 'infantry') {
+            const [sx, sy] = SUB_CELLS[o.sub] ?? SUB_CELLS[0];
+            objects.push({ rx: o.rx, ry: o.ry, draw: () => {
+                const shp = spriteFor(o.type, 'Infantry sprite');
+                if (!shp) return;
+                const [cx, cy] = point(o.rx + sx / 256, o.ry + sy / 256);
+                // Standing still, facing one of 8 ways, counterclockwise from north.
+                drawFrame(shp, (8 - Math.round(o.facing / 32)) % 8, cx, cy, teamPaletteFor(o.house, unitPalette), true);
+            } });
+            continue;
+        }
+        // Vehicles and aircraft: voxels when the art says so, with a turret and barrel if there are files for them.
+        objects.push({ rx: o.rx, ry: o.ry, draw: () => {
+            const [cx, cy] = point(o.rx + 0.5, o.ry + 0.5);
+            const palette = teamPaletteFor(o.house, unitPalette);
+            const voxel = /^(yes|true|1)$/i.test(art?.get(img, 'Voxel') ?? rulesIni?.get(o.type, 'Voxel') ?? '');
+            if (!voxel) {
+                const shp = spriteFor(o.type, 'Vehicle sprite');
+                if (shp) drawFrame(shp, Math.round(((256 - o.facing) % 256) / 8) % Math.max(1, shp.frames.length >> 1), cx, cy, palette, true);
+                return;
+            }
+            const key = `${img}:${o.facing}:${o.house}`;
+            if (!voxelPictures.has(key)) {
+                const parts: VoxelPartInput[] = [];
+                const body = model(img.toLowerCase(), 'Vehicle model');
+                if (body) parts.push({ ...body, forward: 0 });
+                // TurretOffset is in leptons, 256 to a cell.
+                const offset = (Number(art?.get(img, 'TurretOffset') ?? 0) * VOXELS_PER_CELL) / 256;
+                for (const part of ['tur', 'barl']) {
+                    const extra = model(`${img.toLowerCase()}${part}`, part === 'tur' ? 'Turret model' : 'Barrel model');
+                    if (extra) parts.push({ ...extra, forward: offset });
+                }
+                voxelPictures.set(key, parts.length ? drawVoxels(parts, o.facing, tw, th, palette) : null);
+            }
+            const picture = voxelPictures.get(key);
+            if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(cx - picture.originX), Math.round(cy - picture.originY));
+        } });
+    }
     objects.sort((a, b) => a.rx + a.ry - (b.rx + b.ry));
     for (const o of objects) o.draw();
 

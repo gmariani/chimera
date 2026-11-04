@@ -1,21 +1,21 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
 /**
- * Sprites store palette indexes, not colours; the game supplies a palette per
- * map theatre. Every palette found in an opened file is collected here so any
+ * Sprites store palette indexes, not colors; the game supplies a palette per
+ * map theater. Every palette found in an opened file is collected here so any
  * sprite can be shown with any of them.
  */
 
 export interface NamedPalette {
     id: string;
     label: string;
-    /** 256 colours as 8-bit RGB. */
+    /** 256 colors as 8-bit RGB. */
     colors: Uint8Array;
 }
 
-const greyscale = Uint8Array.from({ length: 768 }, (_, i) => Math.floor(i / 3));
+const grayscale = Uint8Array.from({ length: 768 }, (_, i) => Math.floor(i / 3));
 
-/** Each index a distinct hue, so shapes and colour regions show up even without the real palette. */
+/** Each index a distinct hue, so shapes and color regions show up even without the real palette. */
 const spectrum = (() => {
     const out = new Uint8Array(768);
     for (let i = 1; i < 256; i++) {
@@ -35,8 +35,8 @@ function hsl(h: number, s: number, l: number): [number, number, number] {
 }
 
 export const FALLBACK_PALETTES: NamedPalette[] = [
-    { id: 'builtin:spectrum', label: 'Index colours (no real palette)', colors: spectrum },
-    { id: 'builtin:grey', label: 'Greyscale', colors: greyscale },
+    { id: 'builtin:spectrum', label: 'Index colors (no real palette)', colors: spectrum },
+    { id: 'builtin:gray', label: 'Grayscale', colors: grayscale },
 ];
 
 interface PaletteState {

@@ -8,12 +8,12 @@ const parser: FormatParser = {
         return {
             title: 'Palette',
             summary: [
-                ['Colours', '256'],
+                ['Colors', '256'],
                 ['Depth', '6 bits per channel (VGA)'],
             ],
             fields: Array.from({ length: 256 }, (_, i) => {
                 const [r, g, b] = data.subarray(i * 3, i * 3 + 3);
-                return field(`Colour ${i}`, i * 3, 3, `${r}, ${g}, ${b}`, `#${[colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')} on screen`);
+                return field(`Color ${i}`, i * 3, 3, `${r}, ${g}, ${b}`, `#${[colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')} on screen`);
             }),
             preview: { kind: 'palette', colors },
             warnings: [],

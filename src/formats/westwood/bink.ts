@@ -254,7 +254,7 @@ const parser: FormatParser = {
                         field('Height', 24, 4, l.height),
                         field('Frame rate dividend', 28, 4, dividend),
                         field('Frame rate divider', 32, 4, divider),
-                        field('Video flags', 36, 4, `0x${l.flags.toString(16)}`, 'Bit 20: an alpha plane. Bit 17: greyscale.'),
+                        field('Video flags', 36, 4, `0x${l.flags.toString(16)}`, 'Bit 20: an alpha plane. Bit 17: grayscale.'),
                         field('Sound tracks', 40, 4, l.tracks.length),
                     ],
                 },

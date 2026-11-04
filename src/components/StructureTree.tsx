@@ -6,7 +6,7 @@ import { pathKey, type FieldPath } from '../lib/fields';
 /** Long lists (a MIX index can have thousands of entries) show this many until asked for more. */
 const PAGE = 200;
 
-/** The file as a tree of labelled byte ranges. */
+/** The file as a tree of labeled byte ranges. */
 export function StructureTree({
     fields,
     selected,

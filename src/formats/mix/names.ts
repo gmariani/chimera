@@ -58,7 +58,7 @@ const SINGLES = [
     'audio.idx', 'audio.bag', 'audiomd.idx', 'audiomd.bag', 'game.fnt', 'gamemd.fnt', 'ra2.csf', 'ra2md.csf', 'keyboard.ini', 'keyboardmd.ini', 'voxels.vpl',
 ];
 
-/** TD's colour remap tables: the theater's first letter, then what the table is for (DISPLAY.CPP). */
+/** TD's color remap tables: the theater's first letter, then what the table is for (DISPLAY.CPP). */
 const REMAP_TABLES = ['green', 'yellow', 'red', 'mouse', 'trans', 'white', 'shadow', 'units', 'shade', 'light', 'clock'];
 const THEATER_LETTERS = ['t', 'd', 'w', 'j'];
 

@@ -5,15 +5,15 @@ import type { Field, FormatParser, IndexedImage } from '../../core/types';
  * TD/RA fonts. A header of block offsets, then: an info block (character count,
  * largest height and width), each character's data offset, its width, its
  * vertical offset and height, and the pixels at 4 bits each, two to a byte,
- * left pixel in the low nibble. Colour 0 is transparent; the game maps 1–15
- * onto whatever colours it's printing in.
+ * left pixel in the low nibble. Color 0 is transparent; the game maps 1–15
+ * onto whatever colors it's printing in.
  *
  * Tiberian Sun's own fonts (8point.fnt) use the same blocks, but mark the
  * header 2, 0 instead of 0, 5, store a byte per pixel, and count each
  * character's offset from the data block.
  */
 
-/** 15 shades of white for the font's colours, so the preview reads as text. */
+/** 15 shades of white for the font's colors, so the preview reads as text. */
 function fontPalette(): Uint8Array {
     const palette = new Uint8Array(768);
     for (let i = 1; i < 16; i++) palette.fill(Math.round(80 + (175 * i) / 15), i * 3, i * 3 + 3);
@@ -61,7 +61,7 @@ const parser: FormatParser = {
             summary: [
                 ['Characters', String(count)],
                 ['Largest', `${maxWidth} × ${maxHeight}`],
-                ['Colours', eightBit ? '8-bit (Tiberian Sun)' : '4-bit: 15 shades plus transparent'],
+                ['Colors', eightBit ? '8-bit (Tiberian Sun)' : '4-bit: 15 shades plus transparent'],
             ],
             fields: [
                 {
@@ -91,7 +91,7 @@ const parser: FormatParser = {
                 // TD and RA put the heights after the pixels; TS puts them before.
                 { name: 'Pixels', offset: dataBlock, length: (heightBlock > dataBlock ? heightBlock : data.length) - dataBlock, children: glyphs },
             ],
-            // TS's 8-bit glyphs are in the game palette's colours.
+            // TS's 8-bit glyphs are in the game palette's colors.
             preview: { kind: 'images', frames, palette: frames.some((f) => f.pixels.some((p) => p > 15)) ? undefined : fontPalette(), transparentIndex: 0 },
             warnings,
         };

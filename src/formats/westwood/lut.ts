@@ -9,7 +9,7 @@ import { VORTEX_SIZE } from './sniff';
  */
 
 const SHADES = 16;
-/** Own palette: a colour per 8 × 8 block of a test grid for where pixels come from, then the shades as greys. */
+/** Own palette: a color per 8 × 8 block of a test grid for where pixels come from, then the shades as grays. */
 const GRID = 8;
 const SHADE_BASE = GRID * GRID;
 

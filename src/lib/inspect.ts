@@ -31,7 +31,7 @@ export function useParsed(file: OpenFile, names: readonly string[], companions?:
     const version = usesCompanions ? companions?.version : undefined;
 
     useEffect(() => {
-        let cancelled = false;
+        let canceled = false;
         const format = detect(file.data, file.knownName ?? file.name);
         setState((s) => (s.status === 'ready' && s.format.id === format.id ? s : { status: 'loading', format }));
         format
@@ -49,15 +49,15 @@ export function useParsed(file: OpenFile, names: readonly string[], companions?:
                 );
             })
             .then(
-                (parsed) => !cancelled && setState({ status: 'ready', format, parsed }),
+                (parsed) => !canceled && setState({ status: 'ready', format, parsed }),
                 (e: unknown) => {
-                    if (cancelled) return;
+                    if (canceled) return;
                     console.error(e);
                     setState({ status: 'error', format, error: e instanceof Error ? e.message : String(e) });
                 },
             );
         return () => {
-            cancelled = true;
+            canceled = true;
         };
         // `version` isn't read here, but a new one means `find` has more to give.
     }, [file, names, find, version]);

@@ -5,6 +5,8 @@ import { Ini } from '../ini-sections';
 import { namesFromBinary, namesFromText } from '../mix/names';
 import { lzo1x } from './compression';
 import { Links } from '../links';
+import { rulesTable } from '../rules-table';
+import { teamPalette, teamRemap } from './team-colors';
 import { isoMapPreviews, readIsoMap } from './map-iso';
 import pcx from '../pcx';
 import wavParser from '../wav';
@@ -76,7 +78,7 @@ describe('isometric tiles', () => {
 
 describe('voxels', () => {
     it('reads spans into columns', () => {
-        // One 1 × 1 × 3 limb: a skip of 1, one voxel of colour 4 (normal 0) at z = 1, then a skip to the top.
+        // One 1 × 1 × 3 limb: a skip of 1, one voxel of color 4 (normal 0) at z = 1, then a skip to the top.
         const body = [0, 0, 0, 0, /* end */ 7, 0, 0, 0, /* data */ 1, 1, 4, 0, 1, 1, 0, 0];
         const tailers = 802 + 28 + body.length;
         const data = bytes(tailers + 92, (v, b) => {
@@ -206,7 +208,7 @@ describe('1-bit fonts', () => {
     });
 });
 
-describe('high-colour VQA', () => {
+describe('high-color VQA', () => {
     it('draws codebook blocks and keeps skipped ones', () => {
         const chunk = (id: string, body: number[]) => [...id].map((c) => c.charCodeAt(0)).concat([0, 0, body.length >> 8, body.length & 255], body, body.length & 1 ? [0] : []);
         // 8 × 2 pixels: two 4 × 2 blocks. Codebook entry 1 is all 0x7C00 (pure red in 15 bits).
@@ -307,7 +309,7 @@ describe('small leftovers', () => {
         expect(detect(data, null).id).toBe('vpl');
     });
 
-    it('recognises an empty sprite', () => {
+    it('recognizes an empty sprite', () => {
         const data = bytes(8 + 24, (v) => {
             v.setUint16(6, 1, true);
             v.setUint32(8 + 20, 0x12fb00, true);
@@ -343,5 +345,67 @@ describe('Bink', () => {
         expect(parsed.summary).toContainEqual(['Sound', '22050 Hz stereo, DCT']);
         expect(parsed.fields.map((f) => f.name)).toEqual(expect.arrayContaining(['Frame 0 (keyframe)', 'Frame 1']));
         expect(parsed.preview?.kind).toBe('video');
+    });
+});
+
+describe('team colors', () => {
+    it('recolors only the remap range', () => {
+        const palette = Uint8Array.from({ length: 768 }, (_, i) => i % 256);
+        const out = teamPalette(palette, [16, 31], [200, 0, 0]);
+        expect([...out.subarray(15 * 3, 16 * 3)]).toEqual([...palette.subarray(15 * 3, 16 * 3)]);
+        expect(out[16 * 3]).toBeGreaterThan(200);
+        expect(out[16 * 3 + 1]).toBe(0);
+        expect([...out.subarray(32 * 3, 33 * 3)]).toEqual([...palette.subarray(32 * 3, 33 * 3)]);
+    });
+
+    it('sends a range to the nearest colors outside it', () => {
+        const palette = new Uint8Array(768);
+        palette.set([255, 0, 0], 5 * 3);
+        palette.set([0, 0, 255], 6 * 3);
+        const table = teamRemap(palette, [80, 95], [255, 0, 0]);
+        expect(table[80]).toBe(5);
+        expect(table[4]).toBe(4);
+    });
+});
+
+describe('objects on TS and RA2 maps', () => {
+    it('reads buildings, units and infantry by X and Y', () => {
+        const ini = new Ini('[Map]\nSize=0,0,10,10\n[Structures]\n0=GDI,GAPOWR,256,20,30,0,None\n[Units]\n0=Nod,BGGY,256,21,31,64,Guard\n[Infantry]\n0=GDI,E1,256,22,32,3,Guard,128\n[GDI]\nColor=Gold\n');
+        const map = readIsoMap(ini);
+        expect(map.objects).toEqual([
+            { kind: 'building', house: 'GDI', type: 'GAPOWR', rx: 20, ry: 30, facing: 0, sub: 0 },
+            { kind: 'unit', house: 'Nod', type: 'BGGY', rx: 21, ry: 31, facing: 64, sub: 0 },
+            { kind: 'infantry', house: 'GDI', type: 'E1', rx: 22, ry: 32, facing: 128, sub: 3 },
+        ]);
+        expect(map.houseColors.get('gdi')).toBe('Gold');
+    });
+});
+
+describe('rules tables', () => {
+    it('lists objects by type, with names from the string table and links to their art', () => {
+        const rules = '[VehicleTypes]\n0=HTNK\n[InfantryTypes]\n0=E1\n[HTNK]\nUIName=Name:HTNK\nCost=900\nStrength=400\n[E1]\nName=GI\nImage=GI\nCost=200\n';
+        const art = new TextEncoder().encode('[HTNK]\nVoxel=yes\nCameo=HTNKICON\n[GI]\nCameo=GIICON\n');
+        const name = 'Name:HTNK';
+        const text = [...'Rhino'].map((c) => ~c.charCodeAt(0) & 0xffff);
+        const csf = bytes(24 + 12 + name.length + 8 + text.length * 2, (v, b) => {
+            ascii(b, 0, ' FSC');
+            v.setUint32(8, 1, true);
+            ascii(b, 24, ' LBL');
+            v.setUint32(28, 1, true);
+            v.setUint32(32, name.length, true);
+            ascii(b, 36, name);
+            ascii(b, 36 + name.length, ' RTS');
+            v.setUint32(40 + name.length, text.length, true);
+            text.forEach((c, i) => v.setUint16(44 + name.length + i * 2, c, true));
+        });
+        const files: Record<string, Uint8Array> = { 'art.ini': art, 'ra2.csf': csf, 'htnk.vxl': new Uint8Array(1) };
+        const find = (n: string) => (files[n] ? [{ data: files[n], source: 'ra2.mix' }] : []);
+        const table = rulesTable(new Ini(rules), 'rules.ini', find, new Links());
+        if (table?.preview.kind !== 'table') throw new Error('expected a table');
+        expect(table.preview.groups).toEqual(['Infantry', 'Vehicles']);
+        const [gi, htnk] = table.preview.rows;
+        expect(htnk.cells).toMatchObject({ id: 'HTNK', name: 'Rhino', cost: '900', art: 'htnk.vxl', cameo: 'htnkicon.shp (not in the files in use)' });
+        expect(gi.cells).toMatchObject({ id: 'E1', name: 'GI', art: 'gi.shp (not in the files in use)' });
+        expect(gi.files?.art[0]).toBe('gi.shp');
     });
 });

@@ -76,7 +76,7 @@ const parser: FormatParser = {
                         field(i < count ? `Frame ${i + 1}` : i === count ? 'Loop frame / end' : 'End', 14 + i * 4, 4, b.u32(14 + i * 4), offsets[i] === 0 ? (i === 0 ? 'No first frame.' : 'Unused.') : undefined),
                     ),
                 },
-                ...(hasPalette ? [field('Palette', table, 768, '256 colours, 6-bit')] : []),
+                ...(hasPalette ? [field('Palette', table, 768, '256 colors, 6-bit')] : []),
                 ...dataFields,
             ],
             preview: { kind: 'images', frames, palette: hasPalette ? expandPalette(data.subarray(table, table + 768)) : undefined },

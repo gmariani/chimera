@@ -17,7 +17,7 @@ import { decodeVxl, LIMB_HEADER, readHva, VXL_HEADER, type Limb } from './voxel-
 /** Each limb seen four ways: from above, the front, the side, and from above at an angle as in the game. */
 function views(l: Limb): IndexedImage[] {
     const [sx, sy, sz] = l.size;
-    const at = (x: number, y: number, z: number) => l.colours[x + sx * (y + sy * z)];
+    const at = (x: number, y: number, z: number) => l.colors[x + sx * (y + sy * z)];
     const ortho = (w: number, h: number, pick: (u: number, v: number) => number): IndexedImage => {
         const pixels = new Uint8Array(w * h);
         for (let v = 0; v < h; v++) for (let u = 0; u < w; u++) pixels[v * w + u] = pick(u, v);
@@ -62,7 +62,7 @@ function parts(file: string, data: Uint8Array, find: ParseContext['find'], links
         parts: vxl.limbs.map((l, i) => ({
             name: `${file} › ${l.name}`,
             size: l.size,
-            colours: l.colours,
+            colors: l.colors,
             min: l.min,
             max: l.max,
             // The animation's translations are in the limb's own units.
@@ -115,7 +115,7 @@ const parser: FormatParser = {
                     field('Limbs', 20, 4, limbs.length),
                     field('Tailers', 24, 4, tailerCount),
                     field('Body size', 28, 4, bytesLabel(bodySize)),
-                    field('Remap start', 32, 1, vxl.remap[0], 'The palette range recoloured to the owner\'s colour.'),
+                    field('Remap start', 32, 1, vxl.remap[0], 'The palette range recolored to the owner\'s color.'),
                     field('Remap end', 33, 1, vxl.remap[1]),
                     field('Palette', 34, 768, undefined, 'Unused by the games, which draw voxels with the unit palette.'),
                 ],
@@ -153,14 +153,14 @@ const parser: FormatParser = {
                 ['Limbs', limbs.map((l) => `${l.name} (${l.size.join(' × ')}, ${l.count} voxels)`).join('; ')],
                 ['Shown with', all.length > 1 ? all.slice(1).map((p) => p.parts[0].name.split(' › ')[0]).join(', ') : 'Nothing else'],
                 ['Animation', own.animated ? `${stem}.hva, ${own.frames} frame${own.frames === 1 ? '' : 's'}` : 'None found, so the limbs aren\'t placed'],
-                ['Colours', 'Best with the unit palette (unittem.pal)'],
+                ['Colors', 'Best with the unit palette (unittem.pal)'],
             ],
             fields,
             preview: {
                 kind: 'stack',
                 items: [
-                    { title: '3D', preview: { kind: 'voxels', parts: all.flatMap((p) => p.parts), frameCount, palette: ownPalette } },
-                    { title: 'Each limb, from four sides', preview: { kind: 'images', frames: limbs.flatMap(views), palette: ownPalette, transparentIndex: 0 } },
+                    { title: '3D', preview: { kind: 'voxels', parts: all.flatMap((p) => p.parts), frameCount, palette: ownPalette, remap: vxl.remap[1] > vxl.remap[0] ? vxl.remap : [16, 31] } },
+                    { title: 'Each limb, from four sides', preview: { kind: 'images', frames: limbs.flatMap(views), palette: ownPalette, transparentIndex: 0, remap: vxl.remap[1] > vxl.remap[0] ? vxl.remap : [16, 31] } },
                 ],
             },
             links: links.list,

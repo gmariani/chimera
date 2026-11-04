@@ -6,11 +6,13 @@ import { download, safeName } from '../lib/download';
 import { findPalettes } from '../lib/palette-sources';
 import { usePalettes } from '../lib/palettes';
 import { zip } from '../lib/zip';
+import { TablePreview } from './TablePreview';
 import { VoxelViewer } from './VoxelViewer';
+import { TeamColorSelect, useTeamColor } from '../components/TeamColor';
 
 const stem = (name: string) => name.replace(/\.[^.]+$/, '');
 
-export function PreviewTab({ preview, fileName, names }: { preview: Preview; fileName: string; names: readonly string[] }) {
+export function PreviewTab({ preview, fileName, names, onOpenName }: { preview: Preview; fileName: string; names: readonly string[]; /** Opens the first of these files found among the files in use; false if none is. */ onOpenName?: (names: string[]) => boolean }) {
     switch (preview.kind) {
         case 'images':
             return (
@@ -21,6 +23,7 @@ export function PreviewTab({ preview, fileName, names }: { preview: Preview; fil
                     shadowIndex={preview.shadowIndex}
                     columns={preview.columns}
                     legend={preview.legend}
+                    remap={preview.remap}
                     fileName={fileName}
                     names={names}
                 />
@@ -33,8 +36,10 @@ export function PreviewTab({ preview, fileName, names }: { preview: Preview; fil
             return <AudioPreview clip={preview} fileName={fileName} />;
         case 'video':
             return <VideoPreview preview={preview} fileName={fileName} />;
+        case 'table':
+            return <TablePreview columns={preview.columns} groups={preview.groups} rows={preview.rows} onOpenName={onOpenName} />;
         case 'voxels':
-            return <VoxelViewer parts={preview.parts} frameCount={preview.frameCount} ownPalette={preview.palette} fileName={fileName} />;
+            return <VoxelViewer parts={preview.parts} frameCount={preview.frameCount} ownPalette={preview.palette} remap={preview.remap} fileName={fileName} />;
         case 'text':
             return <CodeBlock copy>{preview.text.length > 500_000 ? `${preview.text.slice(0, 500_000)}\n… (${preview.text.length - 500_000} more characters)` : preview.text}</CodeBlock>;
         case 'stack':
@@ -43,7 +48,7 @@ export function PreviewTab({ preview, fileName, names }: { preview: Preview; fil
                     {preview.items.map((item, i) => (
                         <section key={i} className="mb-5">
                             <SectionTitle className="mb-3">{item.title}</SectionTitle>
-                            <PreviewTab preview={item.preview} fileName={fileName} names={names} />
+                            <PreviewTab preview={item.preview} fileName={fileName} names={names} onOpenName={onOpenName} />
                         </section>
                     ))}
                 </>
@@ -51,7 +56,7 @@ export function PreviewTab({ preview, fileName, names }: { preview: Preview; fil
     }
 }
 
-/** How to turn palette indexes into colours. */
+/** How to turn palette indexes into colors. */
 interface Paint {
     palette: Uint8Array;
     transparentIndex?: number;
@@ -110,6 +115,7 @@ function ImagesPreview({
     shadowIndex,
     columns,
     legend,
+    remap,
     fileName,
     names,
 }: {
@@ -119,12 +125,14 @@ function ImagesPreview({
     shadowIndex?: number;
     columns?: number;
     legend?: { label: string; index: number }[];
+    remap?: [number, number];
     fileName: string;
     names: readonly string[];
 }) {
     const { palettes, current, select, add } = usePalettes();
     const [useOwn, setUseOwn] = useState(true);
-    const palette = ownPalette && useOwn ? ownPalette : current.colors;
+    const team = useTeamColor(ownPalette && useOwn ? ownPalette : current.colors, remap);
+    const palette = team.palette;
     const paint = useMemo(() => ({ palette, transparentIndex, shadowIndex }), [palette, transparentIndex, shadowIndex]);
     const [frame, setFrame] = useState(0);
     const [playing, setPlaying] = useState(false);
@@ -244,6 +252,8 @@ function ImagesPreview({
                     </ul>
                 )}
 
+                {remap && <TeamColorSelect team={team.team} onChange={team.setTeam} range={remap} />}
+
                 <Form.Group className="mb-3">
                     <Form.Label className="small text-body-secondary mb-1">Palette</Form.Label>
                     {ownPalette && <Form.Check type="switch" id="own-palette" label="Use the palette in this file" checked={useOwn} onChange={(e) => setUseOwn(e.target.checked)} className="mb-2" />}
@@ -287,7 +297,7 @@ function ImagesPreview({
     );
 }
 
-/** A true-colour picture: no palette to pick, just zoom and save. */
+/** A true-color picture: no palette to pick, just zoom and save. */
 function PicturePreview({ width, height, rgba, fileName }: { width: number; height: number; rgba: Uint8Array; fileName: string }) {
     const canvas = useRef<HTMLCanvasElement>(null);
     // Big pictures (whole maps) start fitted to the page.
