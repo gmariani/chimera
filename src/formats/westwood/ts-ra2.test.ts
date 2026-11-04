@@ -315,3 +315,33 @@ describe('small leftovers', () => {
         expect(detect(data, null).id).toBe('shp-ts');
     });
 });
+
+describe('Bink', () => {
+    it('reads the frame index, keyframes and sound tracks, and loads the decoders', async () => {
+        // One stereo DCT sound track; two frames, the first a keyframe, each an empty sound packet and 2 bytes of video.
+        const index = 44 + 12;
+        const frames = index + 3 * 4;
+        const data = bytes(frames + 12, (v, b) => {
+            ascii(b, 0, 'BIKi');
+            v.setUint32(8, 2, true);
+            v.setUint32(20, 32, true);
+            v.setUint32(24, 16, true);
+            v.setUint32(28, 15, true);
+            v.setUint32(32, 1, true);
+            v.setUint32(40, 1, true);
+            v.setUint16(48, 22050, true);
+            v.setUint16(50, 0x2000 | 0x1000, true);
+            v.setUint32(index, frames | 1, true);
+            v.setUint32(index + 4, frames + 6, true);
+            v.setUint32(index + 8, frames + 12, true);
+        });
+        expect(detect(data, null).id).toBe('bink');
+        const format = detect(data, null);
+        const parsed = (await format.load()).parse(data, context('test.bik'));
+        expect(parsed.warnings).toEqual([]);
+        expect(parsed.summary).toContainEqual(['Frames', '2 at 15 per second (0.1 s), 1 keyframe']);
+        expect(parsed.summary).toContainEqual(['Sound', '22050 Hz stereo, DCT']);
+        expect(parsed.fields.map((f) => f.name)).toEqual(expect.arrayContaining(['Frame 0 (keyframe)', 'Frame 1']));
+        expect(parsed.preview?.kind).toBe('video');
+    });
+});

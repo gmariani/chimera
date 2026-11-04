@@ -8,6 +8,8 @@ export default defineConfig({
     build: {
         outDir: 'build',
         emptyOutDir: true,
+        // The Bink decoders (WebAssembly, ~670 kB) are one chunk, loaded only for .bik files.
+        chunkSizeWarningLimit: 700,
     },
     server: {
         port: 5173,

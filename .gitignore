@@ -11,3 +11,4 @@ npm-debug.log
 *.mix
 *.MIX
 /dune2k
+/wasm/bink/build

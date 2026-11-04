@@ -19,7 +19,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | WAV sound (PCM and IMA ADPCM) | chunks, format | player | WAV |
 | RA2 sound banks (audio.idx with audio.bag) | every sound | each sound as a WAV | WAV |
 | CSF string tables (RA2) | every label | text | — |
-| Bink video (RA2's movies) | header | — (the codec isn't public) | — |
+| Bink video (RA2's movies) | header, frame index | player with sound, decoded by FFmpeg's Bink decoders compiled to WebAssembly | PNG frame, all frames, WAV |
 | Maps (TD .bin with its mission INI, RA [MapPack] in mission INIs) | every cell | drawn with the game's tiles, ore, walls and trees once the theater archive is open; terrain kinds with a key | PNG |
 | TS and RA2 maps (.map, .mpr, .yrm; inside .mmx/.yro) | sections, cells, overlays | drawn with the game's tiles, ore, walls, bridges and trees once the main archive is open (otherwise by height); the map's own preview | PNG |
 | Fonts (.fnt: TD/RA 4-bit, TS 8-bit, TS/RA2 1-bit and Unicode) | header, each character | every character | PNG |
@@ -68,6 +68,16 @@ npm run build    # static site in build/
 ```
 
 The original webpack/JPG/SWF attempt is kept in `legacy/`.
+
+## Bink (WebAssembly)
+
+Bink is decoded by FFmpeg's Bink video and audio decoders, compiled to WebAssembly into `src/formats/westwood/bink-wasm/bink.mjs` (about 670 kB, loaded only when a `.bik` is opened). To rebuild it, with Docker running:
+
+```sh
+./wasm/bink/build.sh   # downloads FFmpeg (the release named in the script), builds in Emscripten's image
+```
+
+Only libavcodec's Bink decoders are built; the container is read in TypeScript (`src/formats/westwood/bink.ts`), and `wasm/bink/wrapper.c` is the small C API between them. FFmpeg is LGPL 2.1+ (see `bink-wasm/LICENSE.ffmpeg.md`).
 
 ## References
 

@@ -53,7 +53,14 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'csf', name: 'String table (CSF)', extensions: ['csf'], sniff: sniffCsf, load: parserOf(() => import('./westwood/csf')) },
     { id: 'gaba', name: 'Sound bank index (GABA)', extensions: ['idx'], sniff: sniffGaba, companions: true, load: parserOf(() => import('./westwood/gaba')) },
     { id: 'bag', name: 'Sound bank data (RA2)', extensions: ['bag'], sniff: () => false, load: parserOf(() => import('./westwood/bag')) },
-    { id: 'bink', name: 'Bink video', extensions: ['bik'], sniff: sniffBink, load: parserOf(() => import('./westwood/bink')) },
+    {
+        id: 'bink',
+        name: 'Bink video',
+        extensions: ['bik'],
+        sniff: sniffBink,
+        // The decoders (WebAssembly) load with the parser.
+        load: parserOf(() => import('./westwood/bink').then(async (m) => (await m.ready(), m))),
+    },
     { id: 'fnt-ts', name: 'Font (TS/RA2, 1-bit)', extensions: ['fnt'], sniff: sniffUnicodeFont, byNameAlone: false, load: parserOf(() => import('./westwood/font-ts')) },
     { id: 'tiles', name: 'Tile set', extensions: ['tem', 'des', 'win', 'sno', 'int', 'jun', 'icn'], sniff: sniffTiles, load: parserOf(() => import('./westwood/tiles')) },
     { id: 'wsa', name: 'Animation (WSA)', extensions: ['wsa'], sniff: sniffWsa, load: parserOf(() => import('./westwood/wsa')) },
