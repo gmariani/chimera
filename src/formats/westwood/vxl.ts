@@ -1,7 +1,10 @@
 import { Bytes, bytesLabel, field } from '../../core/bytes';
 import type { Field, FormatParser, IndexedImage, ParseContext, VoxelPart } from '../../core/types';
 import { Links } from '../links';
+import { Ini } from '../ini-sections';
 import { decodeVxl, LIMB_HEADER, readHva, VXL_HEADER, type Limb } from './voxel-data';
+import { normalTable } from './voxel-normals';
+import { VOXELS_PER_CELL } from './voxel-sprite';
 
 /**
  * TS and RA2 voxel models (.vxl): units drawn from 3D blocks. A header (with a
@@ -51,7 +54,19 @@ function views(l: Limb): IndexedImage[] {
 }
 
 /** A model's limbs as 3D parts, placed and animated by its .hva when there is one. */
-function parts(file: string, data: Uint8Array, find: ParseContext['find'], links: Links): { parts: VoxelPart[]; frames: number; animated: boolean } {
+/** Each voxel's normal as x, y, z, from its limb's table. */
+function voxelNormals(l: Limb): Float32Array | undefined {
+    const table = normalTable(l.normals);
+    if (!table.length) return undefined;
+    const out = new Float32Array(l.colors.length * 3);
+    for (let i = 0; i < l.colors.length; i++) {
+        const n = l.normalIndexes[i] * 3;
+        if (l.colors[i] && n + 2 < table.length) out.set(table.subarray(n, n + 3), i * 3);
+    }
+    return out;
+}
+
+function parts(file: string, data: Uint8Array, find: ParseContext['find'], links: Links, offset?: [number, number, number]): { parts: VoxelPart[]; frames: number; animated: boolean } {
     const vxl = decodeVxl(data);
     const hvaFile = file.replace(/\.vxl$/i, '.hva');
     const found = find?.(hvaFile).find((c) => readHva(c.data)?.names.length === vxl.limbs.length);
@@ -63,6 +78,8 @@ function parts(file: string, data: Uint8Array, find: ParseContext['find'], links
             name: `${file} › ${l.name}`,
             size: l.size,
             colors: l.colors,
+            normals: voxelNormals(l),
+            offset,
             min: l.min,
             max: l.max,
             // The animation's translations are in the limb's own units.
@@ -94,12 +111,17 @@ const parser: FormatParser = {
         const all = [own];
         const stem = name.replace(/\.vxl$/i, '');
         if (!/(tur|barl)$/i.test(stem)) {
+            // art.ini says how far forward the turret sits (TurretOffset, in leptons: 256 to a cell).
+            const artFile = context.find?.('artmd.ini')[0] ?? context.find?.('art.ini')[0];
+            const turretOffset = artFile ? Number(Ini.of(artFile.data).get(stem, 'TurretOffset') ?? 0) : 0;
+            const offset: [number, number, number] = [(turretOffset * VOXELS_PER_CELL) / 256, 0, 0];
             // Not every unit has these, so they're only listed when found.
             for (const [extra, role] of [[`${stem}tur.vxl`, 'Turret'], [`${stem}barl.vxl`, 'Barrel']]) {
                 const found = context.find?.(extra)[0];
                 if (!found) continue;
                 links.use(extra, found, role);
-                all.push(parts(extra, found.data, context.find, links));
+                if (artFile && turretOffset) links.use(artFile === context.find?.('artmd.ini')[0] ? 'artmd.ini' : 'art.ini', artFile, 'Turret position (TurretOffset)');
+                all.push(parts(extra, found.data, context.find, links, offset));
             }
         }
 

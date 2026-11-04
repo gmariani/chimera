@@ -9,7 +9,7 @@ import { TeamColorSelect, useTeamColor } from '../components/TeamColor';
 /**
  * A voxel model in 3D (WebGL2): each voxel's visible faces as a mesh, colored
  * through the palette in the shader so switching palettes is instant, and lit
- * from two directions. Drag to turn it, scroll to zoom, double-click to reset.
+ * by each voxel's normal the way the games do. Drag to turn it, scroll to zoom, double-click to reset.
  */
 
 type Mat4 = Float32Array;
@@ -31,9 +31,9 @@ function partMatrix(part: VoxelPart, frame: number): Mat4 {
         box[12 + i] = part.min[i];
     }
     const m = part.frames[Math.min(frame, part.frames.length - 1)];
-    if (!m) return box;
-    const anim = Float32Array.of(m[0], m[4], m[8], 0, m[1], m[5], m[9], 0, m[2], m[6], m[10], 0, m[3], m[7], m[11], 1);
-    return multiply(anim, box);
+    const placed = m ? multiply(Float32Array.of(m[0], m[4], m[8], 0, m[1], m[5], m[9], 0, m[2], m[6], m[10], 0, m[3], m[7], m[11], 1), box) : box;
+    if (part.offset) for (let i = 0; i < 3; i++) placed[12 + i] += part.offset[i];
+    return placed;
 }
 
 /** The inverse transpose of a matrix's upper 3 × 3, for turning normals. */
@@ -62,9 +62,13 @@ function buildMesh(part: VoxelPart): Float32Array {
             for (let x = 0; x < sx; x++) {
                 const color = at(x, y, z);
                 if (!color) continue;
+                const i = (x + sx * (y + sy * z)) * 3;
+                const own = part.normals && (part.normals[i] || part.normals[i + 1] || part.normals[i + 2]) ? [part.normals[i], part.normals[i + 1], part.normals[i + 2]] : null;
                 for (const { normal, corners } of FACES) {
                     if (at(x + normal[0], y + normal[1], z + normal[2])) continue;
-                    for (const k of [0, 1, 2, 0, 2, 3]) out.push(x + corners[k][0], y + corners[k][1], z + corners[k][2], ...normal, color);
+                    // The game lights a voxel by its own normal, the same on every face; without one, by the face's.
+                    const n = own ?? normal;
+                    for (const k of [0, 1, 2, 0, 2, 3]) out.push(x + corners[k][0], y + corners[k][1], z + corners[k][2], n[0], n[1], n[2], color);
                 }
             }
         }
@@ -86,7 +90,9 @@ out float vLight;
 void main() {
     gl_Position = uProjection * uView * uModel * vec4(aPos, 1.0);
     vec3 n = normalize(uNormal * aNormal);
-    vLight = 0.42 + 0.62 * max(dot(n, normalize(vec3(-0.45, -0.55, 0.7))), 0.0) + 0.18 * max(dot(n, normalize(vec3(0.6, 0.5, 0.25))), 0.0);
+    // The TS/RA2 mission editor's light (EA's GPL source): from (1, 0, -1), against each voxel's normal. Its
+    // brightness, (200 + 300 * light) / 255, washes colors out here, so the range is gentler: 0.7 to 1.25.
+    vLight = 0.7 + 0.55 * max(dot(n, normalize(vec3(-1.0, 0.0, 1.0))), 0.0);
     vColor = texelFetch(uPalette, ivec2(int(aColor), 0), 0).rgb;
 }`;
 

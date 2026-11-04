@@ -14,14 +14,14 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Terrain tile sets (.tem, .des, .win, .sno, .int, .icn) | header, tiles, cell map | the template assembled, each tile | PNG |
 | VQA video (TD/RA version 2; TS's high-color version 3) | chunk map, VQHD | player with sound | PNG frame, all frames, WAV |
 | Isometric tiles (TS/RA2 .tem, .sno, .urb, .des, .lun, .ubn) | header, every cell | assembled, each cell | PNG |
-| Voxel models (.vxl) and animations (.hva) | headers, limbs, matrices | 3D viewer (turn, zoom, animate; turret and barrel included), each limb from four sides | PNG |
+| Voxel models (.vxl) and animations (.hva) | headers, limbs, matrices | 3D viewer (turn, zoom, animate; turret and barrel placed by art.ini; lit by each voxel's normal), each limb from four sides | PNG |
 | Voxel lighting tables (voxels.vpl) | header, tables | the palette at each light level | PNG |
 | WAV sound (PCM and IMA ADPCM) | chunks, format | player | WAV |
 | RA2 sound banks (audio.idx with audio.bag) | every sound | each sound as a WAV | WAV |
 | CSF string tables (RA2) | every label | text | — |
 | Bink video (RA2's movies) | header, frame index | player with sound, decoded by FFmpeg's Bink decoders compiled to WebAssembly | PNG frame, all frames, WAV |
 | Maps (TD .bin with its mission INI, RA [MapPack] in mission INIs) | every cell, every object | drawn with the game's tiles, ore, walls, trees, craters, buildings, units and infantry (in each side's color) once the theater archive is open; terrain kinds with a key | PNG |
-| TS and RA2 maps (.map, .mpr, .yrm; inside .mmx/.yro) | sections, cells, overlays, objects | drawn with the game's tiles, ore, walls, bridges, trees, buildings, infantry and voxel vehicles (in each side's color) once the main archive is open (otherwise by height); the map's own preview | PNG |
+| TS and RA2 maps (.map, .mpr, .yrm; inside .mmx/.yro) | sections, cells, overlays, objects | drawn with the game's tiles, ore, walls, bridges, trees, buildings (with their animated parts, defense turrets and damage), infantry and lit voxel vehicles (in each side's color) once the main archive is open (otherwise by height); the map's own preview | PNG |
 | Fonts (.fnt: TD/RA 4-bit, TS 8-bit, TS/RA2 1-bit and Unicode) | header, each character | every character | PNG |
 | PAL palettes | each color | swatches, use for sprites | — |
 | String tables (.eng, .ger, .fre) | offsets, each string | numbered list | — |
@@ -33,6 +33,8 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Other text | — | text | — |
 
 Sprites and voxels have a **Team color** picker: the games recolor 16 palette entries for the owner (176–191 in TD, 80–95 in RA, 16–31 in TS and RA2); the shades here are close to the games', not exact.
+
+Voxels are lit by each voxel's normal, against the light the TS/RA2 mission editor uses; the normal tables are from that editor's source, which EA released under the GPL 3. The brightness range is gentler than the editor's, which washes colors out here.
 
 Template names, TD template sizes, overlay and tree names, how ore and walls pick their frames, and the remap table and vortex layouts come from the GPL source of the Remastered Collection (`DEFINES.H`, `CDATA.CPP`, `ODATA.CPP`, `TDATA.CPP`, `CELL.CPP`, `DISPLAY.CPP`, `VORTEX.CPP`).
 

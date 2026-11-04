@@ -373,9 +373,9 @@ describe('objects on TS and RA2 maps', () => {
         const ini = new Ini('[Map]\nSize=0,0,10,10\n[Structures]\n0=GDI,GAPOWR,256,20,30,0,None\n[Units]\n0=Nod,BGGY,256,21,31,64,Guard\n[Infantry]\n0=GDI,E1,256,22,32,3,Guard,128\n[GDI]\nColor=Gold\n');
         const map = readIsoMap(ini);
         expect(map.objects).toEqual([
-            { kind: 'building', house: 'GDI', type: 'GAPOWR', rx: 20, ry: 30, facing: 0, sub: 0 },
-            { kind: 'unit', house: 'Nod', type: 'BGGY', rx: 21, ry: 31, facing: 64, sub: 0 },
-            { kind: 'infantry', house: 'GDI', type: 'E1', rx: 22, ry: 32, facing: 128, sub: 3 },
+            { kind: 'building', house: 'GDI', type: 'GAPOWR', rx: 20, ry: 30, facing: 0, sub: 0, health: 256 },
+            { kind: 'unit', house: 'Nod', type: 'BGGY', rx: 21, ry: 31, facing: 64, sub: 0, health: 256 },
+            { kind: 'infantry', house: 'GDI', type: 'E1', rx: 22, ry: 32, facing: 128, sub: 3, health: 256 },
         ]);
         expect(map.houseColors.get('gdi')).toBe('Gold');
     });

@@ -20,6 +20,8 @@ export interface Limb {
     size: [number, number, number];
     /** Color per voxel, x fastest then y then z; 0 for empty (color 0 is stored as 1 so it shows). */
     colors: Uint8Array;
+    /** Each voxel's normal, as an index into its class's table (voxel-normals.ts). */
+    normalIndexes: Uint8Array;
     count: number;
     tailer: number;
     scale: number;
@@ -51,6 +53,7 @@ export function decodeVxl(data: Uint8Array): Vxl {
         const size: [number, number, number] = [b.u8(t + 88), b.u8(t + 89), b.u8(t + 90)];
         const [sx, sy, sz] = size;
         const colors = new Uint8Array(sx * sy * sz);
+        const normalIndexes = new Uint8Array(sx * sy * sz);
         const starts = body + b.u32(t);
         const ends = body + b.u32(t + 4);
         const spans = body + b.u32(t + 8);
@@ -67,6 +70,7 @@ export function decodeVxl(data: Uint8Array): Vxl {
                 for (let k = 0; k < n && at < data.length; k++, z++, at += 2) {
                     if (z < sz) {
                         colors[col + sx * sy * z] = data[at] || 1;
+                        normalIndexes[col + sx * sy * z] = data[at + 1];
                         count++;
                     }
                 }
@@ -78,6 +82,7 @@ export function decodeVxl(data: Uint8Array): Vxl {
             name: b.asciiz(VXL_HEADER + i * LIMB_HEADER).text.slice(0, 16),
             size,
             colors,
+            normalIndexes,
             count,
             tailer: t,
             scale: b.f32(t + 12),

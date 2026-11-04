@@ -59,11 +59,15 @@ export interface VoxelPart {
     size: [number, number, number];
     /** Palette index per voxel, x fastest, then y, then z; 0 is empty. */
     colors: Uint8Array;
+    /** Which way each voxel faces, for lighting: x, y, z per voxel (all 0 where there's no normal). */
+    normals?: Float32Array;
     /** Where the box's corners go: voxel (0, 0, 0) at min, voxel (size) at max. */
     min: [number, number, number];
     max: [number, number, number];
     /** For each animation frame, a 3 × 4 transform, row by row (none: it stays put). */
     frames: Float32Array[];
+    /** Moves the part after its animation, in voxels: a turret's place on the hull (art.ini's TurretOffset). */
+    offset?: [number, number, number];
 }
 
 export interface TableColumn {

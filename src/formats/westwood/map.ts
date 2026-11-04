@@ -159,6 +159,8 @@ export interface MapObject {
     facing: number;
     /** Infantry: where in the cell (0 middle, then the four quarters); smudges: which frame. */
     sub: number;
+    /** Out of 256. */
+    health: number;
 }
 
 /**
@@ -174,13 +176,13 @@ function readObjects(ini: Ini, size: number): MapObject[] {
             const v = value.split(',').map((x) => x.trim());
             const cell = Number(v[3]);
             if (!Number.isInteger(cell) || cell < 0 || cell >= size * size) continue;
-            out.push({ kind, house: v[0].toUpperCase(), type: (v[1] ?? '').toUpperCase(), cell, facing: Number(kind === 'infantry' ? v[6] : v[4]) || 0, sub: kind === 'infantry' ? Number(v[4]) || 0 : 0 });
+            out.push({ kind, house: v[0].toUpperCase(), type: (v[1] ?? '').toUpperCase(), cell, facing: Number(kind === 'infantry' ? v[6] : v[4]) || 0, sub: kind === 'infantry' ? Number(v[4]) || 0 : 0, health: Number(v[2]) || 256 });
         }
     }
     for (const [, value] of ini.entries('SMUDGE')) {
         const v = value.split(',').map((x) => x.trim());
         const cell = Number(v[1]);
-        if (Number.isInteger(cell) && cell >= 0 && cell < size * size) out.push({ kind: 'smudge', house: '', type: v[0].toUpperCase(), cell, facing: 0, sub: Number(v[2]) || 0 });
+        if (Number.isInteger(cell) && cell >= 0 && cell < size * size) out.push({ kind: 'smudge', house: '', type: v[0].toUpperCase(), cell, facing: 0, sub: Number(v[2]) || 0, health: 256 });
     }
     return out;
 }
@@ -200,6 +202,10 @@ const bodyFrame = (facing: number) => (32 - (((facing + 4) >> 3) & 31)) % 32;
 const HUMAN_SHAPE = [0, 0, 7, 7, 7, 7, 6, 6, 6, 6, 5, 5, 5, 5, 5, 4, 4, 4, 3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1, 1, 0];
 /** Where in a cell infantry stand, in 1/256ths: middle, then the four quarters (CONST.CPP, StoppingCoordAbs). */
 const SUB_CELLS = [[128, 128], [64, 64], [192, 64], [64, 192], [192, 192]];
+/** Defenses that turn: their frames are the 32 facings (then the same again, damaged). */
+const TURRET_BUILDINGS = new Set(['GUN', 'AGUN', 'SAM']);
+/** Half strength or less: the game shows the damaged frames, the second half of the building's. */
+const DAMAGED = 128;
 /** Vehicles whose turret is a second set of 32 frames after the body's. */
 const TURRETED = new Set(['JEEP', 'BGGY', 'LTNK', 'MTNK', 'HTNK', 'MSAM', '1TNK', '2TNK', '3TNK', '4TNK']);
 
@@ -502,7 +508,9 @@ export function renderTiles(m: Mission, find: Finder, links: Links): TileRender 
         if (o.kind === 'building') {
             standing.push({ y: y * 256, draw: () => {
                 const shp = spriteFrom(o.type, [theater.ext, 'shp'], `Building sprite (in ${conquer}, or the theater's)`);
-                const image = shp?.frames[0];
+                const damaged = o.health <= DAMAGED;
+                const frame = !shp ? 0 : TURRET_BUILDINGS.has(o.type) ? bodyFrame(o.facing) + (damaged && shp.frames.length >= 64 ? 32 : 0) : damaged ? shp.frames.length >> 1 : 0;
+                const image = shp?.frames[frame];
                 if (image) blit(image.pixels, image.width, image.height, (x - area.x) * TILE, (y - area.y) * TILE, true, remap);
             } });
             continue;

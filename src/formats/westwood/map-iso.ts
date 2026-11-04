@@ -60,6 +60,8 @@ export interface IsoObject {
     facing: number;
     /** Infantry: where in the cell (0 middle, then the four quarters). */
     sub: number;
+    /** Out of 256. */
+    health: number;
 }
 
 /**
@@ -74,7 +76,7 @@ function readObjects(ini: Ini): IsoObject[] {
             const v = value.split(',').map((x) => x.trim());
             const [rx, ry] = [Number(v[3]), Number(v[4])];
             if (!Number.isInteger(rx) || !Number.isInteger(ry)) continue;
-            out.push({ kind, house: v[0], type: (v[1] ?? '').toUpperCase(), rx, ry, facing: Number(kind === 'infantry' ? v[7] : v[5]) || 0, sub: kind === 'infantry' ? Number(v[5]) || 0 : 0 });
+            out.push({ kind, house: v[0], type: (v[1] ?? '').toUpperCase(), rx, ry, facing: Number(kind === 'infantry' ? v[7] : v[5]) || 0, sub: kind === 'infantry' ? Number(v[5]) || 0 : 0, health: Number(v[2]) || 256 });
         }
     }
     return out;
@@ -513,8 +515,10 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
         }
         const img = image(o.type);
         if (o.kind === 'building') {
-            // Drawn centered on its footprint, its foundation slab (bib) first.
+            // Drawn centered on its footprint: its foundation slab (bib), the building (damaged at half
+            // strength or less), its animated parts, then a defense's turret.
             const [fw, fh] = (art?.get(img, 'Foundation') ?? art?.get(o.type, 'Foundation') ?? '1x1').split(/x/i).map((n) => Number(n) || 1);
+            const damaged = o.health <= 128;
             objects.push({ rx: o.rx + fw - 1, ry: o.ry + fh - 1, draw: () => {
                 const [cx, cy] = point(o.rx + fw / 2, o.ry + fh / 2);
                 const palette = teamPaletteFor(o.house, unitPalette);
@@ -522,7 +526,37 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 const bibShp = bib ? spriteFor(bib.toUpperCase(), 'Building foundation sprite') : null;
                 if (bibShp) drawFrame(bibShp, 0, cx, cy, palette, false);
                 const shp = spriteFor(o.type, 'Building sprite');
-                if (shp) drawFrame(shp, 0, cx, cy, palette, true);
+                // Its frames: whole, damaged (, rubble), then the same again as shadows.
+                if (shp) drawFrame(shp, damaged && shp.frames.length >= 4 ? 1 : 0, cx, cy, palette, true);
+                for (const key of ['ActiveAnim', 'ActiveAnimTwo', 'ActiveAnimThree', 'ActiveAnimFour', 'IdleAnim']) {
+                    const anim = (damaged && art?.get(img, `${key}Damaged`)) || art?.get(img, key);
+                    if (!anim) continue;
+                    const animShp = spriteFor(anim.toUpperCase(), 'Building animation sprite');
+                    const dx = Number(art?.get(img, `${key}X`) ?? 0);
+                    const dy = Number(art?.get(img, `${key}Y`) ?? 0);
+                    if (animShp) drawFrame(animShp, Number(art?.get(anim, 'Start') ?? 0) || 0, cx + dx, cy + dy, palette, false);
+                }
+                // A defense's turret: a voxel model or a sprite of 32 facings, placed in pixels from the building's center.
+                const turret = /^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'Turret') ?? '') ? rulesIni?.get(o.type, 'TurretAnim') ?? art?.get(img, 'TurretAnim') : undefined;
+                if (!turret) return;
+                const tx = cx + Number(rulesIni?.get(o.type, 'TurretAnimX') ?? 0);
+                const ty = cy + Number(rulesIni?.get(o.type, 'TurretAnimY') ?? 0);
+                if (/^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'TurretAnimIsVoxel') ?? '')) {
+                    const key = `${turret}:${o.facing}:${o.house}`;
+                    if (!voxelPictures.has(key)) {
+                        const parts: VoxelPartInput[] = [];
+                        for (const [file, role] of [[turret.toLowerCase(), 'Defense turret model'], [`${turret.toLowerCase()}barl`, 'Defense barrel model']]) {
+                            const m = model(file, role);
+                            if (m) parts.push({ ...m, forward: 0 });
+                        }
+                        voxelPictures.set(key, parts.length ? drawVoxels(parts, o.facing, tw, th, palette) : null);
+                    }
+                    const picture = voxelPictures.get(key);
+                    if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(tx - picture.originX), Math.round(ty - picture.originY));
+                } else {
+                    const turretShp = spriteFor(turret.toUpperCase(), 'Defense turret sprite');
+                    if (turretShp) drawFrame(turretShp, Math.round(((256 - o.facing) % 256) / 8) % 32, tx, ty, palette, false);
+                }
             } });
             continue;
         }
