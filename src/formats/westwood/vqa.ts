@@ -12,6 +12,10 @@ import { expandPalette } from './vga';
  * next one, which replaces the current codebook once all its slices are in
  * (every "codebook interval" frames). Sound is interleaved, chunk by chunk.
  *
+ * Sound is IMA ADPCM (SND2), Westwood ADPCM (SND1) or raw (SND0). In stereo,
+ * version 2 alternates bytes between the channels; version 3 puts each chunk's
+ * left channel in its first half and the right in its second.
+ *
  * Tiberian Sun's movies are version 3 in high color (flag 0x10): the codebook
  * holds 15-bit RGB pixels, and each frame is a list of 16-bit commands (VPRZ,
  * VPTR) that skip blocks (keeping the last frame's) or write codebook blocks,
@@ -285,7 +289,7 @@ class HighColorDecoder {
 }
 
 /** Joins the sound chunks into one clip. */
-function decodeSound(data: Uint8Array, chunks: Chunk[], rate: number, channels: number, bits: number): AudioClip | undefined {
+function decodeSound(data: Uint8Array, chunks: Chunk[], rate: number, channels: number, bits: number, version: number): AudioClip | undefined {
     const sound = chunks.filter((c) => c.id === 'SND0' || c.id === 'SND1' || c.id === 'SND2');
     if (!sound.length) return undefined;
     const kind = sound[0].id;
@@ -300,6 +304,20 @@ function decodeSound(data: Uint8Array, chunks: Chunk[], rate: number, channels: 
             const body = data.subarray(c.start, c.end);
             if (channels === 1) {
                 w = decodeIma(body, out, states[0], w);
+                continue;
+            }
+            if (version === 3) {
+                // Version 3 (TS): each chunk is the left channel's half, then the right's, low nibble first.
+                const half = body.length >> 1;
+                for (let c = 0; c < 2; c++) {
+                    let at = w + c;
+                    for (const byte of body.subarray(c * half, (c + 1) * half)) {
+                        out[at] = imaSample(states[c], byte & 0x0f);
+                        out[at + 2] = imaSample(states[c], byte >> 4);
+                        at += 4;
+                    }
+                }
+                w += half * 4;
                 continue;
             }
             for (let i = 0; i + 1 < body.length; i += 2, w += 4) {
@@ -414,7 +432,7 @@ const parser: FormatParser = {
 
         let sound: AudioClip | undefined;
         try {
-            sound = decodeSound(data, top, rate, channels, bits);
+            sound = decodeSound(data, top, rate, channels, bits, header.version);
         } catch (e) {
             warnings.push(`The sound couldn't be decoded: ${e instanceof Error ? e.message : e}`);
         }

@@ -3,6 +3,7 @@ import type { Preview } from '../../core/types';
 import { detect } from '../index';
 import { Ini } from '../ini-sections';
 import { namesFromBinary, namesFromText } from '../mix/names';
+import { imaSample } from './adpcm';
 import { lzo1x } from './compression';
 import { Links } from '../links';
 import { rulesTable } from '../rules-table';
@@ -407,5 +408,26 @@ describe('rules tables', () => {
         expect(htnk.cells).toMatchObject({ id: 'HTNK', name: 'Rhino', cost: '900', art: 'htnk.vxl', cameo: 'htnkicon.shp (not in the files in use)' });
         expect(gi.cells).toMatchObject({ id: 'E1', name: 'GI', art: 'gi.shp (not in the files in use)' });
         expect(gi.files?.art[0]).toBe('gi.shp');
+    });
+});
+
+describe('TS movie sound', () => {
+    it('reads version 3 stereo as the left half of each chunk, then the right', () => {
+        const chunk = (id: string, body: number[]) => [...id].map((c) => c.charCodeAt(0)).concat([0, 0, body.length >> 8, body.length & 255], body, body.length & 1 ? [0] : []);
+        const header = new Array(42).fill(0);
+        Object.assign(header, { 0: 3, 24: 0x22, 25: 0x56, 26: 2, 27: 16 });
+        // Left: bytes 0x21, 0x43 (nibbles 1, 2, 3, 4); right: 0x65, 0x07 (5, 6, 7, 0).
+        const body = [...'WVQA'].map((c) => c.charCodeAt(0)).concat(chunk('VQHD', header), chunk('SND2', [0x21, 0x43, 0x65, 0x07]));
+        const data = Uint8Array.from([...'FORM'].map((c) => c.charCodeAt(0)).concat([0, 0, 0, body.length], body));
+        const preview = vqa.parse(data, context()).preview;
+        const clip = preview?.kind === 'audio' ? preview : preview?.kind === 'video' ? preview.audio : undefined;
+        if (!clip) throw new Error('expected sound');
+        const samples = new Int16Array(clip.wav.buffer, clip.wav.byteOffset + 44, 8);
+        const expect4 = (nibbles: number[]) => {
+            const state = { index: 0, sample: 0 };
+            return nibbles.map((n) => imaSample(state, n));
+        };
+        const [left, right] = [expect4([1, 2, 3, 4]), expect4([5, 6, 7, 0])];
+        expect([...samples]).toEqual(left.flatMap((l, i) => [l, right[i]]));
     });
 });

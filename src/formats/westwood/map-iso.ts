@@ -399,16 +399,29 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const art = artFile ? Ini.of(artFile.data) : null;
     const image = (name: string) => (rulesIni?.get(name, 'Image') ?? art?.get(name, 'Image') ?? name).trim().toUpperCase();
     const sprites = new Map<string, { width: number; height: number; frames: ShpTsFrame[] } | null>();
-    /** An object's sprite: its theater's art, its plain .shp, or (NewTheater) its name with the theater's letter. */
+    /**
+     * An object's sprite, by its art's flags: Theater=yes art is the image name with the theater's
+     * extension (tib01.tem); NewTheater=yes art swaps the name's second letter for the theater's
+     * (GASAND is the snow sandbag, GTSAND the temperate, GGSAND the generic one); other art is a plain .shp.
+     */
     const spriteFor = (name: string, role: string) => {
         if (!sprites.has(name)) {
-            const n = image(name).toLowerCase();
+            const img = image(name);
+            const n = img.toLowerCase();
             // Image=none: the object has no picture (an invisible marker), so there's nothing to find.
             if (n === 'none') {
                 sprites.set(name, null);
                 return null;
             }
-            const candidates = [`${n}.${theater.ext}`, `${n}.shp`, n.length > 2 ? `${n[0]}${theater.letter}${n.slice(2)}.shp` : ''].filter(Boolean);
+            const yesFlag = (key: string) => /^(yes|true|1)$/i.test(art?.get(img, key) ?? art?.get(name, key) ?? '');
+            const lettered = (letter: string) => (n.length > 2 ? `${n[0]}${letter}${n.slice(2)}.shp` : '');
+            const candidates = (
+                yesFlag('Theater')
+                    ? [`${n}.${theater.ext}`, `${n}.shp`]
+                    : yesFlag('NewTheater')
+                      ? [lettered(theater.letter), lettered('g'), `${n}.shp`]
+                      : [`${n}.shp`, `${n}.${theater.ext}`, lettered(theater.letter)]
+            ).filter(Boolean);
             let found: Companion | undefined;
             for (const f of candidates) {
                 found = find?.(f).find((c) => sniffShpTs(c.data));
@@ -450,15 +463,33 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
         const [cx, cy] = point(rx + 0.5, ry + 0.5);
         drawFrame(shp, frame, cx, cy, palette, shadow);
     };
+    // rules.ini marks walls (Wall=yes), which are drawn in the unit palette; their names don't say so (TS's sandbags are GASAND).
+    const isWall = (name: string) => /^(yes|true|1)$/i.test(rulesIni?.get(name, 'Wall') ?? '') || overlayMark(name) === 'wall';
+    /**
+     * TS draws Tiberium with entries 16–31 in its type's color (rules.ini [Tiberiums]: Riparius is
+     * NeonGreen). TIB01–TIB20 are type 1, TIB2_xx type 2 and so on; BTIB is type 2. RA2's ore and gems
+     * carry their own colors (its NeonGreen isn't even defined), so they're left as they are.
+     */
+    const tiberiumPalettes = new Map<number, Uint8Array>();
+    const tiberiumPalette = (name: string) => {
+        const image = Number(name.match(/^TIB(\d)_/i)?.[1] ?? (/^(BTIB|GEM)/i.test(name) ? 2 : 1));
+        if (!tiberiumPalettes.has(image)) {
+            const type = rulesIni?.entries('Tiberiums').map(([, v]) => v.trim()).find((t) => Number(rulesIni.get(t, 'Image')) === image);
+            const hsv = type ? rulesIni?.get('Colors', rulesIni.get(type, 'Color') ?? '')?.split(',').map(Number) : undefined;
+            tiberiumPalettes.set(image, tw === 48 && hsv?.length === 3 && hsv[2] > 0 ? teamPalette(objPalette, TS_REMAP, hsvToRgb(hsv[0], hsv[1], hsv[2])) : objPalette);
+        }
+        return tiberiumPalettes.get(image)!;
+    };
     const overlayPalette = (name: string) => {
         const kind = overlayMark(name);
-        return kind === 'ore' || kind === 'gems' ? objPalette : kind === 'wall' ? unitPalette : isoPalette;
+        if (/^(yes|true|1)$/i.test(rulesIni?.get(name, 'Tiberium') ?? '')) return tiberiumPalette(name);
+        return kind === 'ore' || kind === 'gems' ? objPalette : isWall(name) ? unitPalette : isoPalette;
     };
 
     // Each side's color: the map's own ([GDI] Color=Gold), else rules.ini's, from the game's [Colors] (hue, saturation, value).
     const teams = new Map<string, Uint8Array>();
     const teamPaletteFor = (house: string, base: Uint8Array) => {
-        const key = `${house}:${base === unitPalette ? 'unit' : 'other'}`;
+        const key = `${house}:${base === unitPalette ? 'unit' : base === isoPalette ? 'iso' : 'other'}`;
         if (!teams.has(key)) {
             const name = map.houseColors.get(house.toLowerCase()) ?? rulesIni?.get(house, 'Color') ?? rulesIni?.get(rulesIni.get(house, 'Country') ?? '', 'Color');
             const hsv = name ? rulesIni?.get('Colors', name)?.split(',').map(Number) : undefined;
@@ -466,6 +497,15 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             teams.set(key, teamPalette(base, TS_REMAP, rgb));
         }
         return teams.get(key)!;
+    };
+    const yes = (value: string | undefined) => /^(yes|true|1)$/i.test(value ?? '');
+    /**
+     * The palette an object's art is drawn in: the theater's terrain palette for art marked TerrainPalette
+     * (civilian buildings, lamps), else the unit palette; and the owner's color only where it's Remapable.
+     */
+    const artPalette = (artName: string, house: string) => {
+        const base = yes(art?.get(artName, 'TerrainPalette')) ? isoPalette : unitPalette;
+        return yes(art?.get(artName, 'Remapable')) ? teamPaletteFor(house, base) : base;
     };
 
     // Voxel models (and their animations), by file.
@@ -501,7 +541,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             const name = overlayNames[id];
             if (real && name) objects.push({ rx, ry, draw: () => drawSprite(rx, ry, name, map.overlayData?.[i] ?? 0, overlayPalette(name)) });
             else {
-                const kind = name ? overlayMark(name) : null;
+                const kind = name ? (isWall(name) ? 'wall' : overlayMark(name)) : null;
                 if (kind) objects.push({ rx, ry, draw: () => mark(rx, ry, MARK[kind]) });
             }
         }
@@ -521,7 +561,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             const damaged = o.health <= 128;
             objects.push({ rx: o.rx + fw - 1, ry: o.ry + fh - 1, draw: () => {
                 const [cx, cy] = point(o.rx + fw / 2, o.ry + fh / 2);
-                const palette = teamPaletteFor(o.house, unitPalette);
+                const palette = artPalette(img, o.house);
                 const bib = art?.get(img, 'BibShape');
                 const bibShp = bib ? spriteFor(bib.toUpperCase(), 'Building foundation sprite') : null;
                 if (bibShp) drawFrame(bibShp, 0, cx, cy, palette, false);
@@ -534,7 +574,9 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                     const animShp = spriteFor(anim.toUpperCase(), 'Building animation sprite');
                     const dx = Number(art?.get(img, `${key}X`) ?? 0);
                     const dy = Number(art?.get(img, `${key}Y`) ?? 0);
-                    if (animShp) drawFrame(animShp, Number(art?.get(anim, 'Start') ?? 0) || 0, cx + dx, cy + dy, palette, false);
+                    // An animation in the terrain palette says so; otherwise it's drawn like its building.
+                    const animPalette = yes(art?.get(anim, 'TerrainPalette')) ? artPalette(anim, o.house) : palette;
+                    if (animShp) drawFrame(animShp, Number(art?.get(anim, 'Start') ?? 0) || 0, cx + dx, cy + dy, animPalette, false);
                 }
                 // A defense's turret: a voxel model or a sprite of 32 facings, placed in pixels from the building's center.
                 const turret = /^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'Turret') ?? '') ? rulesIni?.get(o.type, 'TurretAnim') ?? art?.get(img, 'TurretAnim') : undefined;
@@ -567,7 +609,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 if (!shp) return;
                 const [cx, cy] = point(o.rx + sx / 256, o.ry + sy / 256);
                 // Standing still, facing one of 8 ways, counterclockwise from north.
-                drawFrame(shp, (8 - Math.round(o.facing / 32)) % 8, cx, cy, teamPaletteFor(o.house, unitPalette), true);
+                drawFrame(shp, (8 - Math.round(o.facing / 32)) % 8, cx, cy, artPalette(img, o.house), true);
             } });
             continue;
         }
