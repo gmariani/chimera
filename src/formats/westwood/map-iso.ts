@@ -1,7 +1,7 @@
 import type { Companion, Preview } from '../../core/types';
 import { Bytes } from '../../core/bytes';
 import { Ini } from '../ini-sections';
-import type { Links } from '../links';
+import { Links } from '../links';
 import { lcw, lzo1x } from './compression';
 import { decodeShpTs, type ShpTsFrame } from './shp-ts-frames';
 import { sniffShpTs, tmpLayout } from './sniff';
@@ -49,6 +49,8 @@ export interface IsoMap {
     /** Each house's color name, where the map sets one ([GDI] Color=Gold). */
     houseColors: Map<string, string>;
     preview: { width: number; height: number; rgb: Uint8Array } | null;
+    /** [Lighting]: the light everywhere (Ambient less Ground), more each level up (Level), and its tint. */
+    lighting: { ambient: number; level: number; tint: [number, number, number] };
 }
 
 export interface IsoObject {
@@ -133,6 +135,11 @@ export function readIsoMap(ini: Ini): IsoMap {
         const rgb = unpack(ini, 'PreviewPack', pw * ph * 3, lzo1x);
         if (rgb && rgb.length >= pw * ph * 3) preview = { width: pw, height: ph, rgb };
     }
+    // Some maps write "0,5" for 0.5.
+    const light = (key: string, fallback: number) => {
+        const n = Number((ini.get('Lighting', key) ?? '').replace(',', '.'));
+        return ini.get('Lighting', key) !== undefined && Number.isFinite(n) ? n : fallback;
+    };
     return {
         cells,
         theater: (ini.get('Map', 'Theater') ?? 'TEMPERATE').toUpperCase(),
@@ -143,6 +150,7 @@ export function readIsoMap(ini: Ini): IsoMap {
         objects: readObjects(ini),
         houseColors,
         preview,
+        lighting: { ambient: light('Ambient', 1) - light('Ground', 0), level: light('Level', 0), tint: [light('Red', 1), light('Green', 1), light('Blue', 1)] },
     };
 }
 
@@ -268,6 +276,8 @@ class Canvas {
     ground: { depth: number; level: number; owner?: number } | null = null;
     object: { depth: number; level: number } | null = null;
     only: number | null = null;
+    /** What each color channel is multiplied by as it's drawn: the light where it stands, or null for none. */
+    light: [number, number, number] | null = null;
     /** Whether pixel i is hidden from the current object, recording the ground there if drawing ground. */
     private covered(i: number): boolean {
         if (this.ground) {
@@ -294,9 +304,10 @@ class Canvas {
                 const tx = mx / s;
                 if (tx >= this.width || this.covered(ty * this.width + tx)) continue;
                 const at = (ty * this.width + tx) * 4;
-                this.rgba[at] = palette[p * 3];
-                this.rgba[at + 1] = palette[p * 3 + 1];
-                this.rgba[at + 2] = palette[p * 3 + 2];
+                const k = this.light;
+                this.rgba[at] = k ? Math.min(255, palette[p * 3] * k[0]) : palette[p * 3];
+                this.rgba[at + 1] = k ? Math.min(255, palette[p * 3 + 1] * k[1]) : palette[p * 3 + 1];
+                this.rgba[at + 2] = k ? Math.min(255, palette[p * 3 + 2] * k[2]) : palette[p * 3 + 2];
                 this.rgba[at + 3] = 255;
             }
         }
@@ -315,6 +326,21 @@ class Canvas {
             }
         }
     }
+    /** Brightens what's already there by an alpha image (a lamp's pool of light): each value over 127, the value ÷ 127. */
+    brighten(pixels: ArrayLike<number>, w: number, h: number, x: number, y: number) {
+        const s = this.step;
+        for (let sy = 0; sy < h; sy++) {
+            const my = y + sy - this.top;
+            if (my % s || my < 0 || my / s >= this.height) continue;
+            for (let sx = 0; sx < w; sx++) {
+                const v = pixels[sy * w + sx];
+                const mx = x + sx - this.left;
+                if (v <= 127 || mx % s || mx < 0 || mx / s >= this.width) continue;
+                const at = ((my / s) * this.width + mx / s) * 4;
+                for (let c = 0; c < 3; c++) this.rgba[at + c] = Math.min(255, (this.rgba[at + c] * v) / 127);
+            }
+        }
+    }
     /** Draws an RGBA picture (transparent where alpha is 0) with its top left at x, y in map pixels. */
     picture(rgba: Uint8Array, w: number, h: number, x: number, y: number) {
         const s = this.step;
@@ -325,7 +351,12 @@ class Canvas {
                 const mx = x + sx - this.left;
                 const from = (sy * w + sx) * 4;
                 if (!rgba[from + 3] || mx % s || mx < 0 || mx / s >= this.width || this.covered((my / s) * this.width + mx / s)) continue;
-                this.rgba.set(rgba.subarray(from, from + 4), ((my / s) * this.width + mx / s) * 4);
+                const at = ((my / s) * this.width + mx / s) * 4;
+                const k = this.light;
+                this.rgba[at] = k ? Math.min(255, rgba[from] * k[0]) : rgba[from];
+                this.rgba[at + 1] = k ? Math.min(255, rgba[from + 1] * k[1]) : rgba[from + 1];
+                this.rgba[at + 2] = k ? Math.min(255, rgba[from + 2] * k[2]) : rgba[from + 2];
+                this.rgba[at + 3] = 255;
             }
         }
     }
@@ -394,7 +425,7 @@ export interface IsoRender {
  * The map, drawn with the theater's tiles, overlays and trees when they're in
  * the opened archives; otherwise each cell as a flat diamond colored by height.
  */
-export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolean, links: Links): IsoRender {
+export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolean, links: Links, lighting = true): IsoRender {
     const theater = THEATERS[map.theater] ?? THEATERS.TEMPERATE;
     const archive = `ISO${theater.ext.toUpperCase()}.MIX`;
     /** The first of these names that's in the session; recorded as used, or the first name as missing. */
@@ -478,6 +509,36 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const canvas = new Canvas(left, top, fullW, fullH, step);
     const levels = new Map<number, number>();
     for (const c of cells) levels.set(c.ry * 1024 + c.rx, c.level);
+    const rules = pick(yuri ? ['rulesmd.ini', 'rules.ini'] : ['rules.ini', 'rulesmd.ini'], 'Rules (what each overlay is)');
+    const rulesIni = rules ? Ini.of(rules.data) : null;
+
+    // Light, as the game lights a map (and OpenRA's TS does): the map's light, more for each level up, and
+    // each lamp's within its LightVisibility (in leptons, 256 to a cell), fading to nothing at its edge.
+    // Intensity scales the tint: (ambient + level × height + Σ fade × lamp's) × (tint + Σ fade × lamp's).
+    const ruleNumber = (type: string, key: string) => Number((rulesIni?.get(type, key) ?? '').replace(',', '.')) || 0;
+    const lamps = map.objects
+        .filter((o) => o.kind === 'building' && ruleNumber(o.type, 'LightVisibility') > 0)
+        .map((o) => ({ x: o.rx + 0.5, y: o.ry + 0.5, range: ruleNumber(o.type, 'LightVisibility') / 256, intensity: ruleNumber(o.type, 'LightIntensity'), tint: ['LightRedTint', 'LightGreenTint', 'LightBlueTint'].map((k) => ruleNumber(o.type, k)) }));
+    const lights = new Map<number, [number, number, number]>();
+    const lightAt = (rx: number, ry: number): [number, number, number] | null => {
+        if (!real || !lighting) return null;
+        const key = ry * 1024 + rx;
+        let light = lights.get(key);
+        if (!light) {
+            let intensity = map.lighting.ambient + map.lighting.level * (levels.get(key) ?? 0);
+            const tint = [...map.lighting.tint];
+            for (const lamp of lamps) {
+                const distance = Math.hypot(rx + 0.5 - lamp.x, ry + 0.5 - lamp.y);
+                if (distance >= lamp.range) continue;
+                const fade = (lamp.range - distance) / lamp.range;
+                intensity += fade * lamp.intensity;
+                for (let i = 0; i < 3; i++) tint[i] += fade * lamp.tint[i];
+            }
+            light = [Math.max(0, intensity * tint[0]), Math.max(0, intensity * tint[1]), Math.max(0, intensity * tint[2])];
+            lights.set(key, light);
+        }
+        return light;
+    };
 
     // Ground. The parts of tiles that stand above their diamond (cliff faces, rocks) are drawn with it,
     // so the ground in front trims them, then what's left of them again in depth order with the objects,
@@ -502,6 +563,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             for (const level of levels) {
                 const [x, y] = place({ ...c, level });
                 canvas.ground = { depth: c.rx + c.ry, level };
+                canvas.light = lightAt(c.rx, c.ry);
                 canvas.draw(cell.diamond, tw, th, x, y, isoPalette);
             }
         }
@@ -511,6 +573,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
         if (real) {
             const t = tile((c.tile & 0xffff) === 0xffff ? 0 : c.tile);
             canvas.ground = { depth: c.rx + c.ry, level: c.level };
+            canvas.light = lightAt(c.rx, c.ry);
             const cell = t?.cells[c.sub] ?? t?.cells.find(Boolean) ?? first!.cells.find(Boolean);
             if (!cell) continue;
             canvas.draw(cell.diamond, t?.width ?? tw, t?.height ?? th, x, y, isoPalette);
@@ -536,8 +599,6 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     }
 
     // Overlays and trees: sprites centered on their cell when drawing for real, otherwise a mark.
-    const rules = pick(yuri ? ['rulesmd.ini', 'rules.ini'] : ['rules.ini', 'rulesmd.ini'], 'Rules (what each overlay is)');
-    const rulesIni = rules ? Ini.of(rules.data) : null;
     const overlayNames = rulesIni?.entries('OverlayTypes').map(([, v]) => v.trim().toUpperCase()) ?? [];
     // art.ini can point an object at another's art (Image=).
     const artFile = pick(yuri ? ['artmd.ini', 'art.ini'] : ['art.ini', 'artmd.ini'], 'Art (which picture each object uses)');
@@ -914,10 +975,39 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     for (const o of objects) {
         canvas.only = o.owner ?? null;
         canvas.object = o.owner !== undefined ? null : { depth: o.rx + o.ry, level: (levels.get(o.ry * 1024 + o.rx) ?? 0) + (o.up ?? 0) };
+        // Lit by the cell it stands on (a building by its front corner's).
+        canvas.light = lightAt(Math.floor(o.rx), Math.floor(o.ry));
         o.draw();
     }
     canvas.object = null;
     canvas.only = null;
+    canvas.light = null;
+
+    // Pools of light some lamps cast instead of lighting their cells (AlphaImage=, the "AlphaLightPost"'s
+    // ALPHATST): an image of brightness, 127 for none, laid over everything, centered on the building.
+    if (real && lighting) {
+        const alphas = new Map<string, ReturnType<typeof decodeShpTs> | null>();
+        for (const o of map.objects) {
+            if (o.kind !== 'building') continue;
+            const name = (rulesIni?.get(o.type, 'AlphaImage') ?? art?.get(image(o.type), 'AlphaImage'))?.trim().toLowerCase();
+            if (!name || name === 'none') continue;
+            if (!alphas.has(name)) {
+                const file = pick([`${name}.shp`], 'Lamp light (alpha image)');
+                let shp: ReturnType<typeof decodeShpTs> | null = null;
+                try {
+                    shp = file ? decodeShpTs(file.data) : null;
+                } catch {
+                    shp = null;
+                }
+                alphas.set(name, shp);
+            }
+            const shp = alphas.get(name);
+            const frame = shp?.frames[0];
+            if (!shp || !frame) continue;
+            const [cx, cy] = point(o.rx + 0.5, o.ry + 0.5);
+            canvas.brighten(frame.pixels, shp.width, shp.height, Math.round(cx - shp.width / 2), Math.round(cy - shp.height / 2));
+        }
+    }
 
     return { image: { width: canvas.width, height: canvas.height, rgba: canvas.rgba }, real, wanted };
 }
@@ -934,7 +1024,9 @@ export function isoMapPreviews(ini: Ini, find: Finder | undefined, fileName: str
     const map = readIsoMap(ini);
     const yuri = /\.yrm$/i.test(fileName ?? '') || /^(YR|MD)/i.test(ini.get('Basic', 'RequiredAddOn') ?? '') || ini.get('Basic', 'RequiredAddOn') === '1';
     const render = renderIsoMap(map, find, yuri, links);
-    const items: { title: string; preview: Preview }[] = [{ title: render.real ? 'Map' : 'Map (height and objects; open the theater archives for tiles)', preview: { kind: 'picture', ...render.image } }];
+    // Lit as in the game; the switch draws it again unlit, the art's own colors.
+    const toggle = render.real ? { label: 'Lighting', off: () => renderIsoMap(map, find, yuri, new Links(), false).image.rgba } : undefined;
+    const items: { title: string; preview: Preview }[] = [{ title: render.real ? 'Map' : 'Map (height and objects; open the theater archives for tiles)', preview: { kind: 'picture', ...render.image, toggle } }];
     if (map.preview) items.push({ title: 'The map\'s own preview', preview: previewPicture(map.preview) });
     const levels = map.cells.map((c) => c.level);
     const warnings: string[] = [];

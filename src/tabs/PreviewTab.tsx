@@ -31,7 +31,7 @@ export function PreviewTab({ preview, fileName, names, onOpenName }: { preview: 
         case 'palette':
             return <PalettePreview colors={preview.colors} fileName={fileName} />;
         case 'picture':
-            return <PicturePreview width={preview.width} height={preview.height} rgba={preview.rgba} fileName={fileName} />;
+            return <PicturePreview width={preview.width} height={preview.height} rgba={preview.rgba} toggle={preview.toggle} fileName={fileName} />;
         case 'audio':
             return <AudioPreview clip={preview} fileName={fileName} />;
         case 'video':
@@ -297,7 +297,6 @@ function ImagesPreview({
     );
 }
 
-/** A true-color picture: no palette to pick, just zoom and save. */
 /** Dragging with the left button scrolls the element: grab and pan a picture bigger than its stage. */
 function useDragPan<T extends HTMLElement>() {
     const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
@@ -322,11 +321,19 @@ function useDragPan<T extends HTMLElement>() {
     };
 }
 
-function PicturePreview({ width, height, rgba, fileName }: { width: number; height: number; rgba: Uint8Array; fileName: string }) {
+/** A true-color picture: no palette to pick, just zoom and save (and a switch, like a map's lighting). */
+function PicturePreview({ width, height, rgba, toggle, fileName }: { width: number; height: number; rgba: Uint8Array; toggle?: { label: string; off(): Uint8Array }; fileName: string }) {
     const canvas = useRef<HTMLCanvasElement>(null);
     const pan = useDragPan<HTMLDivElement>();
     // Big pictures (whole maps) start fitted to the page.
     const [zoom, setZoom] = useState<number | 'fit'>(width > 900 ? 'fit' : width <= 160 ? 2 : 1);
+    const [on, setOn] = useState(true);
+    // The picture with the switch off is drawn the first time it's wanted, then kept.
+    const off = useMemo(() => {
+        let picture: Uint8Array | null = null;
+        return () => (picture ??= toggle!.off());
+    }, [toggle]);
+    const shown = on || !toggle ? rgba : off();
 
     useEffect(() => {
         const el = canvas.current;
@@ -334,8 +341,8 @@ function PicturePreview({ width, height, rgba, fileName }: { width: number; heig
         el.width = width;
         el.height = height;
         // A view of the same pixels, not a copy: a whole map can be hundreds of megabytes.
-        el.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer as ArrayBuffer, rgba.byteOffset, width * height * 4), width, height), 0, 0);
-    }, [width, height, rgba]);
+        el.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(shown.buffer as ArrayBuffer, shown.byteOffset, width * height * 4), width, height), 0, 0);
+    }, [width, height, shown]);
 
     return (
         <div className="row g-4">
@@ -355,6 +362,7 @@ function PicturePreview({ width, height, rgba, fileName }: { width: number; heig
                         ))}
                     </ButtonGroup>
                 </Form.Group>
+                {toggle && <Form.Check type="switch" id="picture-toggle" className="mb-3" label={toggle.label} checked={on} onChange={(e) => setOn(e.target.checked)} />}
                 <Button size="sm" variant="outline-light" onClick={async () => canvas.current && download(await png(canvas.current), `${safeName(stem(fileName))}.png`)}>
                     <i className="bi bi-image me-1" /> Save PNG
                 </Button>

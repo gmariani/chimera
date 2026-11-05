@@ -102,7 +102,15 @@ export type Preview =
       }
     | { kind: 'palette'; /** 256 colors as 8-bit RGB. */ colors: Uint8Array }
     /** A true-color picture. */
-    | { kind: 'picture'; width: number; height: number; /** 8-bit RGBA, row by row. */ rgba: Uint8Array }
+    | {
+          kind: 'picture';
+          width: number;
+          height: number;
+          /** 8-bit RGBA, row by row. */
+          rgba: Uint8Array;
+          /** A switch for a way of drawing it, on in `rgba` (a map's lighting): the picture without it is drawn when it's turned off. */
+          toggle?: { label: string; off(): Uint8Array };
+      }
     | ({ kind: 'audio' } & AudioClip)
     | {
           kind: 'video';
