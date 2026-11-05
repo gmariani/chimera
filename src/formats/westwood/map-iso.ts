@@ -486,20 +486,24 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const animated: { rx: number; ry: number; up: number; draw: () => void }[] = [];
     const flat = new Uint8Array(768);
     const diamond = unpackDiamond(new Uint8Array((tw * th) / 2).fill(1), tw, th);
-    // A cell lower than all four of its neighbors (a flat tile a level down, as nod12a has at 90,80) leaves
-    // a gap where its diamond would meet theirs. Its tile goes first at their level, under everything,
-    // so it shows only in that gap; the cell itself is still drawn at its own level.
+    // A cell at a different level from a neighbor can leave a gap where their tiles don't meet (a flat tile a
+    // level down, as nod12a has at 90,80; one four levels up, as gdi10b has at 200,73; a cliff a map doesn't
+    // line up). Its tile goes first at each of its neighbors' levels, under everything, so it shows only in
+    // such a gap; the cell itself is still drawn at its own level.
     if (real) {
         const at = new Map(cells.map((c) => [c.ry * 1024 + c.rx, c.level]));
         for (const c of cells) {
-            const around = [at.get((c.ry - 1) * 1024 + c.rx), at.get(c.ry * 1024 + c.rx + 1), at.get((c.ry + 1) * 1024 + c.rx), at.get(c.ry * 1024 + c.rx - 1)];
-            if (around.some((l) => l === undefined || l <= c.level)) continue;
-            const level = Math.min(...(around as number[]));
+            // The eight cells around it: a slope can leave a gap toward a corner as well as a side.
+            const around = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => (dx || dy ? at.get((c.ry + dy) * 1024 + c.rx + dx) : undefined)));
+            const levels = new Set(around.filter((l): l is number => l !== undefined && l !== c.level));
+            if (!levels.size) continue;
             const cell = tile((c.tile & 0xffff) === 0xffff ? 0 : c.tile)?.cells[c.sub];
             if (!cell) continue;
-            const [x, y] = place({ ...c, level });
-            canvas.ground = { depth: c.rx + c.ry, level };
-            canvas.draw(cell.diamond, tw, th, x, y, isoPalette);
+            for (const level of levels) {
+                const [x, y] = place({ ...c, level });
+                canvas.ground = { depth: c.rx + c.ry, level };
+                canvas.draw(cell.diamond, tw, th, x, y, isoPalette);
+            }
         }
     }
     for (const c of cells) {
