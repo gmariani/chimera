@@ -380,6 +380,11 @@ describe('objects on TS and RA2 maps', () => {
         ]);
         expect(map.houseColors.get('gdi')).toBe('Gold');
     });
+
+    it("reads a building's upgrades by slot", () => {
+        const ini = new Ini('[Map]\nSize=0,0,10,10\n[Structures]\n0=GDI,GACTWR,256,93,202,0,None,0,0,1,2,0,None,GAROCK,None,1,0\n');
+        expect(readIsoMap(ini).objects[0].upgrades).toEqual(['', 'GAROCK', '']);
+    });
 });
 
 describe('rules tables', () => {

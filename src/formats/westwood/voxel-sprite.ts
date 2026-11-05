@@ -23,6 +23,10 @@ export interface VoxelPartInput {
     hva: Hva | null;
     /** Moves the part forward, in voxels (a turret's place on the hull). */
     forward: number;
+    /** Raises the part, in voxels (a barrel modeled around its pivot, set on its turret). */
+    up?: number;
+    /** Moves the part to the right, in voxels. */
+    right?: number;
 }
 
 /** A model's voxels as a small RGBA picture, and where its origin (the unit's position) falls in it. */
@@ -35,20 +39,75 @@ export interface VoxelPicture {
 }
 
 /**
+ * How many times larger a model is drawn before it's averaged down: at map scale a voxel is about two pixels, and dots that size leave sloped edges (a Disruptor's nose) ragged.
+ * Known gap: parts a voxel or two thick still drop out when shrunk (the Disruptor's dark blunt nose comes out as a thin point). The game keeps them, as it draws each voxel
+ * as a solid block at map size; doing the same here would mean rasterizing voxels at map scale instead of shrinking a larger picture. Left for later on purpose.
+ */
+const SUPERSAMPLE = 3;
+
+/**
  * Draws a model facing `facing` (0–255, clockwise from north) for a map whose
- * diamonds are tw × th pixels.
+ * diamonds are tw × th pixels: drawn SUPERSAMPLE times larger, then each block of
+ * pixels averaged into one, shown where at least half the block is covered.
  */
 export function drawVoxels(parts: VoxelPartInput[], facing: number, tw: number, th: number, palette: Uint8Array): VoxelPicture | null {
-    // Heading and left in map cell space: north is up the screen, which is -rx and -ry together.
+    const s = SUPERSAMPLE;
+    const big = drawVoxelsAt(parts, facing, tw * s, th * s, palette);
+    if (!big) return null;
+    // Line the blocks up so the origin falls on a block's corner.
+    const padX = (s - (big.originX % s)) % s;
+    const padY = (s - (big.originY % s)) % s;
+    const width = Math.ceil((big.width + padX) / s);
+    const height = Math.ceil((big.height + padY) / s);
+    const rgba = new Uint8Array(width * height * 4);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            let r = 0, g = 0, b = 0, n = 0;
+            for (let dy = 0; dy < s; dy++) {
+                const by = y * s + dy - padY;
+                if (by < 0 || by >= big.height) continue;
+                for (let dx = 0; dx < s; dx++) {
+                    const bx = x * s + dx - padX;
+                    if (bx < 0 || bx >= big.width) continue;
+                    const i = (by * big.width + bx) * 4;
+                    if (!big.rgba[i + 3]) continue;
+                    r += big.rgba[i];
+                    g += big.rgba[i + 1];
+                    b += big.rgba[i + 2];
+                    n++;
+                }
+            }
+            if (n * 2 < s * s) continue;
+            const o = (y * width + x) * 4;
+            // The block's middle, when it's covered: sharp like the game's own pixels; the average only at edges.
+            const cy = y * s + (s >> 1) - padY;
+            const cx = x * s + (s >> 1) - padX;
+            const c = (cy * big.width + cx) * 4;
+            if (cy >= 0 && cy < big.height && cx >= 0 && cx < big.width && big.rgba[c + 3]) {
+                rgba.set(big.rgba.subarray(c, c + 3), o);
+            } else {
+                rgba[o] = r / n;
+                rgba[o + 1] = g / n;
+                rgba[o + 2] = b / n;
+            }
+            rgba[o + 3] = 255;
+        }
+    }
+    return { width, height, rgba, originX: (big.originX + padX) / s, originY: (big.originY + padY) / s };
+}
+
+function drawVoxelsAt(parts: VoxelPartInput[], facing: number, tw: number, th: number, palette: Uint8Array): VoxelPicture | null {
+    // Heading and left in map cell space: north is -ry (up and right on the screen), east +rx (down and
+    // right). A train facing 0 runs along a track that runs along ry; one facing 64 along rx.
     const angle = (facing / 256) * Math.PI * 2;
-    const north = [-Math.SQRT1_2, -Math.SQRT1_2];
-    const east = [Math.SQRT1_2, -Math.SQRT1_2];
+    const north = [0, -1];
+    const east = [1, 0];
     const ahead = [Math.cos(angle) * north[0] + Math.sin(angle) * east[0], Math.cos(angle) * north[1] + Math.sin(angle) * east[1]];
     const left = [Math.sin(angle) * north[0] - Math.cos(angle) * east[0], Math.sin(angle) * north[1] - Math.cos(angle) * east[1]];
 
     type Point = { sx: number; sy: number; depth: number; color: number; light: number };
     const points: Point[] = [];
-    for (const { vxl, hva, forward } of parts) {
+    for (const { vxl, hva, forward, up = 0, right = 0 } of parts) {
         vxl.limbs.forEach((limb, li) => {
             const [sx, sy, sz] = limb.size;
             const normals = normalTable(limb.normals);
@@ -64,7 +123,7 @@ export function drawVoxels(parts: VoxelPartInput[], facing: number, tw: number, 
                     for (let x = 0; x < sx; x++) {
                         const color = limb.colors[x + sx * (y + sy * z)];
                         if (!color) continue;
-                        const [px, py, pz] = transform([limb.min[0] + (x + 0.5) * scale[0] + forward, limb.min[1] + (y + 0.5) * scale[1], limb.min[2] + (z + 0.5) * scale[2]]);
+                        const [px, py, pz] = transform([limb.min[0] + (x + 0.5) * scale[0] + forward, limb.min[1] + (y + 0.5) * scale[1] - right, limb.min[2] + (z + 0.5) * scale[2]]);
                         // The voxel's normal, turned by its limb's animation and the unit's facing, against the light.
                         let light = 1;
                         const ni = limb.normalIndexes[x + sx * (y + sy * z)] * 3;
@@ -79,7 +138,7 @@ export function drawVoxels(parts: VoxelPartInput[], facing: number, tw: number, 
                         // Model x is ahead, y to the left, z up; into cells, then onto the screen.
                         const rx = (px * ahead[0] + py * left[0]) / VOXELS_PER_CELL;
                         const ry = (px * ahead[1] + py * left[1]) / VOXELS_PER_CELL;
-                        const h = pz / VOXELS_PER_CELL;
+                        const h = (pz + up) / VOXELS_PER_CELL;
                         points.push({ sx: ((rx - ry) * tw) / 2, sy: ((rx + ry) * th) / 2 - h * th * HEIGHT_SCALE, depth: rx + ry + h, color, light });
                     }
                 }

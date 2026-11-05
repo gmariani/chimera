@@ -298,8 +298,33 @@ function ImagesPreview({
 }
 
 /** A true-color picture: no palette to pick, just zoom and save. */
+/** Dragging with the left button scrolls the element: grab and pan a picture bigger than its stage. */
+function useDragPan<T extends HTMLElement>() {
+    const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+    return {
+        onPointerDown: (e: React.PointerEvent<T>) => {
+            const el = e.currentTarget;
+            if (e.button !== 0 || (el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight)) return;
+            drag.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
+            el.setPointerCapture(e.pointerId);
+            el.classList.add('is-panning');
+            e.preventDefault();
+        },
+        onPointerMove: (e: React.PointerEvent<T>) => {
+            if (!drag.current) return;
+            e.currentTarget.scrollLeft = drag.current.left - (e.clientX - drag.current.x);
+            e.currentTarget.scrollTop = drag.current.top - (e.clientY - drag.current.y);
+        },
+        onPointerUp: (e: React.PointerEvent<T>) => {
+            drag.current = null;
+            e.currentTarget.classList.remove('is-panning');
+        },
+    };
+}
+
 function PicturePreview({ width, height, rgba, fileName }: { width: number; height: number; rgba: Uint8Array; fileName: string }) {
     const canvas = useRef<HTMLCanvasElement>(null);
+    const pan = useDragPan<HTMLDivElement>();
     // Big pictures (whole maps) start fitted to the page.
     const [zoom, setZoom] = useState<number | 'fit'>(width > 900 ? 'fit' : width <= 160 ? 2 : 1);
 
@@ -308,13 +333,14 @@ function PicturePreview({ width, height, rgba, fileName }: { width: number; heig
         if (!el) return;
         el.width = width;
         el.height = height;
-        el.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(rgba), width, height), 0, 0);
+        // A view of the same pixels, not a copy: a whole map can be hundreds of megabytes.
+        el.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer as ArrayBuffer, rgba.byteOffset, width * height * 4), width, height), 0, 0);
     }, [width, height, rgba]);
 
     return (
         <div className="row g-4">
             <div className="col-lg-8">
-                <div className="image-stage">
+                <div className={`image-stage ${zoom === 'fit' ? '' : 'image-stage--pannable'}`} {...pan} onPointerCancel={pan.onPointerUp}>
                     <canvas ref={canvas} className="image-canvas" style={zoom === 'fit' ? { width: '100%' } : { width: `calc(${zoom} * var(--w))`, ['--w' as string]: `${width}px` }} />
                 </div>
             </div>

@@ -1,4 +1,5 @@
 import type { Companion, Preview } from '../../core/types';
+import { Bytes } from '../../core/bytes';
 import { Ini } from '../ini-sections';
 import type { Links } from '../links';
 import { lcw, lzo1x } from './compression';
@@ -62,11 +63,14 @@ export interface IsoObject {
     sub: number;
     /** Out of 256. */
     health: number;
+    /** A building's upgrades by slot (a Component Tower's gun), "" where there's none. */
+    upgrades?: string[];
 }
 
 /**
  * Objects in a TS or RA2 map: "House,Type,Health,X,Y,Facing,…" for buildings,
  * vehicles and aircraft; infantry put a sub-cell before their mission and facing.
+ * A building's 13th to 15th values are its upgrades, or None.
  */
 function readObjects(ini: Ini): IsoObject[] {
     const out: IsoObject[] = [];
@@ -76,7 +80,8 @@ function readObjects(ini: Ini): IsoObject[] {
             const v = value.split(',').map((x) => x.trim());
             const [rx, ry] = [Number(v[3]), Number(v[4])];
             if (!Number.isInteger(rx) || !Number.isInteger(ry)) continue;
-            out.push({ kind, house: v[0], type: (v[1] ?? '').toUpperCase(), rx, ry, facing: Number(kind === 'infantry' ? v[7] : v[5]) || 0, sub: kind === 'infantry' ? Number(v[5]) || 0 : 0, health: Number(v[2]) || 256 });
+            const upgrades = kind === 'building' ? v.slice(12, 15).map((u) => (/^none$/i.test(u) ? '' : u.toUpperCase())) : [];
+            out.push({ kind, house: v[0], type: (v[1] ?? '').toUpperCase(), rx, ry, facing: Number(kind === 'infantry' ? v[7] : v[5]) || 0, sub: kind === 'infantry' ? Number(v[5]) || 0 : 0, health: Number(v[2]) || 256, ...(upgrades.some(Boolean) ? { upgrades } : {}) });
         }
     }
     return out;
@@ -154,11 +159,12 @@ const THEATERS: Record<string, { ini: string; ext: string; isoPal: string; pal: 
 type Finder = (name: string) => Companion[];
 
 /**
- * A theater INI's tile sets as one list: tile number → the set's file name stem
- * and the tile's number in it. "Marble Madness" sets (NonMarbleMadness=N) are
- * the map editor's; the game draws the same tile from set N instead.
+ * A theater INI's tile sets as one list: tile number → the set's file name stem,
+ * the tile's number in it, and the set's name (its section of tile animations).
+ * "Marble Madness" sets (NonMarbleMadness=N) are the map editor's; the game
+ * draws the same tile from set N instead.
  */
-function tileFiles(ini: Ini): { stem: string; n: number }[] {
+function tileFiles(ini: Ini): { stem: string; n: number; set: string }[] {
     const sets = ini.sections
         .map((s) => ({ s, number: Number(s.name.match(/^TileSet(\d+)$/i)?.[1]) }))
         .filter((x) => Number.isInteger(x.number))
@@ -166,12 +172,12 @@ function tileFiles(ini: Ini): { stem: string; n: number }[] {
         .map(({ s, number }) => {
             const get = (k: string) => s.entries.find((e) => e.key.toLowerCase() === k.toLowerCase())?.value;
             const plain = Number(get('NonMarbleMadness') ?? -1);
-            return { number, stem: (get('FileName') ?? '').toLowerCase(), count: Number(get('TilesInSet') ?? 0), plain };
+            return { number, stem: (get('FileName') ?? '').toLowerCase(), count: Number(get('TilesInSet') ?? 0), plain, name: get('SetName') ?? '' };
         });
-    const out: { stem: string; n: number }[] = [];
+    const out: { stem: string; n: number; set: string }[] = [];
     for (const set of sets) {
         const game = set.plain >= 0 ? sets.find((x) => x.number === set.plain) : undefined;
-        for (let n = 1; n <= set.count; n++) out.push(game ? { stem: game.stem, n: Math.min(n, game.count) } : { stem: set.stem, n });
+        for (let n = 1; n <= set.count; n++) out.push(game ? { stem: game.stem, n: Math.min(n, game.count), set: game.name } : { stem: set.stem, n, set: set.name });
     }
     return out;
 }
@@ -325,7 +331,42 @@ class Canvas {
     }
 }
 
-const MAX_SIDE = 4096;
+/**
+ * The most a map is drawn at full scale: 64 million pixels, at most 16384 on a side (as far as browsers
+ * draw a canvas). Past that it keeps every 2nd (or 3rd...) pixel.
+ */
+const MAX_PIXELS = 64 * 1024 * 1024;
+const MAX_SIDE = 16384;
+/**
+ * Which of a sprite's n facing frames shows a facing (0–255, clockwise from north). The frames start
+ * straight up the screen, which is northwest: north is up and to the right (-ry). Infantry and
+ * defenses' turrets go counterclockwise, so facing 0 is frame 7 of 8; vehicle sprites (the Titan's legs
+ * and torso, the Wolverine) go clockwise, so it's frame 1.
+ */
+function facingFrame(facing: number, n: number, clockwise = false): number {
+    const step = Math.round((facing / 256) * n) + Math.round(n / 8);
+    return (((clockwise ? step : -step) % n) + n) % n;
+}
+/**
+ * Pixels to move a voxel turret down from TurretAnimY, set by eye against the game, as the mission
+ * editor keeps its own table for RA2. TS's laser turret sits on top of its housing; by its numbers alone
+ * it would sit at the foot.
+ */
+const TURRET_NUDGE: Record<string, number> = { NALASR: -20 };
+
+/**
+ * Where a barrel modeled around its pivot sits on its turret: forward, right and up, 1024 to a cell, from
+ * OpenRA's TS rules (WithVoxelBarrel). The model files don't say, and the mission editor has no barrel here.
+ * The Titan's barrel keeps the height its animation file gives it: OpenRA's 256 more put it above the torso.
+ */
+const BARREL_PLACES: Record<string, [number, number, number]> = { ttnkbarl: [181, 0, 362], mmchbarl: [0, 51, 0] };
+
+/** A barrel's voxel model, placed on its turret by BARREL_PLACES. */
+function barrelPart(name: string, found: { vxl: Vxl; hva: Hva | null } | null): VoxelPartInput | null {
+    if (!found) return null;
+    const [forward, right, up] = (BARREL_PLACES[name] ?? [0, 0, 0]).map((n) => (n * VOXELS_PER_CELL) / 1024);
+    return { ...found, forward, right, up };
+}
 /** Theaters' letters and extensions, in the order the mission editor tries them after the map's own. */
 const THEATER_LETTERS = ['g', 't', 'a', 'u', 'n', 'd', 'l'];
 const THEATER_EXTENSIONS = ['tem', 'sno', 'urb', 'lun', 'des', 'ubn'];
@@ -340,6 +381,8 @@ const CENTERED_OVERLAYS: [number, number][] = [
 const VEINHOLE = 0xa7;
 /** How many levels a high bridge's deck stands above the ground under it. */
 const BRIDGE_LEVELS = 4;
+/** How far forward a tile animation sorts: past the rest of its tile (a tunnel's floor spans 3×4 cells). */
+const TILE_ANIM_LEVELS = 6;
 
 export interface IsoRender {
     image: { width: number; height: number; rgba: Uint8Array };
@@ -370,7 +413,8 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     // The theater INI (Yuri's Revenge has its own), its palettes, and a first tile to learn the size from.
     const iniNames = yuri ? [`${theater.ini}md.ini`, `${theater.ini}.ini`] : [`${theater.ini}.ini`, `${theater.ini}md.ini`];
     const theaterIni = pick(iniNames, 'Tile list (which file each tile number is)');
-    const files = theaterIni ? tileFiles(Ini.of(theaterIni.data)) : [];
+    const tileIni = theaterIni ? Ini.of(theaterIni.data) : null;
+    const files = tileIni ? tileFiles(tileIni) : [];
     const isoPal = pick([`${theater.isoPal}.pal`, `${theater.isoPal}md.pal`], 'Palette for tiles and trees');
     const objPal = pick([`${theater.pal}.pal`, `${theater.pal}md.pal`], 'Palette for ore and Tiberium');
     const unitPal = pick([`unit${theater.ext}.pal`, `unit${theater.ext}md.pal`], 'Palette for walls');
@@ -384,6 +428,28 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             tiles.set(i, found ? readTile(found.data) : null);
         }
         return tiles.get(i)!;
+    };
+    /**
+     * A sprite drawn over one of a tile's cells: a tunnel's top, a waterfall. The theater INI's section
+     * named after the tile set gives it as TileNNAnim (the sprite, with the theater's extension),
+     * TileNNAttachesTo (which cell), and TileNNXOffset/YOffset (pixels from that cell's center). Like
+     * the mission editor (EA's GPL source), the second frame unless that's a shadow, else the first.
+     */
+    const anims = new Map<number, { cell: number; dx: number; dy: number; width: number; height: number; pixels: Uint8Array } | null>();
+    const tileAnim = (index: number) => {
+        if (!anims.has(index)) {
+            const f = files[index];
+            const key = f ? `Tile${String(f.n).padStart(2, '0')}` : '';
+            const anim = f && tileIni?.get(f.set, `${key}Anim`);
+            const found = anim ? pick([`${anim.toLowerCase()}.${theater.ext}`, `${anim.toLowerCase()}.tem`], 'Tile animation (a tunnel top, a waterfall)') : undefined;
+            const shp = found && sniffShpTs(found.data) ? decodeShpTs(found.data) : null;
+            // A frame header's 4 bytes at 12 are 0 for a shadow frame.
+            const second = shp && shp.frames.length > 1 && new Bytes(found!.data).u32(8 + 24 + 12) !== 0;
+            const frame = shp?.frames[second ? 1 : 0];
+            const get = (k: string) => Number(tileIni!.get(f!.set, `${key}${k}`) ?? 0) || 0;
+            anims.set(index, shp && frame ? { cell: get('AttachesTo'), dx: get('XOffset'), dy: get('YOffset'), width: shp.width, height: shp.height, pixels: frame.pixels } : null);
+        }
+        return anims.get(index)!;
     };
     const first = files.length ? tile(0) : null;
     const real = !!(first && isoPal);
@@ -408,7 +474,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const top = Math.min(...ys) - pad * 2;
     const fullW = Math.max(...xs) + tw + pad - left;
     const fullH = Math.max(...ys) + th + pad - top;
-    const step = Math.max(1, Math.ceil(Math.max(fullW, fullH) / MAX_SIDE));
+    const step = Math.max(1, Math.ceil(Math.max(fullW / MAX_SIDE, fullH / MAX_SIDE, Math.sqrt((fullW * fullH) / MAX_PIXELS))));
     const canvas = new Canvas(left, top, fullW, fullH, step);
     const levels = new Map<number, number>();
     for (const c of cells) levels.set(c.ry * 1024 + c.rx, c.level);
@@ -417,8 +483,25 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     // so the ground in front trims them, then what's left of them again in depth order with the objects,
     // so a cliff hides what's behind it.
     const raised: { rx: number; ry: number; owner: number; draw: () => void }[] = [];
+    const animated: { rx: number; ry: number; up: number; draw: () => void }[] = [];
     const flat = new Uint8Array(768);
     const diamond = unpackDiamond(new Uint8Array((tw * th) / 2).fill(1), tw, th);
+    // A cell lower than all four of its neighbors (a flat tile a level down, as nod12a has at 90,80) leaves
+    // a gap where its diamond would meet theirs. Its tile goes first at their level, under everything,
+    // so it shows only in that gap; the cell itself is still drawn at its own level.
+    if (real) {
+        const at = new Map(cells.map((c) => [c.ry * 1024 + c.rx, c.level]));
+        for (const c of cells) {
+            const around = [at.get((c.ry - 1) * 1024 + c.rx), at.get(c.ry * 1024 + c.rx + 1), at.get((c.ry + 1) * 1024 + c.rx), at.get(c.ry * 1024 + c.rx - 1)];
+            if (around.some((l) => l === undefined || l <= c.level)) continue;
+            const level = Math.min(...(around as number[]));
+            const cell = tile((c.tile & 0xffff) === 0xffff ? 0 : c.tile)?.cells[c.sub];
+            if (!cell) continue;
+            const [x, y] = place({ ...c, level });
+            canvas.ground = { depth: c.rx + c.ry, level };
+            canvas.draw(cell.diamond, tw, th, x, y, isoPalette);
+        }
+    }
     for (const c of cells) {
         const [x, y] = place(c);
         if (real) {
@@ -434,6 +517,12 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 canvas.ground = { depth: c.rx + c.ry, level: c.level, owner };
                 draw();
                 raised.push({ rx: c.rx, ry: c.ry, owner, draw });
+            }
+            // A tile animation goes over all the ground, its whole tile included, so it's drawn whole with the objects.
+            const anim = tileAnim((c.tile & 0xffff) === 0xffff ? 0 : c.tile);
+            if (anim && anim.cell === c.sub) {
+                const [ax, ay] = [x + tw / 2 - anim.width / 2 + anim.dx, y + th / 2 - anim.height / 2 + anim.dy];
+                animated.push({ rx: c.rx, ry: c.ry, up: TILE_ANIM_LEVELS, draw: () => canvas.draw(anim.pixels, anim.width, anim.height, ax, ay, isoPalette) });
             }
         } else {
             const k = Math.min(c.level, 14) / 14;
@@ -554,6 +643,9 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const overlayPalette = (name: string) => {
         if (yes(rulesIni?.get(name, 'Tiberium'))) return tiberiumPalette(name);
         if (yes(rulesIni?.get(name, 'IsVeins')) || yes(rulesIni?.get(name, 'IsVeinholeMonster')) || /^VEINHOLE/i.test(name)) return tw === 48 ? unitPalette : objPalette;
+        // TS's props (crates, pallets, drums) are plain .shp files but drawn in the terrain palette: the mission
+        // editor forces it for CRAT only, which leaves its pallets red and white. Only walls take the unit palette.
+        if (tw === 48 && !yes(rulesIni?.get(name, 'Wall'))) return isoPalette;
         if (/^CRAT/i.test(name)) return isoPalette;
         return fromFile(name);
     };
@@ -621,7 +713,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     // Raised ground first, so at the same depth an object stands in front of it (the sort keeps order).
     // `up`: levels above its cell, which bring it forward (a high bridge's deck is over what's under it).
     // `owner`: raised ground, drawn again only where it showed.
-    const objects: { rx: number; ry: number; up?: number; owner?: number; draw: () => void }[] = [...raised];
+    const objects: { rx: number; ry: number; up?: number; owner?: number; draw: () => void }[] = [...raised, ...animated];
     if (map.overlays) {
         for (let i = 0; i < map.overlays.length; i++) {
             const id = map.overlays[i];
@@ -637,12 +729,39 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     }
     for (const [rx, ry, name] of map.terrain) objects.push({ rx, ry, draw: () => (real ? drawSprite(rx, ry, name, 0, terrainPalette(name), true) : mark(rx, ry, MARK.tree)) });
 
-    for (const o of map.objects) {
+    // Laser fences. Most maps place only the posts, and the game links each to the next of its house in
+    // line: posts 3 to 5 cells apart get sections between them, while 6 or more is left open (the gaps
+    // missions leave for a road). A map that has its sections already (gdi9c) keeps them.
+    const isPost = (o: (typeof map.objects)[number]) => o.kind === 'building' && yes(rulesIni?.get(o.type, 'LaserFencePost'));
+    const isSection = (o: (typeof map.objects)[number]) => o.kind === 'building' && yes(rulesIni?.get(o.type, 'LaserFence'));
+    const sectionType = rulesIni?.entries('BuildingTypes').map(([, v]) => v.trim()).find((t) => yes(rulesIni?.get(t, 'LaserFence')));
+    const objectsHere = new Map<number, (typeof map.objects)[number]>();
+    for (const o of map.objects) if (o.kind === 'building') objectsHere.set(o.ry * 1024 + o.rx, o);
+    const sections: (typeof map.objects)[number][] = [];
+    for (const post of sectionType ? map.objects.filter(isPost) : []) {
+        for (const [dx, dy] of [[1, 0], [0, 1]]) {
+            let n = 1;
+            while (n <= 5 && !objectsHere.has((post.ry + dy * n) * 1024 + post.rx + dx * n)) n++;
+            const other = objectsHere.get((post.ry + dy * n) * 1024 + post.rx + dx * n);
+            if (n < 2 || n > 5 || !other || !isPost(other) || other.house !== post.house) continue;
+            for (let k = 1; k < n; k++) sections.push({ ...post, type: sectionType!, rx: post.rx + dx * k, ry: post.ry + dy * k });
+        }
+    }
+    const allObjects = [...map.objects, ...sections];
+    // Laser fence posts and sections, by cell: a section's beams run toward its neighbors.
+    const fence = new Set(allObjects.filter((o) => isPost(o) || isSection(o)).map((o) => o.ry * 1024 + o.rx));
+    // Firestorm wall sections join their neighbors like walls: frame = 1 north (-ry) + 2 east + 4 south + 8 west.
+    const firestorm = new Set(allObjects.filter((o) => o.kind === 'building' && yes(rulesIni?.get(o.type, 'FirestormWall'))).map((o) => o.ry * 1024 + o.rx));
+    const firestormFrame = (rx: number, ry: number) =>
+        (firestorm.has((ry - 1) * 1024 + rx) ? 1 : 0) | (firestorm.has(ry * 1024 + rx + 1) ? 2 : 0) | (firestorm.has((ry + 1) * 1024 + rx) ? 4 : 0) | (firestorm.has(ry * 1024 + rx - 1) ? 8 : 0);
+    for (const o of allObjects) {
         if (!real) {
             objects.push({ rx: o.rx, ry: o.ry, draw: () => mark(o.rx, o.ry, MARK[o.kind === 'building' ? 'building' : 'unit']) });
             continue;
         }
         const img = image(o.type);
+        // Invisible light posts and the like light the map but aren't seen.
+        if (yes(rulesIni?.get(o.type, 'InvisibleInGame'))) continue;
         if (o.kind === 'building') {
             // Its foundation slab (bib), the building (damaged at half strength or less), its animated
             // parts, then a defense's turret, each sprite centered on the top corner of the building's
@@ -657,37 +776,69 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 if (bibShp) drawFrame(bibShp, 0, cx, cy, palette, false);
                 const shp = spriteFor(o.type, 'Building sprite');
                 // Its frames: whole, damaged (, rubble), then the same again as shadows.
-                if (shp) drawFrame(shp, damaged && shp.frames.length >= 4 ? 1 : 0, cx, cy, palette, true);
-                for (const key of ['ActiveAnim', 'ActiveAnimTwo', 'ActiveAnimThree', 'ActiveAnimFour', 'IdleAnim']) {
+                // A laser fence section, powered: frames 0–3 run along rx, 4–7 along ry, and each set
+                // animates from its last (as OpenRA's TS sequences have it).
+                const section = yes(rulesIni?.get(o.type, 'LaserFence'));
+                const alongRy = fence.has((o.ry - 1) * 1024 + o.rx) || fence.has((o.ry + 1) * 1024 + o.rx);
+                const frame = section ? (alongRy ? 7 : 3) : firestorm.has(o.ry * 1024 + o.rx) ? firestormFrame(o.rx, o.ry) : damaged && shp && shp.frames.length >= 4 ? 1 : 0;
+                if (shp) drawFrame(shp, frame, cx, cy, palette, true);
+                // The mission editor's set: active, idle, special (a silo's fill, a repair depot's arm) and super
+                // (a superweapon's) animations. Production animations play while something's built or repaired (a
+                // construction yard's crane, a repair depot's flashing platform), so like the editor, not at rest.
+                const animKeys = ['ActiveAnim', 'IdleAnim', 'SpecialAnim', 'SuperAnim'].flatMap((k) => ['', 'Two', 'Three', 'Four'].map((n) => k + n)).filter((k) => !/^IdleAnim./.test(k));
+                for (const key of animKeys) {
                     const anim = (damaged && art?.get(img, `${key}Damaged`)) || art?.get(img, key);
                     if (!anim) continue;
                     const animShp = spriteFor(anim.toUpperCase(), 'Building animation sprite');
                     const dx = Number(art?.get(img, `${key}X`) ?? 0);
                     const dy = Number(art?.get(img, `${key}Y`) ?? 0);
+                    // Each animation shows its Start frame (0 unless set). That can differ from the building's own art,
+                    // and is still right: the hospital's (CAHOSP_A) cross loops yellow, orange, red, so it shows yellow
+                    // over a red cross. Left as is on purpose; it's not a palette bug.
                     // An animation in the terrain palette says so; otherwise it's drawn like its building.
                     const animPalette = yes(art?.get(anim, 'TerrainPalette')) ? artPalette(anim, o.house) : palette;
-                    if (animShp) drawFrame(animShp, Number(art?.get(anim, 'Start') ?? 0) || 0, cx + dx, cy + dy, animPalette, false);
+                    // Special animations play on an event (a repair) from their Start, so like the mission editor they
+                    // show frame 0, at rest: the depot's three point into one file, its arm folding out and back.
+                    const start = key.startsWith('SpecialAnim') ? 0 : Number(art?.get(anim, 'Start') ?? 0) || 0;
+                    if (animShp) drawFrame(animShp, start, cx + dx, cy + dy, animPalette, false);
                 }
+                // Upgrades, placed by the building's PowerUpNLocXX/YY as the mission editor does, their art named by
+                // their own art section's Image (GAVULC → GACTWR_B). A gun (Turret=yes, a Component Tower's) turns to
+                // the building's facing among 32; the rest (a power plant's turbine) are animations, at their Start.
+                o.upgrades?.forEach((upgrade, slot) => {
+                    if (!upgrade) return;
+                    const upgradeImg = image(art?.get(image(upgrade), 'Image') ?? image(upgrade));
+                    const upgradeShp = spriteFor(upgradeImg, 'Upgrade sprite');
+                    if (!upgradeShp) return;
+                    const ux = cx + Number(art?.get(img, `PowerUp${slot + 1}LocXX`) ?? 0);
+                    const uy = cy + Number(art?.get(img, `PowerUp${slot + 1}LocYY`) ?? 0);
+                    const gun = yes(rulesIni?.get(upgrade, 'Turret'));
+                    const frame = gun ? facingFrame(o.facing, Math.min(32, upgradeShp.frames.length)) : Number(art?.get(upgradeImg, 'Start') ?? 0) || 0;
+                    drawFrame(upgradeShp, frame, ux, uy, palette, false);
+                });
                 // A defense's turret: a voxel model or a sprite of 32 facings, placed in pixels from the building's center.
                 const turret = /^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'Turret') ?? '') ? rulesIni?.get(o.type, 'TurretAnim') ?? art?.get(img, 'TurretAnim') : undefined;
                 if (!turret) return;
                 const tx = cx + Number(rulesIni?.get(o.type, 'TurretAnimX') ?? 0);
-                const ty = cy + Number(rulesIni?.get(o.type, 'TurretAnimY') ?? 0);
+                const ty = cy + Number(rulesIni?.get(o.type, 'TurretAnimY') ?? 0) + (TURRET_NUDGE[o.type] ?? 0);
                 if (/^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'TurretAnimIsVoxel') ?? '')) {
                     const key = `${turret}:${o.facing}:${o.house}`;
                     if (!voxelPictures.has(key)) {
                         const parts: VoxelPartInput[] = [];
-                        for (const [file, role] of [[turret.toLowerCase(), 'Defense turret model'], [`${turret.toLowerCase()}barl`, 'Defense barrel model']]) {
-                            const m = model(file, role);
-                            if (m) parts.push({ ...m, forward: 0 });
-                        }
+                        const name = turret.toLowerCase();
+                        const turretModel = model(name, 'Defense turret model');
+                        if (turretModel) parts.push({ ...turretModel, forward: 0 });
+                        // The barrel goes by the turret's name with "barl" for "tur": the Tick Tank's TTNKTUR, ttnkbarl.
+                        const barrel = name.endsWith('tur') ? `${name.slice(0, -3)}barl` : `${name}barl`;
+                        const barrelModel = barrelPart(barrel, model(barrel, 'Defense barrel model'));
+                        if (barrelModel) parts.push(barrelModel);
                         voxelPictures.set(key, parts.length ? drawVoxels(parts, o.facing, tw, th, palette) : null);
                     }
                     const picture = voxelPictures.get(key);
                     if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(tx - picture.originX), Math.round(ty - picture.originY));
                 } else {
                     const turretShp = spriteFor(turret.toUpperCase(), 'Defense turret sprite');
-                    if (turretShp) drawFrame(turretShp, Math.round(((256 - o.facing) % 256) / 8) % 32, tx, ty, palette, false);
+                    if (turretShp) drawFrame(turretShp, facingFrame(o.facing, 32), tx, ty, palette, false);
                 }
             } });
             continue;
@@ -699,7 +850,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 if (!shp) return;
                 const [cx, cy] = point(o.rx + sx / 256, o.ry + sy / 256);
                 // Standing still, facing one of 8 ways, counterclockwise from north.
-                drawFrame(shp, (8 - Math.round(o.facing / 32)) % 8, cx, cy, artPalette(img, o.house), true);
+                drawFrame(shp, facingFrame(o.facing, 8), cx, cy, artPalette(img, o.house), true);
             } });
             continue;
         }
@@ -708,9 +859,33 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             const [cx, cy] = point(o.rx + 0.5, o.ry + 0.5);
             const palette = teamPaletteFor(o.house, unitPalette);
             const voxel = /^(yes|true|1)$/i.test(art?.get(img, 'Voxel') ?? rulesIni?.get(o.type, 'Voxel') ?? '');
+            // A turret and barrel only with Turret=yes, as in FinalSun: the Tick Tank's body has its turret
+            // built in, and its tur/barl models are for when it deploys.
+            const turreted = /^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'Turret') ?? '');
             if (!voxel) {
                 const shp = spriteFor(o.type, 'Vehicle sprite');
-                if (shp) drawFrame(shp, Math.round(((256 - o.facing) % 256) / 8) % Math.max(1, shp.frames.length >> 1), cx, cy, palette, true);
+                if (!shp) return;
+                // A walker has WalkFrames for each of its 8 facings; an animation like the Visceroid's has one facing.
+                const half = shp.frames.length >> 1;
+                const walk = Number(art?.get(img, 'WalkFrames') ?? 0) || 1;
+                // Where the walks start (the mission editor's StartWalkFrame); the turret and standing frames follow them.
+                const start = Number(art?.get(img, 'StartWalkFrame') ?? 0) || 0;
+                const facings = Number(art?.get(img, 'Facings') ?? 0) || (half % 8 === 0 && half >= 8 * walk ? 8 : 1);
+                const dir = facingFrame(o.facing, facings, true);
+                // Standing still: a walker without a turret has a standing frame per facing after its walks (the
+                // Wolverine); otherwise it stands on the first frame of each walk.
+                const standing = !turreted && walk > 1 && half >= start + facings * (walk + 1);
+                drawFrame(shp, start + (standing ? facings * walk + dir : dir * walk), cx, cy, palette, true);
+                // The Titan's torso: 32 facings after its walks, and a voxel barrel on it.
+                if (!turreted || half < start + facings * walk + 32) return;
+                drawFrame(shp, start + facings * walk + facingFrame(o.facing, 32, true), cx, cy, palette, true);
+                const key = `${img}barl:${o.facing}:${o.house}`;
+                if (!voxelPictures.has(key)) {
+                    const barrel = barrelPart(`${img.toLowerCase()}barl`, model(`${img.toLowerCase()}barl`, 'Barrel model'));
+                    voxelPictures.set(key, barrel ? drawVoxels([barrel], o.facing, tw, th, palette) : null);
+                }
+                const picture = voxelPictures.get(key);
+                if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(cx - picture.originX), Math.round(cy - picture.originY));
                 return;
             }
             const key = `${img}:${o.facing}:${o.house}`;
@@ -720,7 +895,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 if (body) parts.push({ ...body, forward: 0 });
                 // TurretOffset is in leptons, 256 to a cell.
                 const offset = (Number(art?.get(img, 'TurretOffset') ?? 0) * VOXELS_PER_CELL) / 256;
-                for (const part of ['tur', 'barl']) {
+                for (const part of turreted ? ['tur', 'barl'] : []) {
                     const extra = model(`${img.toLowerCase()}${part}`, part === 'tur' ? 'Turret model' : 'Barrel model');
                     if (extra) parts.push({ ...extra, forward: offset });
                 }
