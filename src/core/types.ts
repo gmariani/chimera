@@ -99,6 +99,8 @@ export type Preview =
           legend?: { label: string; index: number }[];
           /** The palette entries the game recolors for the owner's team, first and last. */
           remap?: [number, number];
+          /** A switch for something drawn over the pictures, on in `frames` (a multiplayer map's start positions): the pictures without it are made when it's turned off. */
+          toggle?: { label: string; off(): IndexedImage[] };
       }
     | { kind: 'palette'; /** 256 colors as 8-bit RGB. */ colors: Uint8Array }
     /** A true-color picture. */

@@ -211,21 +211,22 @@ describe('vortex frames', () => {
     });
 });
 
+// A TD CLEAR1 with a single 24 × 24 tile of one color (the real one has 16 variants).
+function tileSet(color: number): Uint8Array {
+    const size = 32 + 576 + 1 + 1;
+    return bytes(size, (v, b) => {
+        v.setUint16(0, 24, true);
+        v.setUint16(2, 24, true);
+        v.setUint16(4, 1, true);
+        v.setUint32(8, size, true);
+        v.setUint32(12, 32, true);
+        v.setUint32(24, 32 + 576 + 1, true);
+        v.setUint32(28, 32 + 576, true);
+        b.fill(color, 32, 32 + 576);
+    });
+}
+
 describe('maps with real tiles', () => {
-    // A TD CLEAR1 with a single 24 × 24 tile of one color (the real one has 16 variants).
-    function tileSet(color: number): Uint8Array {
-        const size = 32 + 576 + 1 + 1;
-        return bytes(size, (v, b) => {
-            v.setUint16(0, 24, true);
-            v.setUint16(2, 24, true);
-            v.setUint16(4, 1, true);
-            v.setUint32(8, size, true);
-            v.setUint32(12, 32, true);
-            v.setUint32(24, 32 + 576 + 1, true);
-            v.setUint32(28, 32 + 576, true);
-            b.fill(color, 32, 32 + 576);
-        });
-    }
 
     it('draws a TD mission from its .bin and the theater\'s tiles', () => {
         const bin = new Uint8Array(8192).fill(0xff);
@@ -258,5 +259,22 @@ describe('objects on TD and RA maps', () => {
         const parsed = ini.parse(new TextEncoder().encode(text), { name: 'scg01ea.ini', names: [], find: (n) => (files[n] ? [{ data: files[n], source: 'X.MIX' }] : []) });
         expect(parsed.summary).toContainEqual(['Building', '1 cells']);
         expect(parsed.summary).toContainEqual(['Unit or infantry', '2 cells']);
+    });
+
+    it('numbers where players start on a multiplayer map, and not on a mission', () => {
+        const bin = new Uint8Array(8192).fill(0xff);
+        // Index 1 white, 2 near black: the badge's border and its dark square.
+        const pal = new Uint8Array(768);
+        pal.set([63, 63, 63, 2, 2, 2], 3);
+        const files: Record<string, Uint8Array> = { 'scm01ea.bin': bin, 'clear1.des': tileSet(7), 'desert.pal': pal };
+        const find = (n: string) => (files[n] ? [{ data: files[n], source: 'X.MIX' }] : []);
+        const drawn = (extra: string) => {
+            const text = `[MAP]\nTheater=DESERT\nX=0\nY=0\nWidth=4\nHeight=4\n[Waypoints]\n0=65\n${extra}`;
+            const preview = ini.parse(new TextEncoder().encode(text), { name: 'scm01ea.ini', names: [], find }).preview;
+            if (preview?.kind !== 'stack') throw new Error('expected a stack');
+            return images(preview.items[0].preview).frames[0].pixels;
+        };
+        expect(drawn('').includes(1) && drawn('').includes(2)).toBe(true);
+        expect(drawn('[UNITS]\n0=BadGuy,MTNK,256,130,64,Guard,None\n').includes(2)).toBe(false);
     });
 });

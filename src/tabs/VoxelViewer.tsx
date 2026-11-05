@@ -3,7 +3,7 @@ import { Button, ButtonGroup, Form } from 'react-bootstrap';
 import type { VoxelPart } from '../core/types';
 import { Muted } from '../components/ui';
 import { download, safeName } from '../lib/download';
-import { usePalettes } from '../lib/palettes';
+import { PaletteSelect, usePalettes } from '../lib/palettes';
 import { TeamColorSelect, useTeamColor } from '../components/TeamColor';
 
 /**
@@ -148,7 +148,7 @@ interface Camera {
 const GAME_VIEW: Camera = { yaw: -Math.PI / 4 - Math.PI / 2, pitch: 0.6, zoom: 1 };
 
 export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: { parts: VoxelPart[]; frameCount: number; ownPalette?: Uint8Array; remap?: [number, number]; fileName: string }) {
-    const { palettes, current, select } = usePalettes();
+    const { current } = usePalettes();
     const [useOwn, setUseOwn] = useState(false);
     const team = useTeamColor(ownPalette && useOwn ? ownPalette : current.colors, remap);
     const palette = team.palette;
@@ -408,13 +408,7 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
                     <Form.Label className="small text-body-secondary mb-1">Palette</Form.Label>
                     {ownPalette && <Form.Check type="switch" id="voxel-own-palette" label="Use the palette in this file" checked={useOwn} onChange={(e) => setUseOwn(e.target.checked)} className="mb-2" />}
                     {!(ownPalette && useOwn) && (
-                        <Form.Select size="sm" value={current.id} onChange={(e) => select(e.target.value)}>
-                            {palettes.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                    {p.label}
-                                </option>
-                            ))}
-                        </Form.Select>
+                        <PaletteSelect />
                     )}
                     <div className="small mt-1">
                         <Muted>The games use the unit palette (unittem.pal, in local.mix).</Muted>

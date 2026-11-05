@@ -94,6 +94,8 @@ const SPRITES = [
     'gold01', 'gold02', 'gold03', 'gold04', 'gem01', 'gem02', 'gem03', 'gem04', 'fpls', 'wwcrate', 'squish', 'road', 'conc',
     't04', 't09', 't18', 'split2', 'split3', 'rock1', 'rock2', 'rock3', 'rock4', 'rock5', 'rock6', 'rock7', 'boxes03', 'boxes04',
     'boxes05', 'boxes06', 'boxes07', 'boxes08', 'boxes09', 'ice02', 'ice03', 'ice04', 'ice05',
+    // Craters, scorch marks and building foundations (SDATA.CPP), one for each theater (cr1.sno)
+    'cr1', 'cr2', 'cr3', 'cr4', 'cr5', 'cr6', 'sc1', 'sc2', 'sc3', 'sc4', 'sc5', 'sc6', 'bib1', 'bib2', 'bib3',
 ];
 
 /** Sidebar build icons are the sprite name plus "icon". */

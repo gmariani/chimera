@@ -1,6 +1,6 @@
 import type { Companion, IndexedImage, Preview } from '../../core/types';
-import type { Ini } from '../ini-sections';
-import type { Links } from '../links';
+import { Ini } from '../ini-sections';
+import { Links } from '../links';
 import { lcw } from './compression';
 import { decodeShp, type Shp } from './shp-frames';
 import { sniffShpTd } from './sniff';
@@ -147,6 +147,10 @@ export interface Mission {
     area?: Area;
     /** The INI's Theater= value. */
     theater?: string;
+    /** Red Alert's mission INI, which the game reads over rules.ini (a mission can change an object's art). */
+    ini?: Ini;
+    /** Waypoints 0–7, where players start on a multiplayer map: [player number, cell]. */
+    starts: [number, number][];
 }
 
 export interface MapObject {
@@ -285,6 +289,17 @@ function playableArea(ini: Ini, size: number): Area | undefined {
 }
 
 /** RA: everything's in the INI. Throws if [MapPack] can't be decoded. */
+/** A map that places nothing but where players start: no units, infantry, buildings or ships. */
+const isMultiplayer = (m: Mission) => !m.objects.some((o) => o.kind !== 'smudge');
+
+/** [Waypoints] 0 to 7: on a multiplayer map, where each player starts (missions use them for their scripts). */
+function startCells(ini: Ini, size: number): [number, number][] {
+    return ini.entries('Waypoints').flatMap(([key, value]) => {
+        const [n, cell] = [Number(key), Number(value)];
+        return Number.isInteger(n) && n >= 0 && n < 8 && Number.isInteger(cell) && cell >= 0 && cell < size * size ? [[n, cell] as [number, number]] : [];
+    });
+}
+
 export function raMission(ini: Ini): Mission {
     const cells = RA_SIZE * RA_SIZE;
     const joined = (name: string) => ini.section(name)!.entries.map((e) => e.value).join('');
@@ -302,6 +317,8 @@ export function raMission(ini: Ini): Mission {
         objects: readObjects(ini, RA_SIZE),
         area: playableArea(ini, RA_SIZE),
         theater: ini.get('Map', 'Theater'),
+        ini,
+        starts: startCells(ini, RA_SIZE),
     };
 }
 
@@ -319,6 +336,7 @@ export function tdMission(bin: Uint8Array, ini: Ini | null): Mission {
         objects: ini ? readObjects(ini, TD_SIZE) : [],
         area: ini ? playableArea(ini, TD_SIZE) : undefined,
         theater: ini?.get('Map', 'Theater'),
+        starts: ini ? startCells(ini, TD_SIZE) : [],
     };
 }
 
@@ -352,6 +370,29 @@ function shadeTable(palette: Uint8Array): Uint8Array {
 
 const identityTable = Uint8Array.from({ length: 256 }, (_, i) => i);
 
+/** The palette's color nearest to this one. */
+function nearest(palette: Uint8Array, [r, g, b]: [number, number, number]): number {
+    let best = 0;
+    let bestDistance = Infinity;
+    for (let i = 1; i < 256; i++) {
+        const d = (palette[i * 3] - r) ** 2 + (palette[i * 3 + 1] - g) ** 2 + (palette[i * 3 + 2] - b) ** 2;
+        if (d < bestDistance) [best, bestDistance] = [i, d];
+    }
+    return best;
+}
+
+/** Player numbers 1 to 8 (for waypoints 0 to 7), 3 × 5. */
+const DIGITS = [
+    ['.#.', '##.', '.#.', '.#.', '###'],
+    ['##.', '..#', '.#.', '#..', '###'],
+    ['##.', '..#', '.#.', '..#', '##.'],
+    ['#.#', '#.#', '###', '..#', '..#'],
+    ['###', '#..', '##.', '..#', '##.'],
+    ['.##', '#..', '###', '#.#', '###'],
+    ['###', '..#', '.#.', '.#.', '.#.'],
+    ['###', '#.#', '###', '#.#', '###'],
+];
+
 export type TileRender =
     | { status: 'drawn'; image: IndexedImage; palette?: Uint8Array; wanted?: string }
     | { status: 'needs'; wanted: string };
@@ -359,7 +400,7 @@ export type TileRender =
 const GAME_NAMES = { td: 'Tiberian Dawn', ra: 'Red Alert' };
 
 /** The map drawn the way the game draws it, from the theater's tile sets and sprites; what it used goes in `links`. */
-export function renderTiles(m: Mission, find: Finder, links: Links): TileRender {
+export function renderTiles(m: Mission, find: Finder, links: Links, { starts = true }: { starts?: boolean } = {}): TileRender {
     const theater = THEATERS[m.game][(m.theater ?? 'TEMPERATE').toUpperCase()];
     if (!theater) return { status: 'needs', wanted: `This map's theater, ${m.theater}, isn't one the app knows how to draw.` };
     const { size, templates, icons, overlays, terrain, area = wholeMap(size) } = m;
@@ -432,6 +473,18 @@ export function renderTiles(m: Mission, find: Finder, links: Links): TileRender 
     // Sprites: theater-specific ones share the tile sets' extension; the rest are plain SHPs.
     const sprites = new Map<string, Shp | null>();
     const conquer = `CONQUER.MIX${m.game === 'ra' ? ', inside MAIN.MIX' : ''}`;
+    // Red Alert keeps its infantry (and civilians) apart from its vehicles and buildings.
+    const infantryIn = m.game === 'ra' ? 'HIRES.MIX, inside REDALERT.MIX' : conquer;
+    // Red Alert's rules.ini, with the mission read over it, can give an object another's art: its
+    // civilians share two sprites (C5 is drawn as C2, C6 as C1).
+    // TS's and RA2's are rules.ini too; Red Alert's is the one with its light tank.
+    const rulesFile = m.game === 'ra' ? find('rules.ini').find((c) => Ini.of(c.data).section('1TNK')) : undefined;
+    if (m.game === 'ra') {
+        if (rulesFile) links.use('rules.ini', rulesFile, 'Rules (which art each object uses; in LOCAL.MIX, inside REDALERT.MIX)');
+        else links.miss('rules.ini', 'Rules (which art each object uses; in LOCAL.MIX, inside REDALERT.MIX)');
+    }
+    const rules = rulesFile ? (m.ini ? Ini.of(rulesFile.data).overriddenBy(m.ini) : Ini.of(rulesFile.data)) : m.ini;
+    const art = (type: string) => (rules?.get(type, 'Image') ?? type).trim().toUpperCase();
     /** The first of these files that's there (theater art, or plain .shp), recorded under the role. */
     const spriteFrom = (name: string, exts: string[], role: string): Shp | null => {
         const key = `${name}:${exts.join(',')}`;
@@ -440,7 +493,10 @@ export function renderTiles(m: Mission, find: Finder, links: Links): TileRender 
             let file = '';
             for (const ext of exts) {
                 file = `${name.toLowerCase()}.${ext}`;
-                const candidates = find(file).filter((c) => sniffShpTd(c.data));
+                // Red Alert has its infantry in both HIRES.MIX and LORES.MIX: the high-resolution one first.
+                const candidates = find(file)
+                    .filter((c) => sniffShpTd(c.data))
+                    .sort((a, b) => Number(/lores\.mix/i.test(a.source)) - Number(/lores\.mix/i.test(b.source)));
                 found = candidates.find((c) => c.source === source) ?? candidates[0];
                 if (found) break;
             }
@@ -493,6 +549,9 @@ export function renderTiles(m: Mission, find: Finder, links: Links): TileRender 
     // Trees, buildings, units and infantry, back to front. Trees and buildings are drawn from their
     // cell's top left; units and infantry are centered on where they stand.
     const standing: { y: number; draw: () => void }[] = [];
+    // Which units, infantry and buildings had no sprite, to say where they are.
+    const unseen = new Set<string>();
+    const unseenInfantry = new Set<string>();
     for (const [cell, name] of terrain) {
         const [x, y] = [cell % size, Math.floor(cell / size)];
         standing.push({ y: y * 256, draw: () => {
@@ -507,7 +566,8 @@ export function renderTiles(m: Mission, find: Finder, links: Links): TileRender 
         const remap = remapFor(o.house);
         if (o.kind === 'building') {
             standing.push({ y: y * 256, draw: () => {
-                const shp = spriteFrom(o.type, [theater.ext, 'shp'], `Building sprite (in ${conquer}, or the theater's)`);
+                const shp = spriteFrom(art(o.type), [theater.ext, 'shp'], `Building sprite (in ${conquer}, or the theater's)`);
+                if (!shp) unseen.add(o.type);
                 const damaged = o.health <= DAMAGED;
                 const frame = !shp ? 0 : TURRET_BUILDINGS.has(o.type) ? bodyFrame(o.facing) + (damaged && shp.frames.length >= 64 ? 32 : 0) : damaged ? shp.frames.length >> 1 : 0;
                 const image = shp?.frames[frame];
@@ -517,8 +577,11 @@ export function renderTiles(m: Mission, find: Finder, links: Links): TileRender 
         }
         const [sx, sy] = o.kind === 'infantry' ? SUB_CELLS[o.sub] ?? SUB_CELLS[0] : SUB_CELLS[0];
         standing.push({ y: y * 256 + sy, draw: () => {
-            const shp = spriteFrom(o.type, ['shp'], o.kind === 'infantry' ? `Infantry sprite (in ${conquer})` : `Unit sprite (in ${conquer})`);
-            if (!shp) return;
+            const shp = spriteFrom(art(o.type), ['shp'], o.kind === 'infantry' ? `Infantry sprite (in ${infantryIn})` : `Unit sprite (in ${conquer})`);
+            if (!shp) {
+                (o.kind === 'infantry' ? unseenInfantry : unseen).add(o.type);
+                return;
+            }
             const dir32 = ((o.facing + 4) >> 3) & 31;
             const frames = o.kind === 'infantry' ? [HUMAN_SHAPE[dir32]] : shp.frames.length >= 32 ? [bodyFrame(o.facing), ...(TURRETED.has(o.type) ? [32 + bodyFrame(o.facing)] : [])] : [Math.floor((bodyFrame(o.facing) * shp.frames.length) / 32)];
             for (const f of frames) {
@@ -532,7 +595,49 @@ export function renderTiles(m: Mission, find: Finder, links: Links): TileRender 
     }
     for (const o of standing.sort((a, b) => a.y - b.y)) o.draw();
 
-    return { status: 'drawn', image: { width, height, pixels }, palette, wanted };
+    // A multiplayer map places nothing but where the players start: each start numbered, as the game's
+    // own map preview does. (Missions use the same waypoints for their scripts, so not on those.)
+    if (starts && isMultiplayer(m)) {
+        const light = palette ? nearest(palette, [240, 240, 240]) : 15;
+        const dark = palette ? nearest(palette, [16, 16, 16]) : 0;
+        for (const [n, cell] of m.starts) {
+            const [x, y] = [cell % size, Math.floor(cell / size)];
+            if (!inArea(x, y)) continue;
+            // Big enough to read on a whole map fitted to the page: a dark disc in a light ring, the number.
+            const [side, scale, border] = [52, 6, 4];
+            const left = (x - area.x) * TILE + TILE / 2 - side / 2;
+            const top = (y - area.y) * TILE + TILE / 2 - side / 2;
+            const badge = new Uint8Array(side * side);
+            for (let j = 0; j < side; j++) {
+                for (let i = 0; i < side; i++) {
+                    const r = Math.hypot(i + 0.5 - side / 2, j + 0.5 - side / 2);
+                    if (r <= side / 2) badge[j * side + i] = r > side / 2 - border ? light : dark;
+                }
+            }
+            const [gx0, gy0] = [(side - 3 * scale) / 2, (side - 5 * scale) / 2];
+            DIGITS[n].forEach((row, gy) => [...row].forEach((c, gx) => {
+                if (c !== '#') return;
+                for (let k = 0; k < scale * scale; k++) badge[(gy0 + gy * scale + Math.floor(k / scale)) * side + gx0 + gx * scale + (k % scale)] = light;
+            }));
+            // Only the disc: the corners outside it (0) leave the map showing.
+            for (let j = 0; j < side; j++) {
+                for (let i = 0; i < side; i++) {
+                    const [px, py] = [left + i, top + j];
+                    if (badge[j * side + i] && px >= 0 && py >= 0 && px < width && py < height) pixels[py * width + px] = badge[j * side + i];
+                }
+            }
+        }
+    }
+
+    const some = (types: Set<string>) => `${[...types].slice(0, 4).join(', ')}${types.size > 4 ? ', …' : ''}`;
+    const notes = [wanted];
+    if (m.game === 'td' && unseen.size + unseenInfantry.size) {
+        notes.push(`The map's units, infantry and buildings (${some(new Set([...unseen, ...unseenInfantry]))}) need their sprites from ${conquer}. Open CONQUER.MIX as well to draw them.`);
+    } else {
+        if (unseen.size) notes.push(`The map's vehicles and buildings (${some(unseen)}) need their sprites from ${conquer}. Open MAIN.MIX as well to draw them.`);
+        if (unseenInfantry.size) notes.push(`Its infantry (${some(unseenInfantry)}) are in ${infantryIn}. Open REDALERT.MIX as well to draw them.`);
+    }
+    return { status: 'drawn', image: { width, height, pixels }, palette, wanted: notes.filter(Boolean).join(' ') || undefined };
 }
 
 /** A mission's map as previews (real tiles when they're available, and terrain kinds), with summary rows. */
@@ -547,10 +652,15 @@ export function missionPreviews(m: Mission, find: Finder | undefined, links: Lin
     const kinds: Preview = { kind: 'images', frames: [image], palette: terrainPalette(), legend };
     const tiles = find ? renderTiles(m, find, links) : null;
     if (tiles?.status !== 'drawn') return { items: [{ title: 'Terrain kinds', preview: kinds }], summary, warnings, wanted: tiles?.wanted };
+    // The start positions can be turned off: the map is drawn again without them.
+    const toggle = isMultiplayer(m) && m.starts.length ? { label: 'Start positions', off: () => {
+        const plain = renderTiles(m, find!, new Links(), { starts: false });
+        return plain.status === 'drawn' ? [plain.image] : [tiles.image];
+    } } : undefined;
     return {
         wanted: tiles.wanted,
         items: [
-            { title: 'Map', preview: { kind: 'images', frames: [tiles.image], palette: tiles.palette } },
+            { title: 'Map', preview: { kind: 'images', frames: [tiles.image], palette: tiles.palette, toggle } },
             { title: 'Terrain kinds', preview: kinds },
         ],
         summary,

@@ -4,7 +4,7 @@ import type { AudioClip, IndexedImage, Preview } from '../core/types';
 import { CodeBlock, Muted, SectionTitle, Tip } from '../components/ui';
 import { download, safeName } from '../lib/download';
 import { findPalettes } from '../lib/palette-sources';
-import { usePalettes } from '../lib/palettes';
+import { PaletteSelect, usePalettes } from '../lib/palettes';
 import { zip } from '../lib/zip';
 import { TablePreview } from './TablePreview';
 import { VoxelViewer } from './VoxelViewer';
@@ -24,6 +24,7 @@ export function PreviewTab({ preview, fileName, names, onOpenName }: { preview: 
                     columns={preview.columns}
                     legend={preview.legend}
                     remap={preview.remap}
+                    toggle={preview.toggle}
                     fileName={fileName}
                     names={names}
                 />
@@ -85,6 +86,31 @@ function toImageData(image: IndexedImage, { palette, transparentIndex, shadowInd
 /** How many frames to a row on a sheet: as given, or as square as possible. */
 const sheetColumns = (frames: IndexedImage[], columns?: number) => columns ?? Math.ceil(Math.sqrt(frames.length));
 
+/** How big a picture is drawn: fitted to the stage, or a whole multiple of its pixels. */
+type Zoom = number | 'fit';
+const ZOOMS: Zoom[] = ['fit', 1, 2, 3, 4, 6];
+
+/** Big pictures (whole maps) start fitted to the page; small ones (a unit's sprite) enlarged. */
+const initialZoom = (width: number): Zoom => (width > 900 ? 'fit' : width <= 64 ? 4 : width <= 160 ? 2 : 1);
+
+const zoomStyle = (zoom: Zoom, width: number): React.CSSProperties => (zoom === 'fit' ? { width: '100%' } : { width: `calc(${zoom} * var(--w))`, ['--w' as string]: `${width}px` });
+
+/** The same zoom choices for every picture: maps of any game, sprites, tiles. */
+function ZoomButtons({ zoom, onChange }: { zoom: Zoom; onChange: (zoom: Zoom) => void }) {
+    return (
+        <Form.Group className="mb-3">
+            <Form.Label className="small text-body-secondary mb-1">Zoom</Form.Label>
+            <ButtonGroup size="sm" className="d-flex">
+                {ZOOMS.map((z) => (
+                    <Button key={z} variant={zoom === z ? 'primary' : 'outline-light'} onClick={() => onChange(z)}>
+                        {z === 'fit' ? 'Fit' : `${z}×`}
+                    </Button>
+                ))}
+            </ButtonGroup>
+        </Form.Group>
+    );
+}
+
 /** All frames in a grid, as one canvas. */
 function sheet(frames: IndexedImage[], paint: Paint, columnsWanted?: number): HTMLCanvasElement {
     const columns = sheetColumns(frames, columnsWanted);
@@ -109,17 +135,19 @@ function frameCanvas(frame: IndexedImage, paint: Paint): HTMLCanvasElement {
 const png = (canvas: HTMLCanvasElement) => new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not make a PNG.'))), 'image/png'));
 
 function ImagesPreview({
-    frames,
+    frames: framesOn,
     ownPalette,
     transparentIndex,
     shadowIndex,
     columns,
     legend,
     remap,
+    toggle,
     fileName,
     names,
 }: {
     frames: IndexedImage[];
+    toggle?: { label: string; off(): IndexedImage[] };
     ownPalette?: Uint8Array;
     transparentIndex?: number;
     shadowIndex?: number;
@@ -129,7 +157,14 @@ function ImagesPreview({
     fileName: string;
     names: readonly string[];
 }) {
-    const { palettes, current, select, add } = usePalettes();
+    // With the switch off, the pictures without what it draws (made the first time, then kept).
+    const [on, setOn] = useState(true);
+    const off = useMemo(() => {
+        let pictures: IndexedImage[] | null = null;
+        return () => (pictures ??= toggle!.off());
+    }, [toggle]);
+    const frames = on || !toggle ? framesOn : off();
+    const { current, add } = usePalettes();
     const [useOwn, setUseOwn] = useState(true);
     const team = useTeamColor(ownPalette && useOwn ? ownPalette : current.colors, remap);
     const palette = team.palette;
@@ -138,7 +173,8 @@ function ImagesPreview({
     const [playing, setPlaying] = useState(false);
     const [view, setView] = useState<'frame' | 'sheet'>(frames.length > 1 ? 'sheet' : 'frame');
     const width = Math.max(...frames.map((f) => f.width));
-    const [zoom, setZoom] = useState(width <= 64 ? 4 : width <= 160 ? 2 : 1);
+    const [zoom, setZoom] = useState<Zoom>(initialZoom(width));
+    const pan = useDragPan<HTMLDivElement>();
     const [busy, setBusy] = useState(false);
     const [noPalettesIn, setNoPalettesIn] = useState<string | null>(null);
     const canvas = useRef<HTMLCanvasElement>(null);
@@ -196,8 +232,8 @@ function ImagesPreview({
     return (
         <div className="row g-4">
             <div className="col-lg-8">
-                <div className="image-stage">
-                    <canvas ref={canvas} className={`image-canvas ${view === 'sheet' ? 'image-canvas--sheet' : ''}`} style={{ width: `calc(${zoom} * var(--w))`, ['--w' as string]: `${(view === 'sheet' ? sheetCanvas?.width : frames[frame].width) ?? 0}px` }} onClick={clickSheet} />
+                <div className={`image-stage ${zoom === 'fit' ? '' : 'image-stage--pannable'}`} {...pan} onPointerCancel={pan.onPointerUp}>
+                    <canvas ref={canvas} className={`image-canvas ${view === 'sheet' ? 'image-canvas--sheet' : ''}`} style={zoomStyle(zoom, (view === 'sheet' ? sheetCanvas?.width : frames[frame].width) ?? 0)} onClick={clickSheet} />
                 </div>
             </div>
             <div className="col-lg-4">
@@ -230,16 +266,8 @@ function ImagesPreview({
                     </div>
                 )}
 
-                <Form.Group className="mb-3">
-                    <Form.Label className="small text-body-secondary mb-1">Zoom</Form.Label>
-                    <ButtonGroup size="sm" className="d-flex">
-                        {[1, 2, 3, 4, 6].map((z) => (
-                            <Button key={z} variant={zoom === z ? 'primary' : 'outline-light'} onClick={() => setZoom(z)}>
-                                {z}×
-                            </Button>
-                        ))}
-                    </ButtonGroup>
-                </Form.Group>
+                <ZoomButtons zoom={zoom} onChange={setZoom} />
+                {toggle && <Form.Check type="switch" id="images-toggle" className="mb-3" label={toggle.label} checked={on} onChange={(e) => setOn(e.target.checked)} />}
 
                 {legend && (
                     <ul className="list-unstyled small mb-3 legend">
@@ -258,13 +286,7 @@ function ImagesPreview({
                     <Form.Label className="small text-body-secondary mb-1">Palette</Form.Label>
                     {ownPalette && <Form.Check type="switch" id="own-palette" label="Use the palette in this file" checked={useOwn} onChange={(e) => setUseOwn(e.target.checked)} className="mb-2" />}
                     {!(ownPalette && useOwn) && (
-                        <Form.Select size="sm" value={current.id} onChange={(e) => select(e.target.value)}>
-                            {palettes.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                    {p.label}
-                                </option>
-                            ))}
-                        </Form.Select>
+                        <PaletteSelect />
                     )}
                     <div className="small mt-1">
                         <Tip label="A .pal file, or a MIX that has palettes in it (TEMPERAT.MIX, or Red Alert's REDALERT.MIX). Palettes in any archive you open are picked up too.">
@@ -297,36 +319,52 @@ function ImagesPreview({
     );
 }
 
-/** Dragging with the left button scrolls the element: grab and pan a picture bigger than its stage. */
+/**
+ * Dragging with the left button scrolls the element: grab and pan a picture bigger than its stage.
+ * It pans once the pointer has moved a few pixels, so a plain click still reaches what's under it
+ * (a frame in a sheet), and the click that ends a drag is swallowed.
+ */
 function useDragPan<T extends HTMLElement>() {
-    const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+    const drag = useRef<{ x: number; y: number; left: number; top: number; moving: boolean } | null>(null);
+    const dragged = useRef(false);
     return {
         onPointerDown: (e: React.PointerEvent<T>) => {
             const el = e.currentTarget;
+            dragged.current = false;
             if (e.button !== 0 || (el.scrollWidth <= el.clientWidth && el.scrollHeight <= el.clientHeight)) return;
-            drag.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
-            el.setPointerCapture(e.pointerId);
-            el.classList.add('is-panning');
+            drag.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop, moving: false };
             e.preventDefault();
         },
         onPointerMove: (e: React.PointerEvent<T>) => {
-            if (!drag.current) return;
-            e.currentTarget.scrollLeft = drag.current.left - (e.clientX - drag.current.x);
-            e.currentTarget.scrollTop = drag.current.top - (e.clientY - drag.current.y);
+            const d = drag.current;
+            if (!d) return;
+            if (!d.moving) {
+                if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 3) return;
+                d.moving = true;
+                e.currentTarget.setPointerCapture(e.pointerId);
+                e.currentTarget.classList.add('is-panning');
+            }
+            e.currentTarget.scrollLeft = d.left - (e.clientX - d.x);
+            e.currentTarget.scrollTop = d.top - (e.clientY - d.y);
         },
         onPointerUp: (e: React.PointerEvent<T>) => {
+            dragged.current = !!drag.current?.moving;
             drag.current = null;
             e.currentTarget.classList.remove('is-panning');
+        },
+        onClickCapture: (e: React.MouseEvent<T>) => {
+            if (!dragged.current) return;
+            dragged.current = false;
+            e.stopPropagation();
         },
     };
 }
 
-/** A true-color picture: no palette to pick, just zoom and save (and a switch, like a map's lighting). */
 function PicturePreview({ width, height, rgba, toggle, fileName }: { width: number; height: number; rgba: Uint8Array; toggle?: { label: string; off(): Uint8Array }; fileName: string }) {
     const canvas = useRef<HTMLCanvasElement>(null);
     const pan = useDragPan<HTMLDivElement>();
     // Big pictures (whole maps) start fitted to the page.
-    const [zoom, setZoom] = useState<number | 'fit'>(width > 900 ? 'fit' : width <= 160 ? 2 : 1);
+    const [zoom, setZoom] = useState<Zoom>(initialZoom(width));
     const [on, setOn] = useState(true);
     // The picture with the switch off is drawn the first time it's wanted, then kept.
     const off = useMemo(() => {
@@ -348,20 +386,11 @@ function PicturePreview({ width, height, rgba, toggle, fileName }: { width: numb
         <div className="row g-4">
             <div className="col-lg-8">
                 <div className={`image-stage ${zoom === 'fit' ? '' : 'image-stage--pannable'}`} {...pan} onPointerCancel={pan.onPointerUp}>
-                    <canvas ref={canvas} className="image-canvas" style={zoom === 'fit' ? { width: '100%' } : { width: `calc(${zoom} * var(--w))`, ['--w' as string]: `${width}px` }} />
+                    <canvas ref={canvas} className="image-canvas" style={zoomStyle(zoom, width)} />
                 </div>
             </div>
             <div className="col-lg-4">
-                <Form.Group className="mb-3">
-                    <Form.Label className="small text-body-secondary mb-1">Zoom</Form.Label>
-                    <ButtonGroup size="sm" className="d-flex">
-                        {(['fit', 1, 2, 3, 4] as const).map((z) => (
-                            <Button key={z} variant={zoom === z ? 'primary' : 'outline-light'} onClick={() => setZoom(z)}>
-                                {z === 'fit' ? 'Fit' : `${z}×`}
-                            </Button>
-                        ))}
-                    </ButtonGroup>
-                </Form.Group>
+                <ZoomButtons zoom={zoom} onChange={setZoom} />
                 {toggle && <Form.Check type="switch" id="picture-toggle" className="mb-3" label={toggle.label} checked={on} onChange={(e) => setOn(e.target.checked)} />}
                 <Button size="sm" variant="outline-light" onClick={async () => canvas.current && download(await png(canvas.current), `${safeName(stem(fileName))}.png`)}>
                     <i className="bi bi-image me-1" /> Save PNG
@@ -432,6 +461,7 @@ function VideoPreview({ preview, fileName }: { preview: Extract<Preview, { kind:
     const [frame, setFrame] = useState(0);
     const [playing, setPlaying] = useState(false);
     const [zoom, setZoom] = useState(width <= 320 ? 2 : 1);
+    const pan = useDragPan<HTMLDivElement>();
     const [busy, setBusy] = useState<string | null>(null);
     const canvas = useRef<HTMLCanvasElement>(null);
     const sound = useRef<HTMLAudioElement>(null);
@@ -511,7 +541,7 @@ function VideoPreview({ preview, fileName }: { preview: Extract<Preview, { kind:
     return (
         <div className="row g-4">
             <div className="col-lg-8">
-                <div className="image-stage">
+                <div className="image-stage image-stage--pannable" {...pan} onPointerCancel={pan.onPointerUp}>
                     <canvas ref={canvas} width={width} height={height} className="image-canvas" style={{ width: width * zoom }} />
                 </div>
             </div>

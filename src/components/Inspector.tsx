@@ -41,7 +41,7 @@ export function Inspector({
     onShowFiles: () => void;
 }) {
     const library = useLibrary();
-    const { find: findAnywhere, add: addToLibrary } = library;
+    const { find: findAnywhere, add: addToLibrary, idOf } = library;
     const find = useCallback((name: string) => findAnywhere(name, near), [findAnywhere, near]);
     // The user's names and those learned from opened archives' INIs; `names` alone is what the user can edit.
     const allNames = library.names;
@@ -63,15 +63,17 @@ export function Inspector({
     useEffect(() => {
         if (state.status !== 'ready' || state.format.id !== 'mix') return;
         let canceled = false;
+        // Listed while the file in use they're in is: this one, or the one it was opened from.
+        const owner = near ? near.split(' › ')[0] : idOf(file.data) ?? file.name;
         void findPalettes(file.name, file.data, allNames).then((found) => {
             if (canceled || !found.length) return;
             const best = preferred(found)!;
-            add([best, ...found.filter((p) => p !== best)], root);
+            add([best, ...found.filter((p) => p !== best)].map((p) => ({ ...p, owner })), root);
         });
         return () => {
             canceled = true;
         };
-    }, [state, file, allNames, add, root]);
+    }, [state, file, allNames, add, root, near, idOf]);
 
     const parsed = state.status === 'ready' ? state.parsed : null;
 

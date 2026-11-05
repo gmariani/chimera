@@ -51,8 +51,8 @@ export function App() {
     };
 
     return (
-        <PaletteProvider>
-            <LibraryProvider names={names}>
+        <LibraryProvider names={names}>
+            <PaletteProvider>
                 <TopBar onNew={current ? () => setTrail([]) : undefined} onShowFiles={() => setShowFiles(true)} />
                 <FilesPanel show={showFiles} onHide={() => setShowFiles(false)} />
                 {current ? (
@@ -79,7 +79,7 @@ export function App() {
                 ) : (
                     <OpenPanel onOpen={(file) => setTrail([file])} />
                 )}
-            </LibraryProvider>
-        </PaletteProvider>
+            </PaletteProvider>
+        </LibraryProvider>
     );
 }

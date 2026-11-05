@@ -44,6 +44,8 @@ interface LibraryState {
     /** Adds a file and what's inside it; resolves to how many files it brought. */
     add(name: string, data: Uint8Array, how?: SessionFile['how']): Promise<number>;
     remove(id: string): void;
+    /** The id of the file in the session with these bytes, if it's there. */
+    idOf(data: Uint8Array): string | undefined;
 }
 
 const LibraryContext = createContext<LibraryState | null>(null);
@@ -121,7 +123,10 @@ export function LibraryProvider({ names: userNames, children }: { names: readonl
 
     const add = useCallback(
         async (name: string, data: Uint8Array, how: SessionFile['how'] = 'added') => {
-            const existing = added.current.get(data);
+            // The same file read from disk again comes as new bytes: one of the same name, size and contents
+            // (at a spread of places, which a different build of an archive wouldn't share) is the one in use.
+            const same = (other: Uint8Array) => other.length === data.length && Array.from({ length: 64 }, (_, i) => Math.floor((i * (data.length - 1)) / 63)).every((at) => other[at] === data[at]);
+            const existing = added.current.get(data) ?? [...added.current].find(([other, id]) => id.replace(/ \(\d+\)$/, '').toLowerCase() === name.toLowerCase() && same(other))?.[1];
             if (existing) {
                 // Opening a file that was added for others makes it an opened one.
                 if (how === 'opened') setSession((s) => s.map((f) => (f.id === existing ? { ...f, how } : f)));
@@ -172,7 +177,9 @@ export function LibraryProvider({ names: userNames, children }: { names: readonl
         return [...list].sort((a, b) => rank(a) - rank(b));
     }, []);
 
-    const value = useMemo(() => ({ names, version, files: session, find, add, remove }), [names, version, session, find, add, remove]);
+    const idOf = useCallback((data: Uint8Array) => added.current.get(data), []);
+
+    const value = useMemo(() => ({ names, version, files: session, find, add, remove, idOf }), [names, version, session, find, add, remove, idOf]);
     return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;
 }
 
