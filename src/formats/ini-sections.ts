@@ -51,4 +51,34 @@ export class Ini {
     entries(section: string): [string, string][] {
         return this.section(section)?.entries.map((e) => [e.key, e.value]) ?? [];
     }
+
+    /**
+     * This INI with another read over it, as TS and RA2 read a map over rules.ini: its keys replace these, its
+     * sections are added. A list of types ([BuildingTypes]) gains the other's entries instead, since the game
+     * registers each value it reads and a map's "0=" isn't rules.ini's "0=".
+     */
+    overriddenBy(other: Ini): Ini {
+        const sections = this.sections.map((s) => ({ ...s, entries: [...s.entries] }));
+        const byName = new Map(sections.map((s) => [s.name.toLowerCase(), s]));
+        for (const s of other.sections) {
+            const mine = byName.get(s.name.toLowerCase());
+            if (!mine) {
+                const copy = { ...s, entries: [...s.entries] };
+                sections.push(copy);
+                byName.set(s.name.toLowerCase(), copy);
+            } else if (/Types$/i.test(s.name)) {
+                const values = new Set(mine.entries.map((e) => e.value.toLowerCase()));
+                mine.entries.push(...s.entries.filter((e) => !values.has(e.value.toLowerCase())).map((e, i) => ({ ...e, key: `+${i}` })));
+            } else {
+                for (const e of s.entries) {
+                    const at = mine.entries.findIndex((m) => m.key.toLowerCase() === e.key.toLowerCase());
+                    if (at >= 0) mine.entries[at] = e;
+                    else mine.entries.push(e);
+                }
+            }
+        }
+        const merged = Object.create(Ini.prototype) as Ini;
+        (merged as { sections: IniSection[] }).sections = sections;
+        return merged;
+    }
 }

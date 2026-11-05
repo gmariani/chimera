@@ -51,6 +51,8 @@ export interface IsoMap {
     preview: { width: number; height: number; rgb: Uint8Array } | null;
     /** [Lighting]: the light everywhere (Ambient less Ground), more each level up (Level), and its tint. */
     lighting: { ambient: number; level: number; tint: [number, number, number] };
+    /** The map's own INI: the game reads it over rules.ini, so a map can add and change object types. */
+    ini: Ini;
 }
 
 export interface IsoObject {
@@ -120,6 +122,18 @@ export function readIsoMap(ini: Ini): IsoMap {
         if (rx === 0 && ry === 0) continue;
         cells.push({ rx, ry, tile: v.getInt32(at + 4, true), sub: raw[at + 8], level: raw[at + 9] });
     }
+    // A cell inside the map that the pack leaves out is clear ground at level 0, as the game and the mission
+    // editor start every cell (hillbtwn has a hole of them in a plaza). Inside, by the editor's test, its x
+    // being our ry and its y our rx.
+    if (cells.length) {
+        const have = new Set(cells.map((c) => c.ry * 1024 + c.rx));
+        for (let rx = 1; rx <= w + h; rx++) {
+            for (let ry = 1; ry <= w + h; ry++) {
+                const outside = rx + ry < w + 1 || rx + ry > w + h * 2 || (rx + 1 > w && ry - 1 < rx - w) || (ry + 1 > w && rx + w - 1 < ry);
+                if (!outside && !have.has(ry * 1024 + rx)) cells.push({ rx, ry, tile: 0xffff, sub: 0, level: 0 });
+            }
+        }
+    }
     const terrain: [number, number, string][] = ini.entries('Terrain').flatMap(([key, value]) => {
         const n = Number(key);
         return Number.isInteger(n) ? [[n % 1000, Math.floor(n / 1000), value.trim().toUpperCase()] as [number, number, string]] : [];
@@ -151,6 +165,7 @@ export function readIsoMap(ini: Ini): IsoMap {
         houseColors,
         preview,
         lighting: { ambient: light('Ambient', 1) - light('Ground', 0), level: light('Level', 0), tint: [light('Red', 1), light('Green', 1), light('Blue', 1)] },
+        ini,
     };
 }
 
@@ -278,6 +293,8 @@ class Canvas {
     only: number | null = null;
     /** What each color channel is multiplied by as it's drawn: the light where it stands, or null for none. */
     light: [number, number, number] | null = null;
+    /** The terrain palettes; in any other, colors 240–254 are lights of their own (windows, beacons) and stay unlit. */
+    readonly terrainPalettes = new Set<Uint8Array>();
     /** Whether pixel i is hidden from the current object, recording the ground there if drawing ground. */
     private covered(i: number): boolean {
         if (this.ground) {
@@ -290,7 +307,8 @@ class Canvas {
         return !!this.object && this.groundDepth[i] > this.object.depth && this.groundLevel[i] >= this.object.level + 2;
     }
     /** Draws indexed pixels (0 transparent) through a palette at x, y in map pixels. */
-    draw(pixels: ArrayLike<number>, w: number, h: number, x: number, y: number, palette: Uint8Array) {
+    /** `solid`: where pixels are drawn even as 0 (a tile's diamond, which the game fills whole, color 0 and all). */
+    draw(pixels: ArrayLike<number>, w: number, h: number, x: number, y: number, palette: Uint8Array, solid?: ArrayLike<number>) {
         const s = this.step;
         for (let sy = 0; sy < h; sy++) {
             const my = y + sy - this.top;
@@ -300,11 +318,11 @@ class Canvas {
             for (let sx = 0; sx < w; sx++) {
                 const p = pixels[sy * w + sx];
                 const mx = x + sx - this.left;
-                if (!p || mx % s || mx < 0) continue;
+                if ((!p && !solid?.[sy * w + sx]) || mx % s || mx < 0) continue;
                 const tx = mx / s;
                 if (tx >= this.width || this.covered(ty * this.width + tx)) continue;
                 const at = (ty * this.width + tx) * 4;
-                const k = this.light;
+                const k = p >= 240 && p <= 254 && !this.terrainPalettes.has(palette) ? null : this.light;
                 this.rgba[at] = k ? Math.min(255, palette[p * 3] * k[0]) : palette[p * 3];
                 this.rgba[at + 1] = k ? Math.min(255, palette[p * 3 + 1] * k[1]) : palette[p * 3 + 1];
                 this.rgba[at + 2] = k ? Math.min(255, palette[p * 3 + 2] * k[2]) : palette[p * 3 + 2];
@@ -379,11 +397,15 @@ function facingFrame(facing: number, n: number, clockwise = false): number {
     return (((clockwise ? step : -step) % n) + n) % n;
 }
 /**
- * Pixels to move a voxel turret down from TurretAnimY, set by eye against the game, as the mission
- * editor keeps its own table for RA2. TS's laser turret sits on top of its housing; by its numbers alone
- * it would sit at the foot.
+ * Pixels to move a voxel turret from TurretAnimX/Y, by game: the same name can be another building in each
+ * (NALASR is TS's laser turret and RA2's sentry gun). TS's laser turret, set by eye against the game, sits
+ * on top of its housing; by its numbers alone it would sit at the foot. RA2's Grand Cannon's is the mission
+ * editor's own (FAData.ini [BuildingVoxelTurretsRA2]).
  */
-const TURRET_NUDGE: Record<string, number> = { NALASR: -20 };
+const TURRET_NUDGE: Record<'ts' | 'ra2', Record<string, [number, number]>> = { ts: { NALASR: [0, -20] }, ra2: { GTGCAN: [-2, 2] } };
+
+/** Superweapon animations the RA2 mission editor leaves off (FAData.ini [IgnoreSuperAnim2..4]): they don't sit right at rest. */
+const IGNORED_SUPER_ANIMS = ['NAMISL', 'GACSPH'];
 
 /**
  * Where a barrel modeled around its pivot sits on its turret: forward, right and up, 1024 to a cell, from
@@ -507,10 +529,12 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const fullH = Math.max(...ys) + th + pad - top;
     const step = Math.max(1, Math.ceil(Math.max(fullW / MAX_SIDE, fullH / MAX_SIDE, Math.sqrt((fullW * fullH) / MAX_PIXELS))));
     const canvas = new Canvas(left, top, fullW, fullH, step);
+    canvas.terrainPalettes.add(isoPalette);
     const levels = new Map<number, number>();
     for (const c of cells) levels.set(c.ry * 1024 + c.rx, c.level);
     const rules = pick(yuri ? ['rulesmd.ini', 'rules.ini'] : ['rules.ini', 'rulesmd.ini'], 'Rules (what each overlay is)');
-    const rulesIni = rules ? Ini.of(rules.data) : null;
+    // Rules as the game has them for this map: rules.ini with the map read over it (all01umd adds its own power plants).
+    const rulesIni = rules ? Ini.of(rules.data).overriddenBy(map.ini) : null;
 
     // Light, as the game lights a map (and OpenRA's TS does): the map's light, more for each level up, and
     // each lamp's within its LightVisibility (in leptons, 256 to a cell), fading to nothing at its edge.
@@ -519,13 +543,15 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const lamps = map.objects
         .filter((o) => o.kind === 'building' && ruleNumber(o.type, 'LightVisibility') > 0)
         .map((o) => ({ x: o.rx + 0.5, y: o.ry + 0.5, range: ruleNumber(o.type, 'LightVisibility') / 256, intensity: ruleNumber(o.type, 'LightIntensity'), tint: ['LightRedTint', 'LightGreenTint', 'LightBlueTint'].map((k) => ruleNumber(o.type, k)) }));
-    const lights = new Map<number, [number, number, number]>();
-    const lightAt = (rx: number, ry: number): [number, number, number] | null => {
+    const lights = new Map<string, [number, number, number]>();
+    // Units, infantry and aircraft get a little more ([AudioVisual] ExtraUnitLight and the like).
+    const extraLight = (kind: string) => Number((rulesIni?.get('AudioVisual', kind === 'infantry' ? 'ExtraInfantryLight' : kind === 'aircraft' ? 'ExtraAircraftLight' : 'ExtraUnitLight') ?? '0').replace(',', '.')) || 0;
+    const lightAt = (rx: number, ry: number, extra = 0): [number, number, number] | null => {
         if (!real || !lighting) return null;
-        const key = ry * 1024 + rx;
+        const key = `${rx},${ry},${extra}`;
         let light = lights.get(key);
         if (!light) {
-            let intensity = map.lighting.ambient + map.lighting.level * (levels.get(key) ?? 0);
+            let intensity = map.lighting.ambient + map.lighting.level * (levels.get(ry * 1024 + rx) ?? 0) + extra;
             const tint = [...map.lighting.tint];
             for (const lamp of lamps) {
                 const distance = Math.hypot(rx + 0.5 - lamp.x, ry + 0.5 - lamp.y);
@@ -534,7 +560,14 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 intensity += fade * lamp.intensity;
                 for (let i = 0; i < 3; i++) tint[i] += fade * lamp.tint[i];
             }
-            light = [Math.max(0, intensity * tint[0]), Math.max(0, intensity * tint[1]), Math.max(0, intensity * tint[2])];
+            // Limited as the game limits them (CNCMaps' renderer, which matches it): intensity and each tint
+            // 0 to 2, the tint scaled so its strongest channel is 1, and that channel's light at most 2. Many
+            // lamps overlapping (sov01t's 27 yellow ones) would otherwise wash a map out.
+            const amb = Math.min(Math.max(intensity, 0), 2);
+            const t = tint.map((v) => Math.min(Math.max(v, 0), 2));
+            const most = Math.max(...t);
+            const strength = most < 0.001 ? 0 : Math.min(amb * most, 2);
+            light = most < 0.001 ? [0, 0, 0] : [strength * (t[0] / most), strength * (t[1] / most), strength * (t[2] / most)];
             lights.set(key, light);
         }
         return light;
@@ -558,13 +591,15 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             const around = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].map((dx) => (dx || dy ? at.get((c.ry + dy) * 1024 + c.rx + dx) : undefined)));
             const levels = new Set(around.filter((l): l is number => l !== undefined && l !== c.level));
             if (!levels.size) continue;
-            const cell = tile((c.tile & 0xffff) === 0xffff ? 0 : c.tile)?.cells[c.sub];
+            // As the ground below: a tile with no file (RA2's placeholder height pieces) is clear ground.
+            const t = tile((c.tile & 0xffff) === 0xffff ? 0 : c.tile);
+            const cell = t?.cells[c.sub] ?? t?.cells.find(Boolean) ?? first?.cells.find(Boolean);
             if (!cell) continue;
             for (const level of levels) {
                 const [x, y] = place({ ...c, level });
                 canvas.ground = { depth: c.rx + c.ry, level };
                 canvas.light = lightAt(c.rx, c.ry);
-                canvas.draw(cell.diamond, tw, th, x, y, isoPalette);
+                canvas.draw(cell.diamond, tw, th, x, y, isoPalette, diamond);
             }
         }
     }
@@ -576,7 +611,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             canvas.light = lightAt(c.rx, c.ry);
             const cell = t?.cells[c.sub] ?? t?.cells.find(Boolean) ?? first!.cells.find(Boolean);
             if (!cell) continue;
-            canvas.draw(cell.diamond, t?.width ?? tw, t?.height ?? th, x, y, isoPalette);
+            canvas.draw(cell.diamond, t?.width ?? tw, t?.height ?? th, x, y, isoPalette, (t?.width ?? tw) === tw ? diamond : undefined);
             const extra = cell.extra;
             if (extra) {
                 const owner = raised.length;
@@ -725,6 +760,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             const hsv = name ? rulesIni?.get('Colors', name)?.split(',').map(Number) : undefined;
             const rgb = hsv && hsv.length === 3 ? hsvToRgb(hsv[0], hsv[1], hsv[2]) : TEAM_COLORS.find((c) => c.name === 'Gold')!.rgb;
             teams.set(key, teamPalette(base, TS_REMAP, rgb));
+            if (canvas.terrainPalettes.has(base)) canvas.terrainPalettes.add(teams.get(key)!);
         }
         return teams.get(key)!;
     };
@@ -733,8 +769,19 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
      * The palette an object's art is drawn in: the theater's terrain palette for art marked TerrainPalette
      * (civilian buildings, lamps), else the unit palette; and the owner's color only where it's Remapable.
      */
+    // Art with a palette of its own (Palette=lib: the Statue of Liberty's copper, liburb.pal on an urban map;
+    // the mission editor always takes libtem.pal).
+    const ownPalettes = new Map<string, Uint8Array | null>();
+    const ownPalette = (name: string) => {
+        if (!ownPalettes.has(name)) {
+            const file = pick([`${name}${theater.ext}.pal`, `${name}tem.pal`], 'Palette of its own (art Palette=)');
+            ownPalettes.set(name, file ? expandPalette(file.data) : null);
+        }
+        return ownPalettes.get(name);
+    };
     const artPalette = (artName: string, house: string) => {
-        const base = yes(art?.get(artName, 'TerrainPalette')) ? isoPalette : unitPalette;
+        const own = art?.get(artName, 'Palette')?.trim().toLowerCase();
+        const base = (own && ownPalette(own)) || (yes(art?.get(artName, 'TerrainPalette')) ? isoPalette : unitPalette);
         return yes(art?.get(artName, 'Remapable')) ? teamPaletteFor(house, base) : base;
     };
 
@@ -778,7 +825,8 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     // Raised ground first, so at the same depth an object stands in front of it (the sort keeps order).
     // `up`: levels above its cell, which bring it forward (a high bridge's deck is over what's under it).
     // `owner`: raised ground, drawn again only where it showed.
-    const objects: { rx: number; ry: number; up?: number; owner?: number; draw: () => void }[] = [...raised, ...animated];
+    // `extra`: light added to its cell's (a unit's ExtraUnitLight).
+    const objects: { rx: number; ry: number; up?: number; owner?: number; extra?: number; draw: () => void }[] = [...raised, ...animated];
     if (map.overlays) {
         for (let i = 0; i < map.overlays.length; i++) {
             const id = map.overlays[i];
@@ -852,6 +900,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 // construction yard's crane, a repair depot's flashing platform), so like the editor, not at rest.
                 const animKeys = ['ActiveAnim', 'IdleAnim', 'SpecialAnim', 'SuperAnim'].flatMap((k) => ['', 'Two', 'Three', 'Four'].map((n) => k + n)).filter((k) => !/^IdleAnim./.test(k));
                 for (const key of animKeys) {
+                    if (/^SuperAnim./.test(key) && IGNORED_SUPER_ANIMS.includes(img)) continue;
                     const anim = (damaged && art?.get(img, `${key}Damaged`)) || art?.get(img, key);
                     if (!anim) continue;
                     const animShp = spriteFor(anim.toUpperCase(), 'Building animation sprite');
@@ -884,9 +933,13 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 // A defense's turret: a voxel model or a sprite of 32 facings, placed in pixels from the building's center.
                 const turret = /^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'Turret') ?? '') ? rulesIni?.get(o.type, 'TurretAnim') ?? art?.get(img, 'TurretAnim') : undefined;
                 if (!turret) return;
-                const tx = cx + Number(rulesIni?.get(o.type, 'TurretAnimX') ?? 0);
-                const ty = cy + Number(rulesIni?.get(o.type, 'TurretAnimY') ?? 0) + (TURRET_NUDGE[o.type] ?? 0);
+                const [nx, ny] = TURRET_NUDGE[tw === 48 ? 'ts' : 'ra2'][o.type] ?? [0, 0];
+                const tx = cx + Number(rulesIni?.get(o.type, 'TurretAnimX') ?? 0) + nx;
+                const ty = cy + Number(rulesIni?.get(o.type, 'TurretAnimY') ?? 0) + ny;
                 if (/^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'TurretAnimIsVoxel') ?? '')) {
+                    // TurretAnimZAdjust lowers a voxel turret, in leptons (104 to a level, half a tile high): RA2's
+                    // Tech Outpost's -140 sets its turret on its tower rather than 20 pixels above it.
+                    const zAdjust = (Number(rulesIni?.get(o.type, 'TurretAnimZAdjust') ?? 0) || 0) * (th / 2 / 104);
                     const key = `${turret}:${o.facing}:${o.house}`;
                     if (!voxelPictures.has(key)) {
                         const parts: VoxelPartInput[] = [];
@@ -900,7 +953,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                         voxelPictures.set(key, parts.length ? drawVoxels(parts, o.facing, tw, th, palette) : null);
                     }
                     const picture = voxelPictures.get(key);
-                    if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(tx - picture.originX), Math.round(ty - picture.originY));
+                    if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(tx - picture.originX), Math.round(ty - zAdjust - picture.originY));
                 } else {
                     const turretShp = spriteFor(turret.toUpperCase(), 'Defense turret sprite');
                     if (turretShp) drawFrame(turretShp, facingFrame(o.facing, 32), tx, ty, palette, false);
@@ -910,7 +963,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
         }
         if (o.kind === 'infantry') {
             const [sx, sy] = SUB_CELLS[o.sub] ?? SUB_CELLS[0];
-            objects.push({ rx: o.rx, ry: o.ry, draw: () => {
+            objects.push({ rx: o.rx, ry: o.ry, extra: extraLight(o.kind), draw: () => {
                 const shp = spriteFor(o.type, 'Infantry sprite');
                 if (!shp) return;
                 const [cx, cy] = point(o.rx + sx / 256, o.ry + sy / 256);
@@ -920,7 +973,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             continue;
         }
         // Vehicles and aircraft: voxels when the art says so, with a turret and barrel if there are files for them.
-        objects.push({ rx: o.rx, ry: o.ry, draw: () => {
+        objects.push({ rx: o.rx, ry: o.ry, extra: extraLight(o.kind), draw: () => {
             const [cx, cy] = point(o.rx + 0.5, o.ry + 0.5);
             const palette = teamPaletteFor(o.house, unitPalette);
             const voxel = /^(yes|true|1)$/i.test(art?.get(img, 'Voxel') ?? rulesIni?.get(o.type, 'Voxel') ?? '');
@@ -976,7 +1029,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
         canvas.only = o.owner ?? null;
         canvas.object = o.owner !== undefined ? null : { depth: o.rx + o.ry, level: (levels.get(o.ry * 1024 + o.rx) ?? 0) + (o.up ?? 0) };
         // Lit by the cell it stands on (a building by its front corner's).
-        canvas.light = lightAt(Math.floor(o.rx), Math.floor(o.ry));
+        canvas.light = lightAt(Math.floor(o.rx), Math.floor(o.ry), o.extra);
         o.draw();
     }
     canvas.object = null;

@@ -281,7 +281,10 @@ describe('TS and RA2 maps', () => {
         const text = `[Map]\nTheater=SNOW\nSize=0,0,10,10\n[IsoMapPack5]\n1=${btoa(String.fromCharCode(...block))}\n[Terrain]\n5010=TREE01\n`;
         const ini = new Ini(text);
         const map = readIsoMap(ini);
-        expect(map.cells.map((c) => [c.rx, c.ry, c.level])).toEqual([[10, 5, 0], [11, 5, 3]]);
+        expect(map.cells.slice(0, 2).map((c) => [c.rx, c.ry, c.level])).toEqual([[10, 5, 0], [11, 5, 3]]);
+        // The rest of the map, which the pack leaves out, is clear ground at level 0.
+        expect(map.cells.slice(2).every((c) => c.tile === 0xffff && c.level === 0)).toBe(true);
+        expect(map.cells.some((c) => c.rx === 12 && c.ry === 5)).toBe(true);
         expect(map.terrain).toEqual([[10, 5, 'TREE01']]);
         const links = new Links();
         const previews = isoMapPreviews(ini, () => [], 'test.map', links);
@@ -379,6 +382,16 @@ describe('objects on TS and RA2 maps', () => {
             { kind: 'infantry', house: 'GDI', type: 'E1', rx: 22, ry: 32, facing: 128, sub: 3, health: 256 },
         ]);
         expect(map.houseColors.get('gdi')).toBe('Gold');
+    });
+
+    it('reads a map over rules.ini, adding to its lists of types', () => {
+        const rules = new Ini('[BuildingTypes]\n0=GAPOWR\n[GAPOWR]\nStrength=750\nImage=GAPOWR\n');
+        const map = new Ini('[BuildingTypes]\n0=CAPOWR01\n[GAPOWR]\nStrength=900\n[CAPOWR01]\nImage=CAPOWR\n');
+        const merged = rules.overriddenBy(map);
+        expect(merged.entries('BuildingTypes').map(([, v]) => v)).toEqual(['GAPOWR', 'CAPOWR01']);
+        expect(merged.get('GAPOWR', 'Strength')).toBe('900');
+        expect(merged.get('GAPOWR', 'Image')).toBe('GAPOWR');
+        expect(merged.get('CAPOWR01', 'Image')).toBe('CAPOWR');
     });
 
     it("reads a building's upgrades by slot", () => {
