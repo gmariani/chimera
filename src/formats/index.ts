@@ -3,7 +3,8 @@ import { sniffJpeg } from './jpeg/sniff';
 import { sniffMix, sniffXccDatabase } from './mix/sniff';
 import { sniffTiff } from './tiff/sniff';
 import { sniffPng } from './png/sniff';
-import { sniffMp3, sniffSwf } from './swf/sniff';
+import { sniffFont as sniffSfnt } from './font/sniff';
+import { sniffMp3, sniffPbj, sniffSwf } from './swf/sniff';
 import {
     sniffAud,
     sniffBink,
@@ -73,6 +74,8 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'tiff', name: 'Picture (TIFF)', extensions: ['tif', 'tiff', 'dng', 'nef', 'cr2', 'arw', 'orf', 'pef', 'rw2'], sniff: sniffTiff, load: parserOf(() => import('./tiff')) },
     { id: 'png', name: 'Picture (PNG)', extensions: ['png', 'apng'], sniff: sniffPng, load: parserOf(() => import('./png')) },
     { id: 'swf', name: 'Flash movie (SWF)', extensions: ['swf'], sniff: sniffSwf, load: parserOf(() => import('./swf')) },
+    { id: 'sfnt', name: 'Font (TrueType, OpenType)', extensions: ['ttf', 'otf', 'ttc', 'otc'], sniff: sniffSfnt, load: parserOf(() => import('./font')) },
+    { id: 'pbj', name: 'Pixel Bender kernel (PBJ)', extensions: ['pbj'], sniff: sniffPbj, load: parserOf(() => import('./pbj')) },
     { id: 'mp3', name: 'Sound (MP3)', extensions: ['mp3', 'mp2'], sniff: sniffMp3, load: parserOf(() => import('./mp3')) },
     { id: 'pcx', name: 'Picture (PCX)', extensions: ['pcx'], sniff: sniffPcx, load: parserOf(() => import('./pcx')) },
     { id: 'vqp', name: 'Palette blending tables (VQP)', extensions: ['vqp'], sniff: sniffVqp, load: parserOf(() => import('./westwood/vqp')) },

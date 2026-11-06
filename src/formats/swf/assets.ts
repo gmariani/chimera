@@ -3,6 +3,7 @@ import { encodePng } from '../../core/png';
 import type { Entry } from '../../core/types';
 import { decodeJpeg, segmentsOf } from '../jpeg/decode';
 import { IMA_STEPS, wav } from '../westwood/adpcm';
+import { decodeNellymoser } from './nellymoser';
 import { soundFormat } from './tags';
 
 /**
@@ -10,6 +11,7 @@ import { soundFormat } from './tags';
  * lossless ones and JPEGs with alpha made into PNGs), sounds (MP3 as it is,
  * PCM and ADPCM as WAV), streamed sound joined across frames, video wrapped
  * as FLV, binary data, embedded fonts and ActionScript 3 bytecode.
+ * Nellymoser speech is decoded to WAV too; Speex is left as it is.
  */
 
 /** Where a tag's body is, and which timeline it's on (a sprite's, or the main one). */
@@ -250,7 +252,7 @@ function lossless(data: Uint8Array, t: TagRef, alpha: boolean): { width: number;
     return { width, height, rgba };
 }
 
-/** A sound as a file: MP3 frames as they are, PCM and ADPCM as WAV, Nellymoser and Speex raw. */
+/** A sound as a file: MP3 frames as they are; PCM, ADPCM and Nellymoser as WAV; Speex raw. */
 function soundFile(s: ReturnType<typeof soundFormat>, parts: Uint8Array[], samples: number): { data: Uint8Array; ext?: string } {
     const joined = concat(parts);
     switch (s.format) {
@@ -266,7 +268,8 @@ function soundFile(s: ReturnType<typeof soundFormat>, parts: Uint8Array[], sampl
         case 4:
         case 5:
         case 6:
-            return { data: joined, ext: 'nelly' };
+            // Mono; formats 4 and 5 are fixed at 16 and 8 kHz.
+            return { data: wav(decodeNellymoser(joined), s.format === 4 ? 16000 : s.format === 5 ? 8000 : s.rate, 1) };
         case 11:
             return { data: joined, ext: 'spx' };
     }

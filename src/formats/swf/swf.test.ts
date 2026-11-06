@@ -5,6 +5,9 @@ import type { Field } from '../../core/types';
 import { encodePng } from '../../core/png';
 import { detect } from '../index';
 import png from '../png';
+import pbj from '../pbj';
+import sfnt from '../font';
+import wavParser from '../wav';
 import { typeEntries } from '../../lib/inspect';
 import { decodeSwfAdpcm } from './assets';
 import swf from './index';
@@ -56,7 +59,7 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
         expect(files).toEqual(
             expect.arrayContaining([
                 ['sound 1 (ExportADPCM).wav', 'wav'],
-                ['sound 3 (ExportSpeech).nelly', 'raw'],
+                ['sound 3 (ExportSpeech).wav', 'wav'],
                 ['sound 4 (ExportMP3).mp3', 'mp3'],
                 ['image 6.jpg', 'jpeg'],
                 // DefineBitsJPEG3 with a Flash 5 JPEG (an EOI and SOI in its middle), and its alpha.
@@ -72,12 +75,46 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
         expect(parsed.title).toBe('Flash movie (SWF 10, compressed)');
         const files = typeEntries(parsed.entries!).map((e) => e.fileName);
         expect(files[0]).toBe('uncompressed.swf');
-        expect(files).toContain('binary 44 (Demov10_fla.MainTimeline_GrayScaleKernel).bin');
+        expect(files).toContain('binary 44 (Demov10_fla.MainTimeline_GrayScaleKernel).pbj');
         expect(files).toContain('font 43 (Demov10_fla.MainTimeline_AdobeArabicFullFont).otf');
         // Its structure is the header and the compressed data; the uncompressed movie has the tags.
         expect(parsed.fields.map((f) => f.name)).toEqual(['Header', 'Compressed movie']);
         const inner = swf.parse(parsed.entries![0].data, { name: null, names: [] });
         expect(find(inner.fields, 'SymbolClass')).toBeDefined();
+    });
+
+    it('decodes Nellymoser speech: 109 blocks of 256 samples', () => {
+        const sound = open('Demo v8.swf').entries!.find((e) => e.label === 'sound 3 (ExportSpeech)')!;
+        const parsed = wavParser.parse(sound.data, { name: null, names: [] });
+        expect(parsed.preview?.kind === 'audio' && Math.round(parsed.preview.seconds * 44100)).toBe(109 * 256);
+        // FFmpeg's decode of it peaks at 0.671 (22,000 or so); the noise filling empty bands is random, so only roughly.
+        const samples = new Int16Array(sound.data.buffer.slice(sound.data.byteOffset + 44, sound.data.byteOffset + sound.data.length));
+        expect(Math.max(...samples.map(Math.abs))).toBeGreaterThan(21000);
+        expect(Math.max(...samples.map(Math.abs))).toBeLessThan(23000);
+    });
+
+    it('disassembles the Pixel Bender kernel in its binary data', () => {
+        const kernel = open('Flashbug Demo.swf').entries!.find((e) => e.label.includes('GrayScaleKernel'))!;
+        expect(detect(kernel.data, null).id).toBe('pbj');
+        const parsed = pbj.parse(kernel.data, { name: null, names: [] });
+        expect(parsed.summary).toEqual(expect.arrayContaining([['Name', 'GrayScale'], ['Vendor', 'Mike Chambers'], ['Instructions', '21']]));
+        const text = parsed.preview?.kind === 'text' ? parsed.preview.text : '';
+        expect(text).toContain('f2.xyzw = sampleNearest(texture 0, f0.xy)');
+        expect(text).toContain('f0.z = 0.7154');
+    });
+
+    it('reads its embedded OpenType font and draws the glyphs', () => {
+        const font = open('Flashbug Demo.swf').entries!.find((e) => e.label.startsWith('font 42'))!;
+        expect(typeEntries([font])[0].fileName).toBe('font 42 (FlashbugDemo_fla.MainTimeline_AdobeArabicFullFont).otf');
+        const parsed = sfnt.parse(font.data, { name: null, names: [] });
+        expect(parsed.summary).toEqual(expect.arrayContaining([['Family', 'Adobe Arabic'], ['Glyphs', '1214'], ['Outlines', 'CFF']]));
+        expect(parsed.warnings).toEqual([]);
+        const sheet = parsed.preview?.kind === 'stack' ? parsed.preview.items[0].preview : undefined;
+        if (sheet?.kind !== 'picture') throw new Error('expected a glyph sheet');
+        // Some ink in the cells (glyphs drawn), not all of it (not filled solid).
+        const dark = sheet.rgba.filter((v, i) => i % 4 === 0 && v < 128).length;
+        expect(dark / (sheet.width * sheet.height)).toBeGreaterThan(0.02);
+        expect(dark / (sheet.width * sheet.height)).toBeLessThan(0.3);
     });
 
     it('says when an obfuscator has been at it', () => {

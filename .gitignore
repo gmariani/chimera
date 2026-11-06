@@ -12,3 +12,4 @@ npm-debug.log
 *.MIX
 /dune2k
 /wasm/bink/build
+/SWF Samples

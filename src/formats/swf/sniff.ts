@@ -27,3 +27,8 @@ function frameLength(data: Uint8Array, at: number): number {
     const samples = layer === 1 ? 384 : layer === 3 && !mpeg1 ? 576 : 1152;
     return layer === 1 ? (Math.floor((12 * kbps * 1000) / rate) + pad) * 4 : Math.floor(((samples / 8) * kbps * 1000) / rate) + pad;
 }
+
+/** Pixel Bender bytecode: a version record (A5) and a name record (A4). */
+export function sniffPbj(data: Uint8Array): boolean {
+    return data.length > 8 && data[0] === 0xa5 && data[2] === 0 && data[3] === 0 && data[4] === 0 && data[5] === 0xa4;
+}
