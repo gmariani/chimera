@@ -25,7 +25,7 @@ describe('format 40', () => {
 });
 
 // Every file in the sample archives: what it's detected as, and that its parser runs cleanly.
-const samples = join(__dirname, '../../../MIX Samples');
+const samples = join(__dirname, '../../../samples/westwood');
 describe.skipIf(!existsSync(samples))('sample archive contents', () => {
     const archives = existsSync(samples) ? readdirSync(samples).filter((n) => /\.mix$/i.test(n) && !/^movies/i.test(n)) : [];
     it.each(archives)('%s', async (archive) => {

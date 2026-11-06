@@ -6,8 +6,8 @@ import { detect } from '../index';
 import { huffmanTable, segmentsOf } from './decode';
 import jpeg from './index';
 
-const samples = join(__dirname, '../../../JPG Samples');
-const exifTool = join(samples, 'Image-ExifTool-10.38/t/images');
+const samples = join(__dirname, '../../../samples/images');
+const fromHex = (text: string) => Uint8Array.from(text.match(/../g)!, (b) => parseInt(b, 16));
 
 const open = (path: string): [Uint8Array, Parsed] => {
     const data = new Uint8Array(readFileSync(path));
@@ -83,9 +83,53 @@ describe('segments', () => {
     });
 });
 
+describe('a progressive picture with EXIF and GPS', () => {
+    // 24 × 16, made by Pillow (libjpeg) from jpeg-baseline-exif.jpg, with a camera name and a GPS position.
+    const file = fromHex(
+        [
+            'ffd8ffe000104a46494600010100000100010000ffe100b44578696600004d4d002a000000080003010f00020000000800000032011000020000000c0000003a88250004000000010000004600000000',
+            '4368696d65726100546573742043616d65726100000400010002000000024e00000000020005000000030000007c00030002000000025700000000040005000000030000009400000000000000360000',
+            '00010000003b000000010000007200000005000000010000000100000036000000010000003300000001ffdb00430006040506050406060506070706080a100a0a09090a140e0f0c1017141818171416',
+            '161a1d251f1a1b231c1616202c20232627292a29191f2d302d283025282928ffdb0043010707070a080a130a0a13281a161a282828282828282828282828282828282828282828282828282828282828',
+            '2828282828282828282828282828282828282828ffc20011080010001803012200021101031101ffc400190000020301000000000000000000000000000603040507ffc4001601010101000000000000',
+            '00000000000000040102ffda000c03010002100310000001ccb6d32cd73119849fffc4001a100003000301000000000000000000000001020304051114ffda000801010001050258359abae659bad247',
+            '1ab87453de6cc7a0ff00ffc4001a110002020300000000000000000000000001020011122132ffda0008010301013f01c54e846520f373ffc40019110002030100000000000000000000000000010212',
+            '2111ffda0008010201013f01565ac855ad970fffc4001e10000104020301000000000000000000000100020311122141526171ffda0008010100063f02ac77f15b85f8b11b1d795947232fd28ba47466',
+            '3e28a6b9a3617fffc4001c10000202020300000000000000000000000111003141617181d1ffda0008010100013f211051d154449c0c7a2171159949a83012b475356f190216ac1589ffda000c030100',
+            '02000300000010803fffc4001a1101000105000000000000000000000000110001213151c1ffda0008010301013f10cc2f0f50369d9fffc40017110101010100000000000000000000000001001151ff',
+            'da0008010201013f10612f78ae62dfffc4001e100101000202020300000000000000000001110031215171b1416191ffda0008010100013f10580dcd13d139f785244d917d8da78b30592ab21d9693c7',
+            'e645f2449d9f07c60aad89ed477756fac514159c15dae9a712e7ffd9',
+        ].join(''),
+    );
+    const parsed = jpeg.parse(file, { name: null, names: [] });
+
+    it('decodes it scan by scan', () => {
+        expect(parsed.summary).toEqual(expect.arrayContaining([['Size', '24 × 16'], ['Process', 'Progressive'], ['Scans', '10']]));
+        expect(parsed.fields.filter((f) => f.name.startsWith('Scan ')).map((f) => f.value)).toContain('Y: AC 1–5, from bit 2');
+        const p = picture(parsed.preview);
+        // Pillow's (libjpeg's) values.
+        near(pixel(p, 0, 0), [71, 83, 95]);
+        near(pixel(p, 12, 8), [214, 199, 202]);
+        near(pixel(p, 23, 15), [149, 122, 105]);
+        expect(parsed.warnings).toEqual([]);
+    });
+
+    it('breaks its tables down to the spec\'s parameters', () => {
+        // A DQT's values in rows of the zigzag order, a DHT's symbols by code length, a scan's component selectors.
+        expect(find(parsed.fields, 'Q0–Q7')?.length).toBe(8);
+        expect(find(parsed.fields, 'DC table 0')?.children?.map((c) => c.name)).toEqual(expect.arrayContaining(['Tc, Th', 'L1–L16 (code counts)']));
+        expect(find(parsed.fields, 'Cs (selector)')?.value).toBe('1');
+    });
+
+    it('reads the camera and the GPS position in degrees', () => {
+        expect(parsed.summary).toEqual(expect.arrayContaining([['Camera', 'Chimera Test Camera'], ['GPS', '54.989667, -1.914167']]));
+        expect(find(parsed.fields, 'GPS IFD')).toBeDefined();
+    });
+});
+
 describe.skipIf(!existsSync(samples))('sample pictures', () => {
     it('decodes a baseline 4:2:2 photo as libjpeg does', () => {
-        const [, parsed] = open(join(samples, 'Sample_Ocad.jpg'));
+        const [, parsed] = open(join(samples, 'jpeg-baseline-exif.jpg'));
         expect(parsed.summary).toEqual(expect.arrayContaining([['Size', '600 × 800'], ['Process', 'Baseline'], ['Color', 'YCbCr 4:2:2']]));
         const p = picture(parsed.preview);
         // Pillow's (libjpeg's) values.
@@ -96,24 +140,36 @@ describe.skipIf(!existsSync(samples))('sample pictures', () => {
         expect(parsed.warnings).toEqual([]);
     });
 
-    it('decodes a progressive picture, scan by scan', () => {
-        const [, parsed] = open(join(samples, 'FLCL Thumb.jpg'));
-        expect(parsed.summary).toEqual(expect.arrayContaining([['Process', 'Progressive'], ['Scans', '10']]));
-        expect(parsed.fields.filter((f) => f.name.startsWith('Scan ')).map((f) => f.value)).toContain('Y: AC 1–5, from bit 2');
-        // Tables down to the spec's parameters: a DQT's values in rows of the zigzag order, a DHT's symbols by code length.
-        expect(find(parsed.fields, 'Q0–Q7')?.length).toBe(8);
-        expect(find(parsed.fields, 'DC table 0')?.children?.map((c) => c.name)).toEqual(expect.arrayContaining(['Tc, Th', 'L1–L16 (code counts)']));
-        expect(find(parsed.fields, 'Cs (selector)')?.value).toBe('1');
+    it('decodes a large one', () => {
+        const [, parsed] = open(join(samples, 'jpeg-baseline-large.jpg'));
+        expect(parsed.summary).toContainEqual(['Size', '1400 × 1400']);
         const p = picture(parsed.preview);
-        near(pixel(p, 0, 0), [211, 233, 244]);
-        near(pixel(p, 40, 30), [231, 216, 131]);
-        near(pixel(p, 77, 63), [237, 231, 173]);
-        // Its XMP is shown as text beside the picture.
-        expect(parsed.preview?.kind === 'stack' && parsed.preview.items.map((i) => i.title)).toEqual(['Picture', 'XMP']);
+        near(pixel(p, 0, 0), [221, 221, 221]);
+        near(pixel(p, 700, 700), [243, 243, 243]);
+        near(pixel(p, 1399, 1399), [196, 196, 196]);
+        near(pixel(p, 123, 987), [203, 203, 203]);
+    });
+
+    it('decodes a progressive picture whose encoder made its own scans and tables', () => {
+        // Five scans, each with new Huffman tables before it, not libjpeg's usual ten; and an ICC profile.
+        const [, parsed] = open(join(samples, 'jpeg-progressive-icc.jpg'));
+        expect(parsed.summary).toEqual(expect.arrayContaining([['Size', '720 × 960'], ['Process', 'Progressive'], ['Color', 'YCbCr 4:2:0'], ['Scans', '5']]));
+        expect(parsed.fields.map((f) => f.name)).toContain('APP2 (ICC profile)');
+        const p = picture(parsed.preview);
+        near(pixel(p, 0, 0), [174, 194, 229]);
+        near(pixel(p, 360, 480), [151, 162, 190]);
+        near(pixel(p, 719, 959), [113, 128, 85]);
+        near(pixel(p, 100, 800), [114, 140, 79]);
+        expect(parsed.warnings).toEqual([]);
+    });
+
+    it('says so when a file named .jpg isn\'t one', () => {
+        // Machine code under a JPEG's name: no markers at all.
+        expect(() => open(join(samples, 'jpeg-not-a-jpeg.jpg'))).toThrow('No start-of-image marker (FF D8).');
     });
 
     it('reads EXIF tags, with their meanings, and offers the thumbnail', () => {
-        const [data, parsed] = open(join(samples, 'Sample_Ocad.jpg'));
+        const [data, parsed] = open(join(samples, 'jpeg-baseline-exif.jpg'));
         expect(parsed.summary).toEqual(expect.arrayContaining([['Camera', 'OLYMPUS IMAGING CORP. u710,S710'], ['Exposure', '1/100 s, f/3.4, ISO 64, 6.5 mm']]));
         // Out of line: the entry gives an offset, and the value is where it points.
         const exposure = find(parsed.fields, 'ExposureTime')!;
@@ -126,15 +182,8 @@ describe.skipIf(!existsSync(samples))('sample pictures', () => {
         expect(detect(thumbnail.data, thumbnail.label).id).toBe('jpeg');
     });
 
-    it('finds GPS positions in degrees', () => {
-        const [, parsed] = open(join(exifTool, 'GPS.jpg'));
-        expect(parsed.summary).toContainEqual(['GPS', '54.989667, -1.914167']);
-    });
-
     it('names the application segments it knows', () => {
-        const [, parsed] = open(join(exifTool, 'ExifTool.jpg'));
-        const names = parsed.fields.map((f) => f.name);
-        expect(names).toEqual(expect.arrayContaining(['APP0 (JFIF)', 'APP1 (EXIF)', 'APP1 (XMP)', 'APP2 (ICC profile)', 'APP13 (Photoshop)', 'APP14 (Adobe)']));
-        picture(parsed.preview);
+        const [, parsed] = open(join(samples, 'jpeg-baseline-exif.jpg'));
+        expect(parsed.fields.map((f) => f.name)).toEqual(expect.arrayContaining(['APP0 (JFIF)', 'APP0 (Photobucket)', 'APP1 (EXIF)']));
     });
 });

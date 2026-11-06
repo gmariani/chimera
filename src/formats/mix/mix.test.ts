@@ -136,7 +136,7 @@ describe('MIX parsing', () => {
 });
 
 // Real game files, if present (they aren't committed).
-const samples = join(__dirname, '../../../MIX Samples');
+const samples = join(__dirname, '../../../samples/westwood');
 describe.skipIf(!existsSync(samples))('sample files', () => {
     const names = existsSync(samples) ? readdirSync(samples).filter((n) => /\.mix$/i.test(n)) : [];
     it.each(names)('%s', (name) => {

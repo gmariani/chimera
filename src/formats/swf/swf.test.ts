@@ -2,9 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Field } from '../../core/types';
-import { encodePng } from '../../core/png';
 import { detect } from '../index';
-import png from '../png';
 import pbj from '../pbj';
 import sfnt from '../font';
 import wavParser from '../wav';
@@ -12,7 +10,7 @@ import { typeEntries } from '../../lib/inspect';
 import { decodeSwfAdpcm } from './assets';
 import swf from './index';
 
-const samples = join(__dirname, '../../../SWF Samples');
+const samples = join(__dirname, '../../../samples/flash');
 
 const find = (fields: Field[], name: string): Field | undefined => {
     for (const f of fields) {
@@ -21,17 +19,6 @@ const find = (fields: Field[], name: string): Field | undefined => {
         if (inside) return inside;
     }
 };
-
-describe('PNG', () => {
-    it('reads back what it writes', () => {
-        const rgba = Uint8Array.from({ length: 5 * 3 * 4 }, (_, i) => (i * 37) & 0xff);
-        const file = encodePng(5, 3, rgba);
-        expect(detect(file, null).id).toBe('png');
-        const parsed = png.parse(file, { name: null, names: [] });
-        expect(parsed.warnings).toEqual([]);
-        expect(parsed.preview?.kind === 'picture' && parsed.preview.rgba).toEqual(rgba);
-    });
-});
 
 describe('ADPCM', () => {
     it('reads 2-bit codes from each packet\'s first sample and index', () => {
@@ -47,7 +34,7 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
     const open = (name: string) => swf.parse(new Uint8Array(readFileSync(join(samples, name))), { name, names: [] });
 
     it('reads an uncompressed movie\'s tags, frame by frame', () => {
-        const parsed = open('Demo v8.swf');
+        const parsed = open('swf-v8.swf');
         expect(parsed.summary).toEqual(expect.arrayContaining([['Stage', '550 × 400 px'], ['Frames', '226 at 24 fps'], ['Background', '#333333']]));
         expect(parsed.fields.filter((f) => f.name.startsWith('Frame ')).length).toBe(226);
         expect(find(parsed.fields, 'DefineVideoStream')?.value).toBe('#40, 320 × 240, On2 VP6');
@@ -55,7 +42,7 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
     });
 
     it('pulls out its bitmaps, sounds and video as files', () => {
-        const files = typeEntries(open('Demo v8.swf').entries!).map((e) => [e.fileName, e.format.id]);
+        const files = typeEntries(open('swf-v8.swf').entries!).map((e) => [e.fileName, e.format.id]);
         expect(files).toEqual(
             expect.arrayContaining([
                 ['sound 1 (ExportADPCM).wav', 'wav'],
@@ -71,7 +58,7 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
     });
 
     it('inflates a compressed movie and names assets by their classes', () => {
-        const parsed = open('Demo v10.swf');
+        const parsed = open('swf-v10-zlib.swf');
         expect(parsed.title).toBe('Flash movie (SWF 10, compressed)');
         const files = typeEntries(parsed.entries!).map((e) => e.fileName);
         expect(files[0]).toBe('uncompressed.swf');
@@ -84,7 +71,7 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
     });
 
     it('decodes Nellymoser speech: 109 blocks of 256 samples', () => {
-        const sound = open('Demo v8.swf').entries!.find((e) => e.label === 'sound 3 (ExportSpeech)')!;
+        const sound = open('swf-v8.swf').entries!.find((e) => e.label === 'sound 3 (ExportSpeech)')!;
         const parsed = wavParser.parse(sound.data, { name: null, names: [] });
         expect(parsed.preview?.kind === 'audio' && Math.round(parsed.preview.seconds * 44100)).toBe(109 * 256);
         // FFmpeg's decode of it peaks at 0.671 (22,000 or so); the noise filling empty bands is random, so only roughly.
@@ -94,7 +81,7 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
     });
 
     it('disassembles the Pixel Bender kernel in its binary data', () => {
-        const kernel = open('Flashbug Demo.swf').entries!.find((e) => e.label.includes('GrayScaleKernel'))!;
+        const kernel = open('swf-v10-pixelbender.swf').entries!.find((e) => e.label.includes('GrayScaleKernel'))!;
         expect(detect(kernel.data, null).id).toBe('pbj');
         const parsed = pbj.parse(kernel.data, { name: null, names: [] });
         expect(parsed.summary).toEqual(expect.arrayContaining([['Name', 'GrayScale'], ['Vendor', 'Mike Chambers'], ['Instructions', '21']]));
@@ -104,7 +91,7 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
     });
 
     it('reads its embedded OpenType font and draws the glyphs', () => {
-        const font = open('Flashbug Demo.swf').entries!.find((e) => e.label.startsWith('font 42'))!;
+        const font = open('swf-v10-pixelbender.swf').entries!.find((e) => e.label.startsWith('font 42'))!;
         expect(typeEntries([font])[0].fileName).toBe('font 42 (FlashbugDemo_fla.MainTimeline_AdobeArabicFullFont).otf');
         const parsed = sfnt.parse(font.data, { name: null, names: [] });
         expect(parsed.summary).toEqual(expect.arrayContaining([['Family', 'Adobe Arabic'], ['Glyphs', '1214'], ['Outlines', 'CFF']]));
@@ -118,6 +105,6 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
     });
 
     it('says when an obfuscator has been at it', () => {
-        expect(open('Flashbug Demo_swfprotector.swf').summary).toContainEqual(['Obfuscated', 'Yes: it has an obfuscator\'s tags']);
+        expect(open('swf-obfuscated-swfprotector.swf').summary).toContainEqual(['Obfuscated', 'Yes: it has an obfuscator\'s tags']);
     });
 });

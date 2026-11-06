@@ -2,6 +2,15 @@
 
 A universal file inspector that runs in the browser. Open a file to see how it's put together: every field, what it means, and the bytes behind it, in a structure tree linked to a hex view (in the spirit of 010 Editor templates). Archives open up so you can look inside each file they hold, preview it, and pull any of it out. Nothing is uploaded.
 
+## Todo
+- .t1 font
+- .afm font
+- .sol shared objects
+- .flv Flash Video
+- swf preview with ruffle
+- test dune 2
+- test dune 2k
+
 ## Formats
 
 | Format | Read | Preview | Extract |
@@ -63,7 +72,7 @@ Each format is a plain TypeScript module that turns bytes into data. It never re
 ```sh
 npm install
 npm run dev      # http://localhost:5173
-npm test         # also checks every file in "MIX Samples/" if that folder exists
+npm test         # also checks the files in samples/ (westwood, flash, images, fonts) when they exist
 
 # Every MIX in a game install, every archive nested in those, and every file inside them:
 CHIMERA_GAME_DATA=/path/to/CnCRemastered/Data/CNCDATA npx vitest run src/formats/gamedata.test.ts

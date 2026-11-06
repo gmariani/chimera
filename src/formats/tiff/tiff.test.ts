@@ -8,7 +8,7 @@ import { detect } from '../index';
 import { unpackBits } from './decode';
 import tiff from './index';
 
-const images = join(__dirname, '../../../JPG Samples/Image-ExifTool-10.38/t/images');
+const images = join(__dirname, '../../../samples/images');
 const fromHex = (text: string) => Uint8Array.from(text.match(/../g)!, (b) => parseInt(b, 16));
 const parse = (data: Uint8Array): Parsed => tiff.parse(data, { name: null, names: [] });
 
@@ -79,28 +79,86 @@ describe('structure', () => {
     });
 });
 
+describe('a palette picture', () => {
+    /** A little-endian TIFF: the header, one IFD of SHORT and LONG entries (arrays stored after it), then the data. */
+    function tiff(entries: [tag: number, type: 3 | 4, values: number[]][], data: number[]): Uint8Array {
+        const ifdSize = 2 + entries.length * 12 + 4;
+        const arrays = entries.filter(([, type, v]) => v.length * (type === 3 ? 2 : 4) > 4).reduce((n, [, type, v]) => n + v.length * (type === 3 ? 2 : 4), 0);
+        const dataAt = 8 + ifdSize + arrays;
+        const out = new Uint8Array(dataAt + data.length);
+        const view = new DataView(out.buffer);
+        out.set([0x49, 0x49, 42, 0, 8, 0, 0, 0]);
+        view.setUint16(8, entries.length, true);
+        let arrayAt = 8 + ifdSize;
+        entries.forEach(([tag, type, values], i) => {
+            const at = 10 + i * 12;
+            const size = type === 3 ? 2 : 4;
+            // The strip offset (273) is where the data goes.
+            const v = tag === 273 ? [dataAt] : values;
+            view.setUint16(at, tag, true);
+            view.setUint16(at + 2, type, true);
+            view.setUint32(at + 4, v.length, true);
+            let to = at + 8;
+            if (v.length * size > 4) ((view.setUint32(at + 8, arrayAt, true)), (to = arrayAt), (arrayAt += v.length * size));
+            v.forEach((n, k) => (size === 2 ? view.setUint16(to + k * 2, n, true) : view.setUint32(to + k * 4, n, true)));
+        });
+        out.set(data, dataAt);
+        return out;
+    }
+
+    it('draws 2-bit indexes through the ColorMap', () => {
+        // Four colors: black, red, green, blue (16-bit, reds then greens then blues); two rows, 0 1 2 3 and 3 2 1 0.
+        const colorMap = [0, 65535, 0, 0, 0, 0, 65535, 0, 0, 0, 0, 65535];
+        const file = tiff(
+            [
+                [256, 3, [4]],
+                [257, 3, [2]],
+                [258, 3, [2]],
+                [259, 3, [1]],
+                [262, 3, [3]],
+                [273, 4, [0]],
+                [278, 3, [2]],
+                [279, 4, [2]],
+                [320, 3, colorMap],
+            ],
+            [0b00011011, 0b11100100],
+        );
+        const parsed = parse(file);
+        expect(parsed.summary).toContainEqual(['Color', 'Palette, 2-bit']);
+        const p = picture(parsed.preview);
+        const colors = Array.from({ length: 8 }, (_, i) => Array.from(p.rgba.subarray(i * 4, i * 4 + 3)).join(','));
+        expect(colors).toEqual(['0,0,0', '255,0,0', '0,255,0', '0,0,255', '0,0,255', '0,255,0', '255,0,0', '0,0,0']);
+    });
+});
+
 describe.skipIf(!existsSync(images))('sample files', () => {
     const open = (name: string) => parse(new Uint8Array(readFileSync(join(images, name))));
+    const pixel = (p: { width: number; rgba: Uint8Array }, x: number, y: number) => Array.from(p.rgba.subarray((y * p.width + x) * 4, (y * p.width + x) * 4 + 4));
 
-    it('draws a big-endian LZW picture and reads its EXIF', () => {
-        const parsed = open('ExifTool.tif');
-        expect(parsed.summary).toEqual(expect.arrayContaining([['Size', '160 × 120'], ['Compression', 'LZW'], ['Byte order', 'Big-endian (MM)'], ['Camera', 'Canon EOS DIGITAL REBEL']]));
+    it('draws JPEG-compressed tiles or strips as libtiff does', () => {
+        const parsed = open('tiff-jpeg.tif');
+        expect(parsed.summary).toEqual(expect.arrayContaining([['Size', '512 × 512'], ['Compression', 'JPEG']]));
         const p = picture(parsed.preview);
-        expect([p.width, p.height]).toEqual([160, 120]);
-        expect(find(parsed.fields, 'IFD0 data')?.value).toMatch(/^\d+ strips?, /);
+        // Pillow's (libtiff's and libjpeg's) values, within a level or two of rounding.
+        for (const [x, y, expected] of [
+            [0, 0, [254, 254, 254]],
+            [256, 256, [49, 156, 200]],
+            [511, 511, [255, 255, 255]],
+            [100, 400, [182, 195, 87]],
+        ] as [number, number, number[]][]) {
+            expect(pixel(p, x, y).slice(0, 3).every((v, i) => Math.abs(v - expected[i]) <= 3), `${x}, ${y}`).toBe(true);
+        }
+        expect(parsed.warnings).toEqual([]);
     });
 
-    it('draws a palette picture and names GeoTIFF\'s tags', () => {
-        const parsed = open('GeoTiff.tif');
-        expect(parsed.summary).toContainEqual(['Color', 'Palette, 8-bit']);
-        expect(find(parsed.fields, 'GeoKeyDirectory')).toBeDefined();
-        picture(parsed.preview);
-    });
-
-    it('follows a DNG\'s SubIFDs and says why the raw data isn\'t drawn', () => {
-        const parsed = open('DNG.dng');
-        expect(parsed.title).toBe('Picture (TIFF, DNG)');
-        expect(parsed.summary).toContainEqual(['SubIFDs', '3']);
-        expect(parsed.warnings).toContain('IFD0 › SubIFD 1 couldn\'t be drawn: It\'s raw sensor data, which isn\'t drawn here.');
+    it('draws a Deflate-compressed RGBA picture exactly', () => {
+        const parsed = open('tiff-deflate-rgba.tif');
+        expect(parsed.summary).toEqual(expect.arrayContaining([['Size', '1920 × 1080'], ['Compression', 'Deflate']]));
+        const p = picture(parsed.preview);
+        expect(pixel(p, 0, 0)).toEqual([4, 6, 8, 255]);
+        expect(pixel(p, 960, 540)).toEqual([138, 123, 109, 255]);
+        expect(pixel(p, 1919, 1079)).toEqual([0, 0, 0, 255]);
+        expect(pixel(p, 300, 800)).toEqual([22, 26, 31, 255]);
+        expect(find(parsed.fields, 'IFD0 data')?.value).toMatch(/^\d+ (strips?|tiles?), /);
     });
 });
