@@ -1,7 +1,7 @@
 import { bytesLabel, field, hex } from '../../core/bytes';
 import type { Entry, Field, FormatParser, Preview } from '../../core/types';
 import { decodable, decodeJpeg, isFrame, processOf, segmentsOf, ZIGZAG, type Segment } from './decode';
-import { readExif, type Exif } from './exif';
+import { exifSummary, readExif, type Tiff } from '../tiff/ifd';
 
 /**
  * JPEG pictures (ITU T.81, with JFIF or EXIF around them). A string of
@@ -69,7 +69,7 @@ const parser: FormatParser = {
         const fields: Field[] = [];
         const entries: Entry[] = [];
         const texts: { title: string; text: string }[] = [];
-        let exif: Exif | null = null;
+        let exif: Tiff | null = null;
         let frame: { marker: number; width: number; height: number; precision: number; components: { id: number; h: number; v: number }[] } | null = null;
         let luminance: number[] | null = null;
         let adobe: number | null = null;
@@ -302,7 +302,7 @@ function frameHeader(data: Uint8Array, p: number, dhp: boolean): { fields: Field
 }
 
 /** An APPn segment's identifier (a NUL-terminated string at its start) and what's after it. */
-function readApp(data: Uint8Array, s: Segment, p: number, size: number, texts: { title: string; text: string }[], entries: Entry[], warnings: string[]): { name: string; value?: string; children: Field[]; exif?: Exif; adobe?: number } {
+function readApp(data: Uint8Array, s: Segment, p: number, size: number, texts: { title: string; text: string }[], entries: Entry[], warnings: string[]): { name: string; value?: string; children: Field[]; exif?: Tiff; adobe?: number } {
     const u16 = (at: number) => (data[at] << 8) | data[at + 1];
     let idEnd = p;
     while (idEnd < p + Math.min(size, 80) && data[idEnd] !== 0) idEnd++;
@@ -428,30 +428,6 @@ function colorOf(components: { id: number; h: number; v: number }[], adobe: numb
     const [y, cb, cr] = components;
     const subsampling = cb.h === cr.h && cb.v === cr.v ? ({ '1,1': '4:4:4', '2,1': '4:2:2', '2,2': '4:2:0', '1,2': '4:4:0', '4,1': '4:1:1' } as Record<string, string>)[`${y.h / cb.h},${y.v / cb.v}`] : undefined;
     return `YCbCr${subsampling ? ` ${subsampling}` : ''}`;
-}
-
-function exifSummary(exif: Exif): [string, string][] {
-    const t = exif.tags;
-    const out: [string, string][] = [];
-    const camera = [t.get('Make'), t.get('Model')].filter((v) => typeof v === 'string' && v) as string[];
-    // Models often repeat the make ("Canon" "Canon EOS 40D").
-    if (camera.length) out.push(['Camera', camera.length === 2 && camera[1].toLowerCase().startsWith(camera[0].toLowerCase()) ? camera[1] : camera.join(' ')]);
-    const taken = t.get('DateTimeOriginal') ?? t.get('DateTime');
-    if (typeof taken === 'string' && taken) out.push(['Taken', taken.replace(/^(\d{4}):(\d\d):(\d\d)/, '$1-$2-$3')]);
-    const exposure: string[] = [];
-    const time = t.get('ExposureTime');
-    if (typeof time === 'number' && time > 0) exposure.push(time < 1 ? `1/${Math.round(1 / time)} s` : `${+time.toPrecision(3)} s`);
-    const f = t.get('FNumber');
-    if (typeof f === 'number' && f > 0) exposure.push(`f/${+f.toPrecision(3)}`);
-    const iso = t.get('ISOSpeedRatings');
-    if (typeof iso === 'number' && iso > 0) exposure.push(`ISO ${iso}`);
-    const focal = t.get('FocalLength');
-    if (typeof focal === 'number' && focal > 0) exposure.push(`${+focal.toPrecision(4)} mm`);
-    if (exposure.length) out.push(['Exposure', exposure.join(', ')]);
-    const orientation = t.get('Orientation');
-    if (typeof orientation === 'number' && orientation > 1) out.push(['Orientation', ['', '', 'Mirrored', 'Rotated 180°', 'Mirrored vertically', 'Mirrored, rotated 270°', 'Rotated 90° clockwise', 'Mirrored, rotated 90°', 'Rotated 270° clockwise'][orientation] ?? String(orientation)]);
-    if (exif.position) out.push(['GPS', exif.position.map((d) => d.toFixed(6)).join(', ')]);
-    return out;
 }
 
 export default parser;

@@ -182,8 +182,8 @@ export function processOf(marker: number): string {
 /** Can the decoder draw pictures of this SOF marker: Huffman-coded, not lossless, not hierarchical. */
 export const decodable = (marker: number) => marker === 0xc0 || marker === 0xc1 || marker === 0xc2;
 
-/** Decodes the picture to RGBA. Throws on what it can't read. */
-export function decodeJpeg(data: Uint8Array, segments: Segment[]): Decoded {
+/** Decodes the picture to RGBA. Throws on what it can't read. `ycc` says whether three components are YCbCr, when something outside the JPEG says (a TIFF's PhotometricInterpretation). */
+export function decodeJpeg(data: Uint8Array, segments: Segment[], ycc?: boolean): Decoded {
     const quant: Int32Array[] = [];
     const dcTables: Uint16Array[] = [];
     const acTables: Uint16Array[] = [];
@@ -271,7 +271,7 @@ export function decodeJpeg(data: Uint8Array, segments: Segment[]): Decoded {
     if (!frame) throw new Error('There\'s no frame header (SOF).');
 
     const planes = frame.components.map((c) => samples(c, quant[c.tq] ?? new Int32Array(64).fill(1), frame!.precision));
-    return { width: frame.width, height: frame.height, rgba: toRgba(frame, planes, adobeTransform, jfif) };
+    return { width: frame.width, height: frame.height, rgba: toRgba(frame, planes, adobeTransform, jfif, ycc) };
 }
 
 function decodeScan(
@@ -448,7 +448,7 @@ function taps(size: number, factor: number, planeSize: number): { a: Int32Array;
     return { a, b, w };
 }
 
-function toRgba(frame: { width: number; height: number; components: Component[]; maxH: number; maxV: number }, planes: { width: number; height: number; pixels: Uint8Array }[], adobeTransform: number | null, jfif: boolean): Uint8Array {
+function toRgba(frame: { width: number; height: number; components: Component[]; maxH: number; maxV: number }, planes: { width: number; height: number; pixels: Uint8Array }[], adobeTransform: number | null, jfif: boolean, given?: boolean): Uint8Array {
     const { width, height } = frame;
     // Each component brought up to the picture's size.
     const full = planes.map((plane, i) => {
@@ -482,7 +482,7 @@ function toRgba(frame: { width: number; height: number; components: Component[];
     const n = full.length;
     // Three components are YCbCr unless an Adobe marker says RGB, or (with no JFIF or Adobe marker) they're named R, G and B.
     const named = frame.components.map((c) => String.fromCharCode(c.id)).join('');
-    const ycc = n === 3 ? (adobeTransform !== null ? adobeTransform !== 0 : jfif || named !== 'RGB') : n === 4 && adobeTransform === 2;
+    const ycc = n === 3 && given !== undefined ? given : n === 3 ? (adobeTransform !== null ? adobeTransform !== 0 : jfif || named !== 'RGB') : n === 4 && adobeTransform === 2;
     for (let i = 0, o = 0; i < width * height; i++, o += 4) {
         let r: number, g: number, b: number;
         if (n < 3) {
