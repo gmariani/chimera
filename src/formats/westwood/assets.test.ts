@@ -261,6 +261,44 @@ describe('objects on TD and RA maps', () => {
         expect(parsed.summary).toContainEqual(['Unit or infantry', '2 cells']);
     });
 
+    it('draws a war factory with its roof and door over it', () => {
+        /** A 24 × 24 SHP. Each frame is one color: all of it, or only its top half when `half`. */
+        const shp = (colors: number[], half = false) => {
+            const frames = colors.map((c) => (half ? [0xfe, 0x20, 0x01, c, 0xfe, 0x20, 0x01, 0, 0x80] : [0xfe, 0x40, 0x02, c, 0x80]));
+            const table = 14 + (frames.length + 2) * 8;
+            return bytes(table + frames.reduce((n, f) => n + f.length, 0), (v, b) => {
+                v.setUint16(0, frames.length, true);
+                v.setUint16(6, 24, true);
+                v.setUint16(8, 24, true);
+                let at = table;
+                frames.forEach((f, i) => {
+                    v.setUint32(14 + i * 8, (at | (0x80 << 24)) >>> 0, true);
+                    b.set(f, at);
+                    at += f.length;
+                });
+                v.setUint32(14 + frames.length * 8, at, true);
+            });
+        };
+        const files: Record<string, Uint8Array> = {
+            'scm01ea.bin': new Uint8Array(8192).fill(0xff),
+            'clear1.des': tileSet(7),
+            'desert.pal': new Uint8Array(768),
+            'weap.shp': shp([20, 21]),
+            'weap2.shp': shp([30, 31, 32, 33], true),
+        };
+        const find = (n: string) => (files[n] ? [{ data: files[n], source: 'X.MIX' }] : []);
+        /** The colors at the top and the bottom of the building's cell. */
+        const drawn = (type: string, health: number) => {
+            const text = `[MAP]\nTheater=DESERT\nX=0\nY=0\nWidth=4\nHeight=4\n[STRUCTURES]\n0=Neutral,${type},${health},0,0,None\n`;
+            const preview = ini.parse(new TextEncoder().encode(text), { name: 'scm01ea.ini', names: [], find }).preview;
+            if (preview?.kind !== 'stack') throw new Error('expected a stack');
+            const { width, pixels } = images(preview.items[0].preview).frames[0];
+            return [pixels[0], pixels[23 * width]];
+        };
+        expect(drawn('WEAP', 256)).toEqual([30, 20]);
+        expect(drawn('WEAP', 100)).toEqual([32, 21]);
+    });
+
     it('numbers where players start on a multiplayer map, and not on a mission', () => {
         const bin = new Uint8Array(8192).fill(0xff);
         // Index 1 white, 2 near black: the badge's border and its dark square.

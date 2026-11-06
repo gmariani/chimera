@@ -339,9 +339,10 @@ export function sniffGaba(data: Uint8Array): boolean {
     return b.ascii(0, 4) === 'GABA' && (b.u32(4) === 1 || b.u32(4) === 2) && data.length >= 12 + b.u32(8) * (b.u32(4) === 2 ? 36 : 32);
 }
 
-/** Bink video (RA2's movies). */
+/** Bink video (RA2's movies): "BIK", or "KB2" for Bink 2 (the Remastered Collection's), then a revision letter. */
 export function sniffBink(data: Uint8Array): boolean {
-    return new Bytes(data).ascii(0, 3) === 'BIK';
+    const id = new Bytes(data).ascii(0, 3);
+    return id === 'BIK' || id === 'KB2';
 }
 
 /**

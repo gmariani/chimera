@@ -75,7 +75,7 @@ const SPRITES = [
     'mcv', 'v2rl', 'mnly', 'mrj', 'mgg', 'ftrk', 'dtrk', 'truk', 'bggy', 'bike', 'ftnk', 'msam', 'mlrs', 'mhq', 'boat',
     'lst', 'ss', 'msub', 'dd', 'ca', 'pt', 'tran', 'heli', 'hind', 'mig', 'yak', 'badr', 'u2', 'orca', 'a10', 'c17',
     // Buildings
-    'fact', 'powr', 'apwr', 'nuke', 'nuk2', 'barr', 'tent', 'pyle', 'hand', 'proc', 'weap', 'dome', 'hq', 'eye', 'tmpl',
+    'fact', 'powr', 'apwr', 'nuke', 'nuk2', 'barr', 'tent', 'pyle', 'hand', 'proc', 'weap', 'weap2', 'dome', 'hq', 'eye', 'tmpl',
     'gun', 'agun', 'sam', 'gap', 'ftur', 'tsla', 'pbox', 'hbox', 'gtwr', 'atwr', 'obli', 'fix', 'silo', 'hpad', 'afld',
     'spen', 'syrd', 'iron', 'pdox', 'atek', 'stek', 'kenn', 'mslo', 'fcom', 'hosp', 'bio', 'miss', 'brik', 'sbag', 'cycl',
     'barb', 'wood', 'fenc', 'mine', 'minv', 'minp', 'v01', 'v02', 'v03', 'v04', 'v05', 'v06', 'v07', 'v08', 'v09', 'v10',

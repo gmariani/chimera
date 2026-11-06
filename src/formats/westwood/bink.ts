@@ -4,13 +4,17 @@ import { wav } from './adpcm';
 import type { BinkWasm } from './bink-wasm/bink.mjs';
 
 /**
- * Bink video (RAD Game Tools), which RA2 uses for its movies. The container is
- * read here: a 44-byte header, then per sound track a size, its rate and flags,
- * and an ID, then where each frame starts (bit 0 marks a keyframe). Each frame
- * holds, per sound track, a 4-byte size and that much audio, then the video.
+ * Bink video (RAD Game Tools), which RA2 uses for its movies, and Bink 2 ("KB2"),
+ * which the C&C Remastered Collection uses for its new ones. The container is
+ * read here: a 44-byte header (4 bytes more in Bink 1's revision k and Bink 2's
+ * i to k), then per sound track a size, its rate and flags, and an ID, then
+ * where each frame starts (bit 0 marks a keyframe). Each frame holds, per sound
+ * track, a 4-byte size and that much audio, then the video.
  *
  * The packets are decoded by FFmpeg's Bink decoders, compiled to WebAssembly
- * (wasm/bink), which load only when a Bink file is opened.
+ * (wasm/bink), which load only when a Bink file is opened. FFmpeg has no Bink 2
+ * video decoder (RAD never published the format), so Bink 2 files play their
+ * sound only; their sound is the same Bink audio as Bink 1's.
  */
 
 const AUDIO_STEREO = 0x2000;
@@ -34,6 +38,10 @@ export function ready(): Promise<void> {
 
 interface Layout {
     tag: number;
+    /** Bink 2. */
+    two: boolean;
+    /** Where the sound tracks' sizes start: after the header and, in later revisions, a field nobody has named. */
+    base: number;
     flags: number;
     width: number;
     height: number;
@@ -43,13 +51,19 @@ interface Layout {
 
 function layout(data: Uint8Array): Layout {
     const b = new Bytes(data);
+    const two = b.ascii(0, 3) === 'KB2';
+    const revision = b.ascii(3, 1);
+    // As FFmpeg's demuxer has it: Bink 1's revision k and Bink 2's i, j and k add 4 bytes here.
+    const base = (!two && revision === 'k') || (two && 'ijk'.includes(revision)) ? 48 : 44;
     const count = b.u32(8);
     const tracks = b.u32(40);
-    const trackInfo = 44 + tracks * 4;
-    const index = 44 + tracks * 12;
+    const trackInfo = base + tracks * 4;
+    const index = base + tracks * 12;
     const offsets = Array.from({ length: count + 1 }, (_, i) => b.u32(index + i * 4));
     return {
         tag: b.u32(0),
+        two,
+        base,
         flags: b.u32(36),
         width: b.u32(20),
         height: b.u32(24),
@@ -175,9 +189,9 @@ class Player {
     }
 }
 
-/** The first sound track, decoded whole. */
-function sound(w: BinkWasm, data: Uint8Array, l: Layout): AudioClip | undefined {
-    const track = l.tracks[0];
+/** A sound track (the first, unless told), decoded whole. */
+function sound(w: BinkWasm, data: Uint8Array, l: Layout, index = 0): AudioClip | undefined {
+    const track = l.tracks[index];
     if (!track || !track.rate) return undefined;
     const channels = track.flags & AUDIO_STEREO ? 2 : 1;
     const decoder = w._audio_open(track.flags & AUDIO_DCT ? 1 : 0, l.tag, track.rate, channels);
@@ -188,7 +202,7 @@ function sound(w: BinkWasm, data: Uint8Array, l: Layout): AudioClip | undefined 
     const chunks: Int16Array[] = [];
     try {
         for (let i = 0; i < l.frames.length; i++) {
-            const packet = packets(data, l, i).audio[0];
+            const packet = packets(data, l, i).audio[index];
             if (!packet.length) continue;
             const n = w._audio_decode(decoder, input.put(packet), packet.length, out, max);
             if (n > 0) chunks.push(w.HEAP16.slice(out >> 1, (out >> 1) + n));
@@ -210,7 +224,8 @@ function sound(w: BinkWasm, data: Uint8Array, l: Layout): AudioClip | undefined 
 const parser: FormatParser = {
     parse(data) {
         const b = new Bytes(data);
-        if (b.ascii(0, 3) !== 'BIK') throw new Error('No "BIK" header.');
+        const signature = b.ascii(0, 3);
+        if (signature !== 'BIK' && signature !== 'KB2') throw new Error('No "BIK" or "KB2" header.');
         const l = layout(data);
         const [dividend, divider] = [b.u32(28), b.u32(32)];
         const fps = divider ? dividend / divider : 0;
@@ -219,24 +234,28 @@ const parser: FormatParser = {
 
         let player: Player | null = null;
         let audio: AudioClip | undefined;
+        /** Bink 2's other sound tracks (the Remastered Collection's movies have one per language, it seems). */
+        let others: AudioClip[] = [];
         if (!wasm) warnings.push('The Bink decoder couldn\'t be loaded, so only the header is shown.');
         else {
             try {
-                player = new Player(wasm, data, l);
+                if (l.two) warnings.push('Bink 2 video can\'t be shown: RAD never published the format and FFmpeg has no decoder for it. The sound plays.');
+                else player = new Player(wasm, data, l);
                 audio = sound(wasm, data, l);
+                if (l.two) others = l.tracks.slice(1).map((_, i) => sound(wasm!, data, l, i + 1)).filter((c): c is AudioClip => !!c);
             } catch (e) {
                 warnings.push(e instanceof Error ? e.message : String(e));
             }
         }
 
         return {
-            title: 'Bink video',
+            title: l.two ? 'Bink 2 video' : 'Bink video',
             summary: [
                 ['Version', b.ascii(3, 1)],
                 ['Size', `${l.width} × ${l.height}`],
                 ['Frames', `${count} at ${+fps.toFixed(3)} per second (${fps ? (count / fps).toFixed(1) : '?'} s), ${((k) => `${k} keyframe${k === 1 ? '' : 's'}`)(l.frames.filter((f) => f.key).length)}`],
                 ['Sound', l.tracks.length ? l.tracks.map((t) => `${t.rate} Hz ${t.flags & AUDIO_STEREO ? 'stereo' : 'mono'}, ${t.flags & AUDIO_DCT ? 'DCT' : 'RDFT'}`).join('; ') : 'None'],
-                ['Decoder', 'FFmpeg\'s Bink decoders, compiled to WebAssembly'],
+                ['Decoder', l.two ? 'Sound only: FFmpeg\'s Bink audio decoder, compiled to WebAssembly' : 'FFmpeg\'s Bink decoders, compiled to WebAssembly'],
             ],
             fields: [
                 {
@@ -244,7 +263,7 @@ const parser: FormatParser = {
                     offset: 0,
                     length: 44,
                     children: [
-                        field('ID', 0, 3, 'BIK'),
+                        field('ID', 0, 3, signature),
                         field('Version', 3, 1, b.ascii(3, 1)),
                         field('Size', 4, 4, bytesLabel(b.u32(4)), 'Of everything after this field.'),
                         field('Frames', 8, 4, count),
@@ -258,13 +277,20 @@ const parser: FormatParser = {
                         field('Sound tracks', 40, 4, l.tracks.length),
                     ],
                 },
-                ...l.tracks.map((t, i) => field(`Track ${i} format`, 44 + l.tracks.length * 4 + i * 4, 4, `${t.rate} Hz${t.flags & AUDIO_STEREO ? ', stereo' : ''}${t.flags & AUDIO_DCT ? ', DCT' : ', RDFT'}`)),
-                field('Frame index', 44 + l.tracks.length * 12, (count + 1) * 4, `${count + 1} offsets`, 'Where each frame starts; bit 0 marks a keyframe.'),
+                ...(l.base > 44 ? [field('Unknown', 44, 4, `0x${b.u32(44).toString(16).padStart(8, '0')}`, 'Added in Bink 1\'s revision k and Bink 2\'s i; not documented.')] : []),
+                ...l.tracks.map((_, i) => field(`Track ${i} largest decoded size`, l.base + i * 4, 4, bytesLabel(b.u32(l.base + i * 4)))),
+                ...l.tracks.map((t, i) => field(`Track ${i} format`, l.base + l.tracks.length * 4 + i * 4, 4, `${t.rate} Hz${t.flags & AUDIO_STEREO ? ', stereo' : ''}${t.flags & AUDIO_DCT ? ', DCT' : ', RDFT'}`)),
+                ...l.tracks.map((_, i) => field(`Track ${i} ID`, l.base + l.tracks.length * 8 + i * 4, 4, b.u32(l.base + l.tracks.length * 8 + i * 4))),
+                field('Frame index', l.base + l.tracks.length * 12, (count + 1) * 4, `${count + 1} offsets`, 'Where each frame starts; bit 0 marks a keyframe.'),
                 ...l.frames.slice(0, 2000).map((f, i) => field(`Frame ${i}${f.key ? ' (keyframe)' : ''}`, f.start, f.end - f.start, bytesLabel(f.end - f.start))),
             ],
             preview: player
                 ? { kind: 'video', width: l.width, height: l.height, frameCount: count, fps: fps || 15, frame: (i) => player.frame(i), audio }
-                : undefined,
+                : audio && others.length
+                  ? { kind: 'stack', items: [audio, ...others].map((clip, i) => ({ title: `Sound track ${i + 1}`, preview: { kind: 'audio', ...clip } })) }
+                  : audio
+                    ? { kind: 'audio', ...audio }
+                    : undefined,
             warnings,
         };
     },

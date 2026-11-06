@@ -7,6 +7,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 - .afm font
 - .sol shared objects
 - .flv Flash Video
+- bink2 https://github.com/mrtnmtth/FFmpeg-bink2
 - swf preview with ruffle
 - test dune 2
 - test dune 2k
@@ -29,7 +30,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | WAV sound (PCM, IMA ADPCM, and Microsoft ADPCM as the Remastered Collection's music uses) | chunks, format | player | WAV |
 | RA2 sound banks (audio.idx with audio.bag) | every sound | each sound as a WAV | WAV |
 | CSF string tables (RA2) | every label | text | — |
-| Bink video (RA2's movies) | header, frame index | player with sound, decoded by FFmpeg's Bink decoders compiled to WebAssembly | PNG frame, all frames, WAV |
+| Bink video (RA2's movies) and Bink 2 (the Remastered Collection's) | header, frame index | player with sound, decoded by FFmpeg's Bink decoders compiled to WebAssembly; Bink 2's sound only, each track (FFmpeg has no Bink 2 video decoder) | PNG frame, all frames, WAV |
 | Maps (TD .bin with its mission INI, RA [MapPack] in mission INIs) | every cell, every object | drawn with the game's tiles, ore, walls, trees, craters, buildings, units and infantry (in each side's color) once the theater archive is open; terrain kinds with a key | PNG |
 | TS and RA2 maps (.map, .mpr, .yrm; inside .mmx/.yro) | sections, cells, overlays, objects | drawn with the game's tiles, ore, walls, bridges, trees, buildings (with their animated parts, defense turrets and damage), infantry and lit voxel vehicles (in each side's color) once the main archive is open (otherwise by height); the map's own preview | PNG |
 | Fonts (.fnt: TD/RA 4-bit, TS 8-bit, TS/RA2 1-bit and Unicode) | header, each character | every character | PNG |

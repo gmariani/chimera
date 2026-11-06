@@ -572,6 +572,12 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
                 const frame = !shp ? 0 : TURRET_BUILDINGS.has(o.type) ? bodyFrame(o.facing) + (damaged && shp.frames.length >= 64 ? 32 : 0) : damaged ? shp.frames.length >> 1 : 0;
                 const image = shp?.frames[frame];
                 if (image) blit(image.pixels, image.width, image.height, (x - area.x) * TILE, (y - area.y) * TILE, true, remap);
+                // A war factory's own sprite is only its floor and walls: the roof and door are drawn over it. (Red Alert's fake one uses the same art.)
+                if (art(o.type) === 'WEAP') {
+                    const top = spriteFrom('WEAP2', ['shp'], `War factory roof and door (in ${conquer})`);
+                    const roof = top?.frames[damaged ? top.frames.length >> 1 : 0];
+                    if (roof) blit(roof.pixels, roof.width, roof.height, (x - area.x) * TILE, (y - area.y) * TILE, true, remap);
+                }
             } });
             continue;
         }

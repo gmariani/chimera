@@ -63,7 +63,7 @@ export const FORMATS: FormatDescriptor[] = [
     {
         id: 'bink',
         name: 'Bink video',
-        extensions: ['bik'],
+        extensions: ['bik', 'bk2'],
         sniff: sniffBink,
         // The decoders (WebAssembly) load with the parser.
         load: parserOf(() => import('./westwood/bink').then(async (m) => (await m.ready(), m))),
