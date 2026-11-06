@@ -68,14 +68,15 @@ export function useParsed(file: OpenFile, names: readonly string[], companions?:
 export interface TypedEntry {
     entry: Entry;
     format: FormatDescriptor;
-    /** The name to save under: the real one, or the label plus the detected extension. */
+    /** The name to save under: the real one, or the label plus the detected extension (a label that has its own, for a format the app doesn't read, keeps it). */
     fileName: string;
 }
 
 export function typeEntries(entries: Entry[]): TypedEntry[] {
     return entries.map((entry) => {
         const format = detect(entry.data, entry.name);
-        return { entry, format, fileName: entry.name ?? `${entry.label}.${extensionOf(format)}` };
+        const ownExtension = format.id === 'raw' && /\.[a-z0-9]{2,5}$/i.test(entry.label);
+        return { entry, format, fileName: entry.name ?? (ownExtension ? entry.label : `${entry.label}.${extensionOf(format)}`) };
     });
 }
 

@@ -425,29 +425,30 @@ function PalettePreview({ colors, fileName }: { colors: Uint8Array; fileName: st
 }
 
 /** A blob URL for a WAV, made and revoked by the same effect, so it lives exactly as long as it's shown (seeking re-reads it). */
-function useWavUrl(wav: Uint8Array | undefined): string | undefined {
+function useWavUrl(wav: Uint8Array | undefined, mime = 'audio/wav'): string | undefined {
     const [url, setUrl] = useState<string>();
     useEffect(() => {
         if (!wav) {
             setUrl(undefined);
             return;
         }
-        const made = URL.createObjectURL(new Blob([wav as Uint8Array<ArrayBuffer>], { type: 'audio/wav' }));
+        const made = URL.createObjectURL(new Blob([wav as Uint8Array<ArrayBuffer>], { type: mime }));
         setUrl(made);
         return () => URL.revokeObjectURL(made);
-    }, [wav]);
+    }, [wav, mime]);
     return url;
 }
 
 const clipLabel = (clip: AudioClip) => `${clip.seconds.toFixed(2)} s · ${clip.sampleRate} Hz · ${clip.bits}-bit ${clip.channels === 2 ? 'stereo' : 'mono'}`;
 
 function AudioPreview({ clip, fileName }: { clip: AudioClip; fileName: string }) {
-    const url = useWavUrl(clip.wav);
+    const url = useWavUrl(clip.wav, clip.mime);
+    const mp3 = clip.mime === 'audio/mpeg';
     return (
         <div className="d-flex flex-wrap gap-3 align-items-center">
             <audio controls src={url} className="audio-player" />
-            <Button variant="outline-light" onClick={() => download(clip.wav, `${safeName(stem(fileName))}.wav`, 'audio/wav')}>
-                <i className="bi bi-file-earmark-music me-1" /> Save as WAV
+            <Button variant="outline-light" onClick={() => download(clip.wav, `${safeName(stem(fileName))}.${mp3 ? 'mp3' : 'wav'}`, clip.mime ?? 'audio/wav')}>
+                <i className="bi bi-file-earmark-music me-1" /> Save as {mp3 ? 'MP3' : 'WAV'}
             </Button>
             <Muted>{clipLabel(clip)}</Muted>
         </div>

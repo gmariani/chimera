@@ -270,12 +270,17 @@ body {
     line-height: 1;
 }
 
+/* The name keeps its width (up to a point); a long value, like a whole XML packet, takes what's left and is cut short. */
 .tree-name {
+    flex: 0 0 auto;
+    max-width: 70%;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .tree-value {
+    flex: 1 1 0;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     color: var(--bs-secondary-color);
