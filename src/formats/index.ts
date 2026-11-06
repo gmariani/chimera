@@ -1,5 +1,6 @@
 import type { FormatDescriptor, FormatParser } from '../core/types';
 import { sniffJpeg } from './jpeg/sniff';
+import { sniffMeg } from './meg/sniff';
 import { sniffMix, sniffXccDatabase } from './mix/sniff';
 import { sniffTiff } from './tiff/sniff';
 import { sniffPng } from './png/sniff';
@@ -44,6 +45,7 @@ const parserOf = (load: () => Promise<{ default: FormatParser }>) => () => load(
 /** In order of how sure a successful sniff is: text matches almost anything, so it's last. */
 export const FORMATS: FormatDescriptor[] = [
     { id: 'mix', name: 'Westwood MIX archive', extensions: ['mix'], sniff: sniffMix, load: parserOf(() => import('./mix')) },
+    { id: 'meg', name: 'Petroglyph MEG archive', extensions: ['meg'], sniff: sniffMeg, load: parserOf(() => import('./meg')) },
     { id: 'shp-td', name: 'Sprite (TD/RA SHP)', extensions: ['shp'], sniff: sniffShpTd, load: parserOf(() => import('./westwood/shp-td')) },
     { id: 'shp-ts', name: 'Sprite (TS/RA2 SHP)', extensions: ['shp'], sniff: sniffShpTs, load: parserOf(() => import('./westwood/shp-ts')) },
     { id: 'shp-d2', name: 'Sprite (Dune II-style SHP)', extensions: ['shp'], sniff: sniffShpD2, load: parserOf(() => import('./westwood/shp-d2')) },

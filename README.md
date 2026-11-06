@@ -16,6 +16,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Format | Read | Preview | Extract |
 | --- | --- | --- | --- |
 | Westwood MIX (TD, RA, TS, RA2, and RA2's .mmx/.yro maps), plain or Blowfish-encrypted | full structure, names from hashes | — | single files, all as ZIP, nested MIX |
+| Petroglyph MEG archives (versions 1–3: Empire at War, the C&C Remastered Collection's music, sound, textures and config) | header, names, records | — | single files, all as ZIP |
 | SHP sprites (TD/RA, TS/RA2, and the Dune II-style cursors) | headers, frame table | all frames, animation, any palette | PNG frame, sheet, all frames |
 | AUD audio (IMA and Westwood ADPCM) | headers, chunks | player | WAV |
 | CPS and PCX pictures (256-color and 24-bit) | headers | image | PNG |
@@ -25,7 +26,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Isometric tiles (TS/RA2 .tem, .sno, .urb, .des, .lun, .ubn) | header, every cell | assembled, each cell | PNG |
 | Voxel models (.vxl) and animations (.hva) | headers, limbs, matrices | 3D viewer (turn, zoom, animate; turret and barrel placed by art.ini; lit by each voxel's normal), each limb from four sides | PNG |
 | Voxel lighting tables (voxels.vpl) | header, tables | the palette at each light level | PNG |
-| WAV sound (PCM and IMA ADPCM) | chunks, format | player | WAV |
+| WAV sound (PCM, IMA ADPCM, and Microsoft ADPCM as the Remastered Collection's music uses) | chunks, format | player | WAV |
 | RA2 sound banks (audio.idx with audio.bag) | every sound | each sound as a WAV | WAV |
 | CSF string tables (RA2) | every label | text | — |
 | Bink video (RA2's movies) | header, frame index | player with sound, decoded by FFmpeg's Bink decoders compiled to WebAssembly | PNG frame, all frames, WAV |
@@ -39,6 +40,13 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | VQP palette blending tables | tables | first table | — |
 | INI files | sections and entries | text; for rules.ini, a table of every unit and building (name, cost, strength, art) linking to its sprite or voxel model | — |
 | XCC local mix database | names | list | — |
+| JPEG pictures (baseline, extended, progressive; JFIF, EXIF, XMP, ICC, Adobe and other APPn segments) | every segment to the T.81 parameters, EXIF tags | image | PNG, EXIF and JFIF thumbnails |
+| TIFF pictures (strips and tiles; none, PackBits, LZW, Deflate, JPEG, CCITT fax; bilevel to CMYK, YCbCr and L\*a\*b\*; DNG, NEF and CR2 previews) | header, every IFD and tag | every page | PNG, embedded JPEGs |
+| PNG pictures (every color type and depth, Adam7) | every chunk, text | image | PNG |
+| MP3 and other MPEG audio | ID3 tags, frames | player | MP3 |
+| Flash movies (SWF, plain or zlib-compressed) | header and every tag by frame, to the SWF 19 fields | metadata | bitmaps (JPEG, PNG), sounds (MP3; PCM, ADPCM and Nellymoser as WAV), streamed sound, video as FLV, binary data, fonts, ABC bytecode, the uncompressed movie |
+| Pixel Bender kernels (.pbj) | every record and instruction | disassembly | — |
+| TrueType and OpenType fonts (TrueType and CFF outlines, CID-keyed; collections) | table directory, head, hhea, maxp, name, OS/2, post, cmap, CFF | every glyph, the names | PNG |
 | Other text | — | text | — |
 
 Sprites and voxels have a **Team color** picker: the games recolor 16 palette entries for the owner (176–191 in TD, 80–95 in RA, 16–31 in TS and RA2); the shades here are close to the games', not exact.
