@@ -56,6 +56,28 @@ describe('segments', () => {
         expect(end).toBe(data.length);
     });
 
+    it('breaks out the hierarchical and arithmetic-coding segments (DHP, EXP, DAC), which no sample has', () => {
+        const data = Uint8Array.from([
+            0xff, 0xd8,
+            // DHP: 8-bit, 16 lines of 32 samples, one component (1, 2×1, table 0).
+            0xff, 0xde, 0, 11, 8, 0, 16, 0, 32, 1, 1, 0x21, 0,
+            // EXP: expand horizontally only.
+            0xff, 0xdf, 0, 3, 0x10,
+            // DAC: DC table 1 with L 2, U 5; AC table 0 with Kx 7.
+            0xff, 0xcc, 0, 6, 0x01, 0x52, 0x10, 7,
+            0xff, 0xd9,
+        ]); // prettier-ignore
+        const parsed = jpeg.parse(data, { name: null, names: [] });
+        const dhp = find(parsed.fields, 'DHP (Hierarchical progression)')!;
+        expect(dhp.value).toBe('32 × 16');
+        expect(find(dhp.children!, 'H, V (sampling)')?.value).toBe('2×1');
+        expect(find(parsed.fields, 'EXP (Expand reference components)')?.value).toBe('Expand horizontally');
+        expect(find(parsed.fields, 'DAC (Arithmetic coding conditioning)')?.children?.slice(2).map((t) => [t.name, t.value])).toEqual([
+            ['DC conditioning 1', 'L 2, U 5'],
+            ['AC conditioning 0', 'Kx 7'],
+        ]);
+    });
+
     it('is found by its first bytes', () => {
         expect(detect(Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16]), 'photo.bin').id).toBe('jpeg');
     });
@@ -78,6 +100,10 @@ describe.skipIf(!existsSync(samples))('sample pictures', () => {
         const [, parsed] = open(join(samples, 'FLCL Thumb.jpg'));
         expect(parsed.summary).toEqual(expect.arrayContaining([['Process', 'Progressive'], ['Scans', '10']]));
         expect(parsed.fields.filter((f) => f.name.startsWith('Scan ')).map((f) => f.value)).toContain('Y: AC 1–5, from bit 2');
+        // Tables down to the spec's parameters: a DQT's values in rows of the zigzag order, a DHT's symbols by code length.
+        expect(find(parsed.fields, 'Q0–Q7')?.length).toBe(8);
+        expect(find(parsed.fields, 'DC table 0')?.children?.map((c) => c.name)).toEqual(expect.arrayContaining(['Tc, Th', 'L1–L16 (code counts)']));
+        expect(find(parsed.fields, 'Cs (selector)')?.value).toBe('1');
         const p = picture(parsed.preview);
         near(pixel(p, 0, 0), [211, 233, 244]);
         near(pixel(p, 40, 30), [231, 216, 131]);
@@ -89,7 +115,11 @@ describe.skipIf(!existsSync(samples))('sample pictures', () => {
     it('reads EXIF tags, with their meanings, and offers the thumbnail', () => {
         const [data, parsed] = open(join(samples, 'Sample_Ocad.jpg'));
         expect(parsed.summary).toEqual(expect.arrayContaining([['Camera', 'OLYMPUS IMAGING CORP. u710,S710'], ['Exposure', '1/100 s, f/3.4, ISO 64, 6.5 mm']]));
-        expect(find(parsed.fields, 'ExposureTime')?.value).toBe('1/100');
+        // Out of line: the entry gives an offset, and the value is where it points.
+        const exposure = find(parsed.fields, 'ExposureTime')!;
+        expect(exposure.value).toBe('1/100');
+        expect(exposure.children?.map((c) => c.name)).toEqual(['Tag', 'Type', 'Count', 'Value offset', 'Value']);
+        expect(find(exposure.children!, 'Type')?.value).toBe('5 (RATIONAL)');
         expect(find(parsed.fields, 'ResolutionUnit')?.value).toBe('2 (Inches)');
         const thumbnail = parsed.entries!.find((e) => e.label === 'exif thumbnail')!;
         expect(Array.from(data.subarray(thumbnail.offset, thumbnail.offset + 2))).toEqual([0xff, 0xd8]);

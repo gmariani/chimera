@@ -105,7 +105,11 @@ const parser: FormatParser = {
                         offset: at,
                         length: 1 + length,
                         value: `${sixteen ? 16 : 8}-bit`,
-                        children: [field('Precision and ID', at, 1, `0x${hex(data[at], 2)}`, 'High 4 bits: 0 for 8-bit values, 1 for 16-bit; low 4: the table number.'), field('Values', at + 1, length, values.slice(0, 8).join(' ') + ' …', 'In zigzag order, the DC value first.')],
+                        children: [
+                            field('Pq, Tq', at, 1, `0x${hex(data[at], 2)}`, 'Precision (high 4 bits): 0 for 8-bit values, 1 for 16-bit; destination (low 4), 0 to 3.'),
+                            // Eight rows of the zigzag order: Q0 (the DC value) to Q7, and so on.
+                            ...Array.from({ length: 8 }, (_, row) => field(`Q${row * 8}–Q${row * 8 + 7}`, at + 1 + (row * length) / 8, length / 8, values.slice(row * 8, row * 8 + 8).join(' '), row === 0 ? 'In zigzag order, the DC value first.' : undefined)),
+                        ],
                     });
                     at += 1 + length;
                 }
@@ -122,33 +126,19 @@ const parser: FormatParser = {
                         length: 17 + total,
                         value: `${total} codes`,
                         children: [
-                            field('Class and ID', at, 1, `0x${hex(data[at], 2)}`, 'High 4 bits: 0 for DC, 1 for AC; low 4: the table number.'),
-                            field('Code counts', at + 1, 16, Array.from(counts).join(' '), 'How many codes there are of each length, 1 to 16 bits.'),
-                            field('Symbols', at + 17, total, total <= 16 ? Array.from(data.subarray(at + 17, at + 17 + total), (b) => hex(b, 2)).join(' ') : bytesLabel(total), kind === 'DC' ? 'The bit length of each difference.' : 'Each a run of zeros (high 4 bits) and a bit length (low 4).'),
+                            field('Tc, Th', at, 1, `0x${hex(data[at], 2)}`, 'Table class (high 4 bits): 0 for DC or lossless, 1 for AC; destination (low 4), 0 to 3.'),
+                            field('L1–L16 (code counts)', at + 1, 16, Array.from(counts).join(' '), 'How many codes there are of each length, 1 to 16 bits.'),
+                            ...symbolFields(data, at + 17, counts, kind),
                         ],
                     });
                     at += 17 + total;
                 }
                 fields.push(segment(`${code} (${title})`, tables, tables.map((t) => t.name).join(', ')));
-            } else if (isFrame(s.marker)) {
-                const count = data[p + 5];
-                const components = Array.from({ length: count }, (_, i) => ({ at: p + 6 + i * 3, id: data[p + 6 + i * 3], h: data[p + 7 + i * 3] >> 4, v: data[p + 7 + i * 3] & 15, tq: data[p + 8 + i * 3] }));
-                if (!frame) frame = { marker: s.marker, precision: data[p], height: u16(p + 1), width: u16(p + 3), components };
-                fields.push(
-                    segment(`${code} (${processOf(s.marker)})`, [
-                        field('Precision', p, 1, `${data[p]} bits per sample`),
-                        field('Height', p + 1, 2, u16(p + 1), u16(p + 1) ? undefined : 'Given later, by a DNL marker.'),
-                        field('Width', p + 3, 2, u16(p + 3)),
-                        field('Components', p + 5, 1, count),
-                        ...components.map((c) => ({
-                            name: `Component ${c.id}${COMPONENT_NAMES[c.id] ? ` (${COMPONENT_NAMES[c.id]})` : ''}`,
-                            offset: c.at,
-                            length: 3,
-                            value: `${c.h}×${c.v}, table ${c.tq}`,
-                            children: [field('ID', c.at, 1, c.id), field('Sampling', c.at + 1, 1, `${c.h}×${c.v}`, 'Horizontal (high 4 bits) and vertical (low 4) sampling factors.'), field('Quantization table', c.at + 2, 1, c.tq)],
-                        })),
-                    ], `${u16(p + 3)} × ${u16(p + 1)}`),
-                );
+            } else if (isFrame(s.marker) || s.marker === 0xde) {
+                const header = frameHeader(data, p, s.marker === 0xde);
+                if (s.marker !== 0xde && !frame) frame = { marker: s.marker, precision: data[p], height: u16(p + 1), width: u16(p + 3), components: header.components };
+                const name = s.marker === 0xde ? `${code} (${title})` : `${code} (${processOf(s.marker)})`;
+                fields.push(segment(name, header.fields, `${u16(p + 3)} × ${u16(p + 1)}`));
             } else if (s.marker === 0xda) {
                 scans++;
                 const count = data[p];
@@ -158,19 +148,49 @@ const parser: FormatParser = {
                 const progressive = frame?.marker === 0xc2 || frame?.marker === 0xc6 || frame?.marker === 0xca || frame?.marker === 0xce;
                 const what = !progressive ? names.join(', ') : `${names.join(', ')}: ${ss === 0 ? 'DC' : `AC ${ss}–${se}`}${ah ? `, refining bit ${al}` : al ? `, from bit ${al}` : ''}`;
                 const children: Field[] = [
-                    field('Components', p, 1, count),
-                    ...Array.from({ length: count }, (_, i) => field(`Component ${names[i]}`, p + 1 + i * 2, 2, `DC table ${data[p + 2 + i * 2] >> 4}, AC table ${data[p + 2 + i * 2] & 15}`)),
-                    field('Spectral start', q, 1, ss, 'The first coefficient in the scan, in zigzag order (0 is DC).'),
-                    field('Spectral end', q + 1, 1, se),
-                    field('Successive approximation', q + 2, 1, `${ah}, ${al}`, 'The bit refined last time (high 4 bits) and this time (low 4); 0, 0 when it\'s all at once.'),
+                    field('Ns (components)', p, 1, count),
+                    ...Array.from({ length: count }, (_, i): Field => {
+                        const at = p + 1 + i * 2;
+                        return {
+                            name: `Component ${names[i]}`,
+                            offset: at,
+                            length: 2,
+                            value: `DC table ${data[at + 1] >> 4}, AC table ${data[at + 1] & 15}`,
+                            children: [field('Cs (selector)', at, 1, data[at], 'The component\'s identifier in the frame header.'), field('Td, Ta (tables)', at + 1, 1, `${data[at + 1] >> 4}, ${data[at + 1] & 15}`, 'The DC (high 4 bits) and AC (low 4) entropy coding tables.')],
+                        };
+                    }),
+                    field('Ss (spectral start)', q, 1, ss, 'The first coefficient in the scan, in zigzag order (0 is DC).'),
+                    field('Se (spectral end)', q + 1, 1, se, 'The last; 63 in a sequential scan.'),
+                    field('Ah, Al (successive approximation)', q + 2, 1, `${ah}, ${al}`, 'The bit refined last time (high 4 bits) and this time (low 4); 0, 0 when it\'s all at once.'),
                 ];
                 const scan = s.scan!;
                 const coded = field('Coded data', scan.offset, scan.length, bytesLabel(scan.length), `Huffman-coded${scan.restarts ? `, with ${scan.restarts} restart marker${scan.restarts === 1 ? '' : 's'}` : ''}; each FF in it is followed by a stuffed 00.`);
                 fields.push({ name: `Scan ${scans}`, offset: s.offset, length: s.length + scan.length, value: what, children: [segment(`${code} (${title})`, children), coded] });
             } else if (s.marker === 0xdd) {
-                fields.push(segment(`${code} (${title})`, [field('Interval', p, 2, u16(p), 'MCUs between restart markers (0: none).')], String(u16(p))));
+                fields.push(segment(`${code} (${title})`, [field('Ri (interval)', p, 2, u16(p), 'MCUs between restart markers (0: none).')], String(u16(p))));
+            } else if (s.marker === 0xcc) {
+                const tables: Field[] = [];
+                for (let at = p; at + 2 <= p + size; at += 2) {
+                    const ac = data[at] >> 4 === 1;
+                    const cs = data[at + 1];
+                    tables.push({
+                        name: `${ac ? 'AC' : 'DC'} conditioning ${data[at] & 15}`,
+                        offset: at,
+                        length: 2,
+                        value: ac ? `Kx ${cs}` : `L ${cs & 15}, U ${cs >> 4}`,
+                        children: [
+                            field('Tc, Tb', at, 1, `0x${hex(data[at], 2)}`, 'Table class (high 4 bits): 0 for DC or lossless, 1 for AC; destination (low 4), 0 to 3.'),
+                            field('Cs', at + 1, 1, cs, ac ? 'Kx, 1 to 63: the coefficient index that splits the AC coding contexts.' : 'L + 16 × U: the lower and upper bounds that sort DC differences into small and large.'),
+                        ],
+                    });
+                }
+                fields.push(segment(`${code} (${title})`, tables, tables.map((t) => t.name).join(', ')));
+            } else if (s.marker === 0xdf) {
+                const [eh, ev] = [data[p] >> 4, data[p] & 15];
+                const value = eh || ev ? `Expand ${[eh && 'horizontally', ev && 'vertically'].filter(Boolean).join(' and ')}` : 'No expansion';
+                fields.push(segment(`${code} (${title})`, [field('Eh, Ev', p, 1, `${eh}, ${ev}`, 'Whether the next (differential) frame doubles the reference components across (high 4 bits) and down (low 4).')], value));
             } else if (s.marker === 0xdc) {
-                fields.push(segment(`${code} (${title})`, [field('Lines', p, 2, u16(p))]));
+                fields.push(segment(`${code} (${title})`, [field('NL (lines)', p, 2, u16(p), 'The picture\'s height, when the frame header gave 0.')], String(u16(p))));
             } else if (s.marker === 0xfe) {
                 const text = new TextDecoder('latin1').decode(data.subarray(p, p + size)).replace(/\0+$/, '');
                 texts.push({ title: 'Comment', text });
@@ -241,6 +261,46 @@ const parser: FormatParser = {
     },
 };
 
+/** A Huffman table's symbols (Vi,j), a field for each code length that has any. */
+function symbolFields(data: Uint8Array, at: number, counts: Uint8Array, kind: string): Field[] {
+    const out: Field[] = [];
+    for (let length = 1; length <= 16; length++) {
+        const n = counts[length - 1];
+        if (!n) continue;
+        const symbols = Array.from(data.subarray(at, at + n), (b) => hex(b, 2));
+        out.push(field(`V${length} (${length}-bit codes)`, at, n, symbols.length > 16 ? `${symbols.slice(0, 16).join(' ')} … (${n})` : symbols.join(' '), out.length ? undefined : kind === 'DC' ? 'Each the bit length of a DC difference.' : 'Each a run of zeros (high 4 bits) and a bit length (low 4); 00 ends the block, F0 skips 16 zeros.'));
+        at += n;
+    }
+    return out;
+}
+
+/** A frame header (SOFn), or DHP, which has the same layout: the size and sampling of the whole picture, and each component's. */
+function frameHeader(data: Uint8Array, p: number, dhp: boolean): { fields: Field[]; components: { id: number; h: number; v: number }[] } {
+    const u16 = (at: number) => (data[at] << 8) | data[at + 1];
+    const count = data[p + 5];
+    const components = Array.from({ length: count }, (_, i) => ({ at: p + 6 + i * 3, id: data[p + 6 + i * 3], h: data[p + 7 + i * 3] >> 4, v: data[p + 7 + i * 3] & 15, tq: data[p + 8 + i * 3] }));
+    return {
+        components,
+        fields: [
+            field('P (precision)', p, 1, `${data[p]} bits per sample`),
+            field('Y (lines)', p + 1, 2, u16(p + 1), u16(p + 1) ? undefined : 'Given later, by a DNL marker.'),
+            field('X (samples per line)', p + 3, 2, u16(p + 3)),
+            field('Nf (components)', p + 5, 1, count),
+            ...components.map((c) => ({
+                name: `Component ${c.id}${COMPONENT_NAMES[c.id] ? ` (${COMPONENT_NAMES[c.id]})` : ''}`,
+                offset: c.at,
+                length: 3,
+                value: `${c.h}×${c.v}, table ${c.tq}`,
+                children: [
+                    field('C (identifier)', c.at, 1, c.id),
+                    field('H, V (sampling)', c.at + 1, 1, `${c.h}×${c.v}`, 'Horizontal (high 4 bits) and vertical (low 4) sampling factors, 1 to 4.'),
+                    field('Tq (quantization table)', c.at + 2, 1, c.tq, dhp ? 'Always 0 in a DHP segment.' : undefined),
+                ],
+            })),
+        ],
+    };
+}
+
 /** An APPn segment's identifier (a NUL-terminated string at its start) and what's after it. */
 function readApp(data: Uint8Array, s: Segment, p: number, size: number, texts: { title: string; text: string }[], entries: Entry[], warnings: string[]): { name: string; value?: string; children: Field[]; exif?: Exif; adobe?: number } {
     const u16 = (at: number) => (data[at] << 8) | data[at + 1];
@@ -275,7 +335,32 @@ function readApp(data: Uint8Array, s: Segment, p: number, size: number, texts: {
         const code = data[rest];
         const kinds: Record<number, string> = { 0x10: 'JPEG thumbnail', 0x11: '1 byte per pixel thumbnail', 0x13: '3 bytes per pixel thumbnail' };
         if (code === 0x10 && restSize > 1) entries.push({ name: null, label: 'thumbnail', offset: rest + 1, size: restSize - 1, data: data.subarray(rest + 1, rest + restSize) });
-        return { name: 'JFIF extension', value: kinds[code], children: [idField, field('Extension code', rest, 1, `0x${hex(code, 2)}${kinds[code] ? ` (${kinds[code]})` : ''}`), field('Thumbnail', rest + 1, restSize - 1, bytesLabel(restSize - 1))] };
+        const codeField = field('Extension code', rest, 1, `0x${hex(code, 2)}${kinds[code] ? ` (${kinds[code]})` : ''}`);
+        if (code !== 0x11 && code !== 0x13) return { name: 'JFIF extension', value: kinds[code], children: [idField, codeField, field('Thumbnail', rest + 1, restSize - 1, bytesLabel(restSize - 1))] };
+        // Uncompressed thumbnails: a width and a height, then (1 byte per pixel) a 256-color RGB palette and the indexes, or RGB pixels.
+        const [w, h] = [data[rest + 1], data[rest + 2]];
+        const palette = code === 0x11 ? 768 : 0;
+        const pixels = w * h * (code === 0x11 ? 1 : 3);
+        return {
+            name: 'JFIF extension',
+            value: `${kinds[code]}, ${w} × ${h}`,
+            children: [idField, codeField, field('Width', rest + 1, 1, w), field('Height', rest + 2, 1, h), ...(palette ? [field('Palette', rest + 3, palette, '256 colors, 8-bit RGB')] : []), field('Pixels', rest + 3 + palette, pixels, bytesLabel(pixels))],
+        };
+    }
+    if (n === 0 && (id.startsWith('II') || id.startsWith('MM')) && ascii(data, p + 6, 4) === 'HEAP') {
+        // Canon's Camera Image File Format: a byte order, the header length, a type ("HEAPJPGM" in a JPEG) and a version, then a heap of records.
+        const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+        const little = data[p] === 0x49;
+        return {
+            name: 'Canon CIFF',
+            children: [
+                field('Byte order', p, 2, ascii(data, p, 2)),
+                field('Header length', p + 2, 4, view.getUint32(p + 2, little)),
+                field('Type', p + 6, 8, ascii(data, p + 6, 8)),
+                field('Version', p + 14, 4, `${view.getUint16(p + 14, little)}.${view.getUint16(p + 16, little)}`),
+                field('Heap', p + 18, size - 18, bytesLabel(size - 18), 'Canon\'s records: the camera\'s settings and the like.'),
+            ],
+        };
     }
     if (n === 0 && id === 'AVI1') {
         return { name: 'AVI1', children: [idField, field('Field', rest, 1, ['Not interlaced', 'Odd', 'Even'][data[rest]] ?? String(data[rest]), 'Which video field this frame was taken from.'), field('Reserved', rest + 1, restSize - 1)] };

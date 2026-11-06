@@ -319,11 +319,15 @@ export function readExif(data: Uint8Array, base: number, end: number): Exif {
                 if (tag === 'InteroperabilityIFDPointer') pointers.push(['Interoperability IFD', base + numbers[0], INTEROP_TAGS]);
             }
             const note = tag === 'MakerNote' ? 'In the camera maker\'s own format.' : undefined;
-            children.push(
-                size <= 4
-                    ? { ...field(tag, entry, 12, value, note), note: [note, `Tag 0x${hex(id, 4)}, ${what}.`].filter(Boolean).join(' ') }
-                    : { name: tag, offset: entry, length: 12, value, note, children: [field('Entry', entry, 12, `Tag 0x${hex(id, 4)}, ${what}`), field('Value', valueAt, size, value)] },
-            );
+            // The entry's four parts, and the value where it's stored: in the entry when it fits in 4 bytes, else at its offset.
+            const parts = [
+                field('Tag', entry, 2, `0x${hex(id, 4)}`),
+                field('Type', entry + 2, 2, `${type} (${TYPE_NAME[type] || 'unknown'})`),
+                field('Count', entry + 4, 4, n, 'Values, not bytes.'),
+                size <= 4 ? field('Value', entry + 8, 4, value, size < 4 ? 'Left-aligned; the rest is padding.' : undefined) : field('Value offset', entry + 8, 4, u32(entry + 8), 'From the TIFF header.'),
+                ...(size > 4 ? [field('Value', valueAt, size, value)] : []),
+            ];
+            children.push({ name: tag, offset: entry, length: 12, value, note: [note, `${what}.`].filter(Boolean).join(' '), children: parts });
         }
         const next = at + 2 + count * 12;
         children.push(field('Next IFD offset', next, 4, u32(next)));
