@@ -93,7 +93,9 @@ const ZOOMS: Zoom[] = ['fit', 1, 2, 3, 4, 6];
 /** Big pictures (whole maps) start fitted to the page; small ones (a unit's sprite) enlarged. */
 const initialZoom = (width: number): Zoom => (width > 900 ? 'fit' : width <= 64 ? 4 : width <= 160 ? 2 : 1);
 
-const zoomStyle = (zoom: Zoom, width: number): React.CSSProperties => (zoom === 'fit' ? { width: '100%' } : { width: `calc(${zoom} * var(--w))`, ['--w' as string]: `${width}px` });
+/** Fit shows the whole picture at 1:1, or smaller if that's what fits the stage (its height less its padding); it never enlarges. */
+const zoomStyle = (zoom: Zoom, width: number, height: number): React.CSSProperties =>
+    zoom === 'fit' ? { width: `min(${width}px, 100%${height ? `, calc((var(--stage-height) - 2rem) * ${width / height})` : ''})` } : { width: `calc(${zoom} * var(--w))`, ['--w' as string]: `${width}px` };
 
 /** The same zoom choices for every picture: maps of any game, sprites, tiles. */
 function ZoomButtons({ zoom, onChange }: { zoom: Zoom; onChange: (zoom: Zoom) => void }) {
@@ -233,7 +235,7 @@ function ImagesPreview({
         <div className="row g-4">
             <div className="col-lg-8">
                 <div className={`image-stage ${zoom === 'fit' ? '' : 'image-stage--pannable'}`} {...pan} onPointerCancel={pan.onPointerUp}>
-                    <canvas ref={canvas} className={`image-canvas ${view === 'sheet' ? 'image-canvas--sheet' : ''}`} style={zoomStyle(zoom, (view === 'sheet' ? sheetCanvas?.width : frames[frame].width) ?? 0)} onClick={clickSheet} />
+                    <canvas ref={canvas} className={`image-canvas ${view === 'sheet' ? 'image-canvas--sheet' : ''}`} style={zoomStyle(zoom, (view === 'sheet' ? sheetCanvas?.width : frames[frame].width) ?? 0, (view === 'sheet' ? sheetCanvas?.height : frames[frame].height) ?? 0)} onClick={clickSheet} />
                 </div>
             </div>
             <div className="col-lg-4">
@@ -386,7 +388,7 @@ function PicturePreview({ width, height, rgba, toggle, fileName }: { width: numb
         <div className="row g-4">
             <div className="col-lg-8">
                 <div className={`image-stage ${zoom === 'fit' ? '' : 'image-stage--pannable'}`} {...pan} onPointerCancel={pan.onPointerUp}>
-                    <canvas ref={canvas} className="image-canvas" style={zoomStyle(zoom, width)} />
+                    <canvas ref={canvas} className="image-canvas" style={zoomStyle(zoom, width, height)} />
                 </div>
             </div>
             <div className="col-lg-4">

@@ -103,7 +103,8 @@ export function Inspector({
     const links = parsed?.links ?? [];
     const missing = links.filter((l) => !l.source).length;
     const available: TabKey[] = parsed ? [...(parsed.entries ? ['contents' as const] : []), ...(parsed.preview ? ['preview' as const] : []), ...(links.length ? ['links' as const] : []), 'structure'] : [];
-    const active = tab && available.includes(tab) ? tab : available[0];
+    // A file with a preview opens on it, even when it holds files too (a photo's thumbnail).
+    const active = tab && available.includes(tab) ? tab : available.includes('preview') ? 'preview' : available[0];
 
     return (
         <>

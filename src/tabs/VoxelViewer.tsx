@@ -317,7 +317,7 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
         <div className="row g-4">
             <div className="col-lg-8">
                 {error ? (
-                    <div className="image-stage align-items-center">
+                    <div className="image-stage align-items-center" style={{ height: 'auto' }}>
                         <Muted>{error}</Muted>
                     </div>
                 ) : (

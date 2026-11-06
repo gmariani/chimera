@@ -418,8 +418,9 @@ body {
     display: flex;
     align-items: flex-start;
     justify-content: flex-start;
-    min-height: 16rem;
-    max-height: 75vh;
+    /* One size whatever the zoom: a smaller picture shows more of the checkerboard. */
+    --stage-height: 75vh;
+    height: var(--stage-height);
     padding: 1rem;
     overflow: auto;
     border-radius: var(--bs-border-radius);
@@ -430,9 +431,9 @@ body {
     background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
 
-/* Centered while it fits; wider than the stage, it starts at the left edge so all of it scrolls into view (justify-content: center would push its left side out of reach). */
+/* Centered while it fits; bigger than the stage, it starts at the top left so all of it scrolls into view (centering with justify-content would push its edges out of reach). */
 .image-stage > * {
-    margin-inline: auto;
+    margin: auto;
 }
 
 /* A zoomed picture: drag to pan. */

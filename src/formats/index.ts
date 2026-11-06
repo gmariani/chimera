@@ -1,4 +1,5 @@
 import type { FormatDescriptor, FormatParser } from '../core/types';
+import { sniffJpeg } from './jpeg/sniff';
 import { sniffMix, sniffXccDatabase } from './mix/sniff';
 import {
     sniffAud,
@@ -65,6 +66,7 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'tiles', name: 'Tile set', extensions: ['tem', 'des', 'win', 'sno', 'int', 'jun', 'icn'], sniff: sniffTiles, load: parserOf(() => import('./westwood/tiles')) },
     { id: 'wsa', name: 'Animation (WSA)', extensions: ['wsa'], sniff: sniffWsa, load: parserOf(() => import('./westwood/wsa')) },
     { id: 'fnt', name: 'Font', extensions: ['fnt'], sniff: sniffFont, load: parserOf(() => import('./westwood/font')) },
+    { id: 'jpeg', name: 'Picture (JPEG)', extensions: ['jpg', 'jpeg', 'jpe', 'jfif'], sniff: sniffJpeg, load: parserOf(() => import('./jpeg')) },
     { id: 'pcx', name: 'Picture (PCX)', extensions: ['pcx'], sniff: sniffPcx, load: parserOf(() => import('./pcx')) },
     { id: 'vqp', name: 'Palette blending tables (VQP)', extensions: ['vqp'], sniff: sniffVqp, load: parserOf(() => import('./westwood/vqp')) },
     { id: 'xcc-names', name: 'File names (XCC)', extensions: ['dat'], sniff: sniffXccDatabase, byNameAlone: false, load: parserOf(() => import('./mix/database')) },
