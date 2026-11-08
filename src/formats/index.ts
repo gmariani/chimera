@@ -1,7 +1,9 @@
 import type { FormatDescriptor, FormatParser } from '../core/types';
+import { sniffChunkFile } from './chunks/sniff';
 import { sniffJpeg } from './jpeg/sniff';
-import { sniffMeg } from './meg/sniff';
+import { sniffLoc, sniffMeg } from './meg/sniff';
 import { sniffMix, sniffXccDatabase } from './mix/sniff';
+import { sniffOgg } from './ogg/sniff';
 import { sniffTiff } from './tiff/sniff';
 import { sniffPng } from './png/sniff';
 import { sniffFont as sniffSfnt } from './font/sniff';
@@ -58,6 +60,7 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'hva', name: 'Voxel animation (HVA)', extensions: ['hva'], sniff: sniffHva, load: parserOf(() => import('./westwood/hva')) },
     { id: 'wav', name: 'Sound (WAV)', extensions: ['wav'], sniff: sniffWav, load: parserOf(() => import('./wav')) },
     { id: 'csf', name: 'String table (CSF)', extensions: ['csf'], sniff: sniffCsf, load: parserOf(() => import('./westwood/csf')) },
+    { id: 'loc', name: 'Petroglyph string table (LOC)', extensions: ['loc'], sniff: sniffLoc, load: parserOf(() => import('./meg/loc')) },
     { id: 'gaba', name: 'Sound bank index (GABA)', extensions: ['idx'], sniff: sniffGaba, companions: true, load: parserOf(() => import('./westwood/gaba')) },
     { id: 'bag', name: 'Sound bank data (RA2)', extensions: ['bag'], sniff: () => false, load: parserOf(() => import('./westwood/bag')) },
     {
@@ -79,8 +82,10 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'sfnt', name: 'Font (TrueType, OpenType)', extensions: ['ttf', 'otf', 'ttc', 'otc'], sniff: sniffSfnt, load: parserOf(() => import('./font')) },
     { id: 'pbj', name: 'Pixel Bender kernel (PBJ)', extensions: ['pbj'], sniff: sniffPbj, load: parserOf(() => import('./pbj')) },
     { id: 'mp3', name: 'Sound (MP3)', extensions: ['mp3', 'mp2'], sniff: sniffMp3, load: parserOf(() => import('./mp3')) },
+    { id: 'ogg', name: 'Sound or video (Ogg)', extensions: ['ogg', 'oga', 'ogv', 'ogx', 'opus', 'spx'], sniff: sniffOgg, load: parserOf(() => import('./ogg')) },
     { id: 'pcx', name: 'Picture (PCX)', extensions: ['pcx'], sniff: sniffPcx, load: parserOf(() => import('./pcx')) },
     { id: 'vqp', name: 'Palette blending tables (VQP)', extensions: ['vqp'], sniff: sniffVqp, load: parserOf(() => import('./westwood/vqp')) },
+    { id: 'chunks', name: 'Petroglyph chunk file', extensions: ['bui', 'cfx', 'bfd', 'gtl', 'gpd', 'cpd', 'sob', 'chunks'], sniff: sniffChunkFile, load: parserOf(() => import('./chunks')) },
     { id: 'xcc-names', name: 'File names (XCC)', extensions: ['dat'], sniff: sniffXccDatabase, byNameAlone: false, load: parserOf(() => import('./mix/database')) },
     { id: 'strings', name: 'String table', extensions: ['eng', 'ger', 'fre', 'ita', 'spa'], sniff: sniffStrings, load: parserOf(() => import('./westwood/strings')) },
     { id: 'lut', name: 'Chronal vortex frame (RA)', extensions: ['lut'], sniff: sniffVortex, load: parserOf(() => import('./westwood/lut')) },

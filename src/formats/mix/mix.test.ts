@@ -1,10 +1,12 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Blowfish } from './blowfish';
 import { classicId, crcId } from './ids';
 import { blowfishKey } from './key';
-import { parseMix, readLayout } from './index';
+import { parseMix, readLayout, unlistedRanges } from './index';
+import { sha1 } from '../../core/sha1';
 import { sniffMix } from './sniff';
 
 const fromHex = (text: string) => Uint8Array.from(text.match(/../g)!, (b) => parseInt(b, 16));
@@ -68,14 +70,16 @@ describe('key calculation', () => {
 });
 
 /** Builds a MIX file the way the games lay one out. */
-function buildMix(files: [string, Uint8Array][], options: { layout: 'td' | 'ra'; encrypt?: boolean; checksum?: boolean }) {
+function buildMix(files: [string, Uint8Array][], options: { layout: 'td' | 'ra'; encrypt?: boolean; checksum?: boolean; badChecksum?: boolean; hidden?: Uint8Array; bodySize?: number }) {
     const index = files.map(([name, data]) => ({ id: classicId(name), data })).sort((a, b) => (a.id | 0) - (b.id | 0));
-    const bodySize = index.reduce((n, f) => n + f.data.length, 0);
+    // Bytes no entry points to, stored before the files.
+    const hidden = options.hidden ?? new Uint8Array();
+    const bodySize = options.bodySize ?? hidden.length + index.reduce((n, f) => n + f.data.length, 0);
     const header = new Uint8Array(6 + index.length * 12);
     const view = new DataView(header.buffer);
     view.setUint16(0, index.length, true);
     view.setUint32(2, bodySize, true);
-    let offset = 0;
+    let offset = hidden.length;
     index.forEach((f, i) => {
         view.setUint32(6 + i * 12, f.id, true);
         view.setUint32(10 + i * 12, offset, true);
@@ -96,8 +100,15 @@ function buildMix(files: [string, Uint8Array][], options: { layout: 'td' | 'ra';
     } else {
         parts.push(header);
     }
-    parts.push(...index.map((f) => f.data));
-    if (options.checksum) parts.push(new Uint8Array(20));
+    const body = [hidden, ...index.map((f) => f.data)];
+    parts.push(...body);
+    if (options.checksum) {
+        const digest = createHash('sha1');
+        for (const part of body) digest.update(part);
+        const sum = new Uint8Array(digest.digest());
+        if (options.badChecksum) sum[0] ^= 1;
+        parts.push(sum);
+    }
     const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
     let at = 0;
     for (const p of parts) {
@@ -128,6 +139,66 @@ describe('MIX parsing', () => {
             if (options.encrypt) expect(parsed.overlays).toHaveLength(1);
         });
     }
+
+    it('checks the checksum against the body', () => {
+        const good = parseMix(buildMix(files, { layout: 'ra', checksum: true }), { name: null, names: [] });
+        expect(good.summary).toContainEqual(['Checksum', 'SHA-1, matches']);
+        expect(good.fields.at(-1)!.note).toMatch(/Matches the body/);
+
+        const bad = parseMix(buildMix(files, { layout: 'ra', checksum: true, badChecksum: true }), { name: null, names: [] });
+        expect(bad.summary).toContainEqual(['Checksum', "SHA-1, doesn't match"]);
+        expect(bad.warnings.join()).toMatch(/checksum doesn't match/);
+    });
+
+    it('opens the bytes no entry points to, and counts zeros as padding', () => {
+        const hidden = new TextEncoder().encode('; Scenario 8 control for house BadGuy.');
+        const data = buildMix(files, { layout: 'ra', checksum: true, hidden });
+        const parsed = parseMix(data, { name: null, names: [] });
+        expect(parsed.warnings).toEqual([]);
+        expect(parsed.entries).toHaveLength(4);
+        const extra = parsed.entries![3];
+        expect(extra).toMatchObject({ name: null, label: `unlisted at ${4 + 6 + 3 * 12}`, size: hidden.length });
+        expect(extra.data).toEqual(hidden);
+        expect(parsed.summary.find(([k]) => k === 'Unlisted data')![1]).toMatch(/in 1 place/);
+        expect(parsed.summary).toContainEqual(['Checksum', 'SHA-1, matches']);
+        const body = parsed.fields.find((f) => f.name === 'Body')!;
+        expect(body.children![0]).toMatchObject({ name: 'Unlisted data', offset: extra.offset, length: hidden.length });
+
+        const zeros = parseMix(buildMix(files, { layout: 'td', hidden: new Uint8Array(5) }), { name: null, names: [] });
+        expect(zeros.entries).toHaveLength(3);
+        expect(zeros.summary).toContainEqual(['Padding', '5 bytes between files (zeros, or leftovers before a file on a 16-byte boundary)']);
+    });
+
+    it('takes a few leftover bytes before a boundary as padding, as TS and RA2 leave them', () => {
+        const scraps = new TextEncoder().encode('ransp');
+        // Before a file at body offset 5: not a boundary, so it's data.
+        expect(parseMix(buildMix(files, { layout: 'ra', hidden: scraps }), { name: null, names: [] }).entries).toHaveLength(4);
+        // At the end of the body: padding.
+        const atEnd = parseMix(buildMix([], { layout: 'ra', hidden: scraps }), { name: null, names: [] });
+        expect(atEnd.entries).toHaveLength(0);
+        expect(atEnd.summary.find(([k]) => k === 'Padding')).toBeTruthy();
+    });
+
+    it('finds the gaps between, before and after entries, ignoring overlaps', () => {
+        expect(unlistedRanges([{ id: 1, offset: 4, size: 4 }, { id: 2, offset: 6, size: 4 }, { id: 3, offset: 14, size: 2 }], 20)).toEqual([
+            { offset: 0, length: 4 },
+            { offset: 10, length: 4 },
+            { offset: 16, length: 4 },
+        ]);
+        expect(unlistedRanges([{ id: 1, offset: 0, size: 30 }], 20)).toEqual([]);
+    });
+
+    it('says when the body size looks raised on purpose', () => {
+        const data = buildMix(files, { layout: 'ra', bodySize: 99999 });
+        const parsed = parseMix(data, { name: 'x.mix', names: [] });
+        expect(parsed.warnings.join()).toMatch(/XCC Mixer refuses/);
+        expect(parsed.entries).toHaveLength(3);
+    });
+
+    it('hashes like the reference SHA-1', () => {
+        expect(toHex(sha1(new TextEncoder().encode('abc')))).toBe('a9993e364706816aba3e25717850c26c9cd0d89d');
+        expect(toHex(sha1(new Uint8Array()))).toBe('da39a3ee5e6b4b0d3255bfef95601890afd80709');
+    });
 
     it('rejects things that are not MIX files', () => {
         expect(sniffMix(new TextEncoder().encode('Hello, world! This is just text.'))).toBe(false);

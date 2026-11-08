@@ -30,6 +30,8 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | WAV sound (PCM, IMA ADPCM, and Microsoft ADPCM as the Remastered Collection's music uses) | chunks, format | player | WAV |
 | RA2 sound banks (audio.idx with audio.bag) | every sound | each sound as a WAV | WAV |
 | CSF string tables (RA2) | every label | text | — |
+| LOC string tables (the Remastered Collection's text and credits, in Config.meg) | header, every record, value and key | text | — |
+| Petroglyph chunk files (the Remastered Collection's .bui UI layouts, .cfx, .bfd, .gtl, .gpd, .cpd, .sob; undocumented, so most ids are unnamed) | header; once uncompressed, every chunk and property | outline of a layout's widgets, or the file's strings | the uncompressed file |
 | Bink video (RA2's movies) and Bink 2 (the Remastered Collection's) | header, frame index | player with sound, decoded by FFmpeg's Bink decoders compiled to WebAssembly; Bink 2's sound only, each track (FFmpeg has no Bink 2 video decoder) | PNG frame, all frames, WAV |
 | Maps (TD .bin with its mission INI, RA [MapPack] in mission INIs) | every cell, every object | drawn with the game's tiles, ore, walls, trees, craters, buildings, units and infantry (in each side's color) once the theater archive is open; terrain kinds with a key | PNG |
 | TS and RA2 maps (.map, .mpr, .yrm; inside .mmx/.yro) | sections, cells, overlays, objects | drawn with the game's tiles, ore, walls, bridges, trees, buildings (with their animated parts, defense turrets and damage), infantry and lit voxel vehicles (in each side's color) once the main archive is open (otherwise by height); the map's own preview | PNG |
@@ -45,6 +47,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | TIFF pictures (strips and tiles; none, PackBits, LZW, Deflate, JPEG, CCITT fax; bilevel to CMYK, YCbCr and L\*a\*b\*; DNG, NEF and CR2 previews) | header, every IFD and tag | every page | PNG, embedded JPEGs |
 | PNG pictures (every color type and depth, Adam7) | every chunk, text | image | PNG |
 | MP3 and other MPEG audio | ID3 tags, frames | player | MP3 |
+| Ogg (Vorbis, Opus, FLAC; Speex and Theora described, not played) | every page, codec headers, tags | player | Ogg |
 | Flash movies (SWF, plain or zlib-compressed) | header and every tag by frame, to the SWF 19 fields | metadata | bitmaps (JPEG, PNG), sounds (MP3; PCM, ADPCM and Nellymoser as WAV), streamed sound, video as FLV, binary data, fonts, ABC bytecode, the uncompressed movie |
 | Pixel Bender kernels (.pbj) | every record and instruction | disassembly | — |
 | TrueType and OpenType fonts (TrueType and CFF outlines, CID-keyed; collections) | table directory, head, hhea, maxp, name, OS/2, post, cmap, CFF | every glyph, the names | PNG |

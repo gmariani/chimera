@@ -13,6 +13,8 @@ const ARCHIVES = [
     'sounds.mix', 'speech.mix', 'allies.mix', 'russian.mix', 'scores.mix', 'movies.mix', 'movies1.mix', 'movies2.mix',
     'transit.mix', 'update.mix', 'updatec.mix', 'expand.mix', 'expand2.mix', 'deseicnh.mix', 'tempicnh.mix', 'winticnh.mix',
     'temperat.mix', 'winter.mix', 'desert.mix', 'snow.mix', 'interior.mix', 'jungle.mix', 'nchires.mix',
+    // The Red Alert map editor's archives (named in Gavin Pugh's 1997 Red Alert File Formats Guide).
+    'editor.mix', 'edhi.mix', 'edlo.mix', 'setup.mix',
     'cache.mix', 'conquer.mix', 'isosnow.mix', 'isotemp.mix', 'sidec01.mix', 'sidec02.mix', 'e01scd.mix', 'multi.mix',
     'tibsun.mix', 'ra2.mix', 'ra2md.mix', 'language.mix', 'langmd.mix', 'cameo.mix', 'cameomd.mix', 'audio.mix', 'audiomd.mix',
 ];

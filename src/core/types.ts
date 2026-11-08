@@ -40,12 +40,13 @@ export interface IndexedImage {
     pixels: Uint8Array;
 }
 
-/** Decoded sound, as a WAV file (or, with `mime`, another file the browser plays: MP3). */
+/** Decoded sound, as a WAV file (or, with `mime`, another file the browser plays: MP3, Ogg). */
 export interface AudioClip {
     wav: Uint8Array;
     mime?: string;
     sampleRate: number;
     channels: number;
+    /** Bits per sample; 0 for codecs that have no such thing (Vorbis, Opus). */
     bits: number;
     seconds: number;
 }

@@ -439,16 +439,20 @@ function useWavUrl(wav: Uint8Array | undefined, mime = 'audio/wav'): string | un
     return url;
 }
 
-const clipLabel = (clip: AudioClip) => `${clip.seconds.toFixed(2)} s · ${clip.sampleRate} Hz · ${clip.bits}-bit ${clip.channels === 2 ? 'stereo' : 'mono'}`;
+const channelsLabel = (channels: number) => (channels === 1 ? 'mono' : channels === 2 ? 'stereo' : `${channels} channels`);
+const clipLabel = (clip: AudioClip) => `${clip.seconds.toFixed(2)} s · ${clip.sampleRate} Hz · ${clip.bits ? `${clip.bits}-bit ` : ''}${channelsLabel(clip.channels)}`;
+
+/** The extension to save a clip under, for the files the browser plays as they are. */
+const CLIP_EXTENSIONS: Record<string, string> = { 'audio/mpeg': 'mp3', 'audio/ogg': 'ogg' };
 
 function AudioPreview({ clip, fileName }: { clip: AudioClip; fileName: string }) {
     const url = useWavUrl(clip.wav, clip.mime);
-    const mp3 = clip.mime === 'audio/mpeg';
+    const extension = (clip.mime && CLIP_EXTENSIONS[clip.mime]) || 'wav';
     return (
         <div className="d-flex flex-wrap gap-3 align-items-center">
             <audio controls src={url} className="audio-player" />
-            <Button variant="outline-light" onClick={() => download(clip.wav, `${safeName(stem(fileName))}.${mp3 ? 'mp3' : 'wav'}`, clip.mime ?? 'audio/wav')}>
-                <i className="bi bi-file-earmark-music me-1" /> Save as {mp3 ? 'MP3' : 'WAV'}
+            <Button variant="outline-light" onClick={() => download(clip.wav, `${safeName(stem(fileName))}.${extension}`, clip.mime ?? 'audio/wav')}>
+                <i className="bi bi-file-earmark-music me-1" /> Save as {extension.toUpperCase()}
             </Button>
             <Muted>{clipLabel(clip)}</Muted>
         </div>
