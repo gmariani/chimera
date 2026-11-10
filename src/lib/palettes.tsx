@@ -109,7 +109,7 @@ export function PaletteSelect() {
     );
 }
 
-/** The palette a file's sprites most likely want: the temperate one if there is one. */
+/** The palette a file's sprites most likely want: C&C's temperate one, or Dune II's main one (IBM.PAL), if there is one. */
 export function preferred(palettes: NamedPalette[]): NamedPalette | undefined {
-    return palettes.find((p) => /(^|› )temperat\.pal$/i.test(p.label)) ?? palettes[0];
+    return palettes.find((p) => /(^|› )temperat\.pal$/i.test(p.label)) ?? palettes.find((p) => /(^|› )ibm\.pal$/i.test(p.label)) ?? palettes[0];
 }

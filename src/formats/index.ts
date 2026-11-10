@@ -19,6 +19,7 @@ import {
     sniffFont,
     sniffIni,
     sniffMapTd,
+    sniffPak,
     sniffPal,
     sniffPcx,
     sniffShpD2,
@@ -52,6 +53,8 @@ const parserOf = (load: () => Promise<{ default: FormatParser }>) => () => load(
 export const FORMATS: FormatDescriptor[] = [
     { id: 'mix', name: 'Westwood MIX archive', extensions: ['mix'], sniff: sniffMix, load: parserOf(() => import('./mix')) },
     { id: 'meg', name: 'Petroglyph MEG archive', extensions: ['meg'], sniff: sniffMeg, load: parserOf(() => import('./meg')) },
+    // Chrome, Quake and others use .pak too, so the name alone says nothing.
+    { id: 'pak', name: 'Westwood PAK archive', extensions: ['pak'], sniff: sniffPak, byNameAlone: false, load: parserOf(() => import('./westwood/pak')) },
     { id: 'shp-td', name: 'Sprite (TD/RA SHP)', extensions: ['shp'], alsoNamed: THEATERS, sniff: sniffShpTd, load: parserOf(() => import('./westwood/shp-td')) },
     { id: 'shp-ts', name: 'Sprite (TS/RA2 SHP)', extensions: ['shp'], alsoNamed: THEATERS, sniff: sniffShpTs, load: parserOf(() => import('./westwood/shp-ts')) },
     { id: 'shp-d2', name: 'Sprite (Dune II-style SHP)', extensions: ['shp'], sniff: sniffShpD2, load: parserOf(() => import('./westwood/shp-d2')) },

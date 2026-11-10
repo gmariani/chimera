@@ -66,7 +66,7 @@ export function Inspector({
     // Palettes in an archive are what its sprites are meant to be seen with. A newly opened
     // file's own palette replaces one from an earlier file (Red Alert's differ from TD's).
     useEffect(() => {
-        if (state.status !== 'ready' || state.format.id !== 'mix') return;
+        if (state.status !== 'ready' || (state.format.id !== 'mix' && state.format.id !== 'pak')) return;
         let canceled = false;
         // Listed while the file in use they're in is: this one, or the one it was opened from.
         const owner = near ? near.split(' › ')[0] : idOf(file.data) ?? file.name;

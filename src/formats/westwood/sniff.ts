@@ -1,4 +1,5 @@
 import { Bytes } from '../../core/bytes';
+import { pakLayout } from './pak';
 
 /**
  * Cheap checks for Westwood's asset formats. These run on every file inside an
@@ -47,11 +48,15 @@ export function shpD2Offsets(data: Uint8Array): number[] | null {
     if (frames === 0 || data.length < 6) return null;
     const wide = b.u16(4) === 0;
     const size = wide ? 4 : 2;
-    const read = (i: number) => (wide ? b.u32(2 + i * size) : b.u16(2 + i * size)) + 2;
     if (2 + (frames + 1) * size > data.length) return null;
-    const offsets: number[] = [];
-    for (let i = 0; i <= frames; i++) offsets.push(read(i));
-    if (offsets[0] < 2 + (frames + 1) * size || offsets[frames] !== data.length) return null;
+    const raw: number[] = [];
+    for (let i = 0; i <= frames; i++) raw.push(wide ? b.u32(2 + i * size) : b.u16(2 + i * size));
+    // Offsets count from the start of the file (Dune II's own sprites) or from just after the frame count
+    // (TD's and RA's cursors): whichever puts the last one exactly at the end of the file.
+    const base = raw[frames] === data.length ? 0 : raw[frames] + 2 === data.length ? 2 : -1;
+    if (base < 0) return null;
+    const offsets = raw.map((o) => o + base);
+    if (offsets[0] < 2 + (frames + 1) * size) return null;
     for (let i = 0; i < frames; i++) {
         const at = offsets[i];
         // Each frame: flags, slices, width, height, then its own size. Offsets needn't be in order:
@@ -64,6 +69,11 @@ export function shpD2Offsets(data: Uint8Array): number[] | null {
 
 export function sniffShpD2(data: Uint8Array): boolean {
     return shpD2Offsets(data) !== null;
+}
+
+/** Westwood PAK archives: offsets and DOS names, the first file starting right where they end. */
+export function sniffPak(data: Uint8Array): boolean {
+    return pakLayout(data) !== null;
 }
 
 /** TS/RA2 sprites: a zero word, the canvas size and frame count, then 24-byte frame headers. */

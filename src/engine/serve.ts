@@ -4,7 +4,7 @@ import { inspect } from '../formats/inspect';
 import { readNameList } from '../formats/mix/names';
 import { expandPalette } from '../formats/westwood/vga';
 import type { NamedPalette } from '../lib/palettes';
-import { Library } from './library';
+import { ARCHIVES, Library } from './library';
 import type { DataRef, FromPage, FromWorker, Request, Results, WireEntry, WireInspection, WirePreview } from './protocol';
 
 /**
@@ -144,7 +144,7 @@ const PALETTE_DEPTH = 3;
 export async function palettesIn(name: string, data: Uint8Array, names: readonly string[], depth = 0): Promise<NamedPalette[]> {
     const format = detect(data, name);
     if (format.id === 'pal') return data.length >= 768 ? [{ id: `${name}:${data.length}:${data[0]}${data[1]}${data[2]}`, label: name, colors: expandPalette(data) }] : [];
-    if (format.id !== 'mix' || depth >= PALETTE_DEPTH) return [];
+    if (!ARCHIVES.has(format.id) || depth >= PALETTE_DEPTH) return [];
     let entries: Entry[];
     try {
         entries = (await format.load()).parse(data, { name, names }).entries ?? [];
@@ -154,7 +154,7 @@ export async function palettesIn(name: string, data: Uint8Array, names: readonly
     const found: NamedPalette[] = [];
     for (const e of entries) {
         const id = detect(e.data, e.name).id;
-        if (id !== 'pal' && id !== 'mix') continue;
+        if (id !== 'pal' && !ARCHIVES.has(id)) continue;
         const inner = await palettesIn(e.name ?? `${e.label}.${id}`, e.data, names, depth + 1);
         for (const p of inner) found.push({ ...p, id: `${name}/${p.id}`, label: `${name} › ${p.label}` });
     }

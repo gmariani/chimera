@@ -81,6 +81,8 @@ const parser: FormatParser = {
         }
 
         const sizes = new Set(frames.map((f) => `${f.width} × ${f.height}`));
+        // What the stored offsets count from: the start of the file, or byte 2 (see shpD2Offsets).
+        const base = offsets[count] - (wide ? b.u32(2 + count * size) : b.u16(2 + count * size));
         return {
             title: 'Sprite (Dune II-style SHP)',
             summary: [
@@ -94,7 +96,7 @@ const parser: FormatParser = {
                     name: 'Offsets',
                     offset: 2,
                     length: offsets[0] - 2,
-                    note: 'Where each frame starts, counted from byte 2; the last one is the end of the file. Frames that look the same share one copy of the data.',
+                    note: `Where each frame starts, counted from ${base === 0 ? 'the start of the file (as Dune II stores them)' : 'byte 2 (as TD\'s and RA\'s cursors store them)'}; the last one is the end of the file. Frames that look the same share one copy of the data.`,
                     children: offsets.map((o, i) => field(i < count ? `Frame ${i + 1}` : 'End of file', 2 + i * size, size, o, i < count ? undefined : 'Any entries after this are unused.')),
                 },
                 ...frameFields,

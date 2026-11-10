@@ -17,8 +17,9 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Format | Read | Preview | Extract |
 | --- | --- | --- | --- |
 | Westwood MIX (TD, RA, TS, RA2, and RA2's .mmx/.yro maps), plain or Blowfish-encrypted | full structure, names from hashes | — | single files, all as ZIP, nested MIX |
+| Westwood PAK archives (versions 1–3: Eye of the Beholder, Dune II, the Legend of Kyrandia, Lands of Lore) | header, every entry and end marker; duplicates and hidden data called out | — | single files, all as ZIP |
 | Petroglyph MEG archives (versions 1–3: Empire at War, the C&C Remastered Collection's music, sound, textures and config) | header, names, records | — | single files, all as ZIP |
-| SHP sprites (TD/RA, TS/RA2, and the Dune II-style cursors) | headers, frame table | all frames, animation, any palette | PNG frame, sheet, all frames |
+| SHP sprites (TD/RA, TS/RA2, Dune II, and TD/RA's Dune II-style cursors) | headers, frame table | all frames, animation, any palette | PNG frame, sheet, all frames |
 | AUD audio (IMA and Westwood ADPCM) | headers, chunks | player | WAV |
 | CPS and PCX pictures (256-color and 24-bit) | headers | image | PNG |
 | WSA animations | headers, frame offsets | all frames, animation | PNG frame, sheet, all frames |

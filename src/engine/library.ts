@@ -13,6 +13,9 @@ import { sniffText } from '../formats/westwood/sniff';
  * (see namesFromText).
  */
 
+/** Archives whose files are indexed for others to find: Westwood's MIX and PAK. */
+export const ARCHIVES = new Set(['mix', 'pak']);
+
 /** How deep to look inside archives within archives (RA keeps theaters a level down in MAIN.MIX). */
 const MAX_DEPTH = 3;
 
@@ -38,7 +41,7 @@ function typed(entries: Entry[]): { entry: Entry; id: string; fileName: string }
 
 async function entriesOf(name: string, data: Uint8Array, names: readonly string[]): Promise<Entry[] | null> {
     const format = detect(data, name);
-    if (format.id !== 'mix') return null;
+    if (!ARCHIVES.has(format.id)) return null;
     try {
         return (await format.load()).parse(data, { name, names }).entries ?? [];
     } catch {
@@ -52,7 +55,7 @@ async function texts(name: string, data: Uint8Array, names: readonly string[], d
     if (!entries) return [];
     const found: string[] = [];
     for (const t of typed(entries)) {
-        if (t.id === 'mix') append(found, await texts(t.fileName, t.entry.data, names, depth + 1));
+        if (ARCHIVES.has(t.id)) append(found, await texts(t.fileName, t.entry.data, names, depth + 1));
         else if (sniffText(t.entry.data)) found.push(new TextDecoder('latin1').decode(t.entry.data));
     }
     return found;
@@ -126,7 +129,7 @@ export class Library {
                     count.files++;
                 }
             }
-            if (t.id === 'mix') await this.collect(t.fileName, t.entry.data, path, count, depth + 1);
+            if (ARCHIVES.has(t.id)) await this.collect(t.fileName, t.entry.data, path, count, depth + 1);
         }
     }
 
