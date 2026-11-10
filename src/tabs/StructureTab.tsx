@@ -38,11 +38,12 @@ export function StructureTab({ data, parsed, fileName }: { data: Uint8Array; par
     };
 
     return (
-        <div className="row g-4">
-            <div className="col-lg-5">
+        // Two cells of the frame: the fields on the left; what's picked, over its bytes, on the right.
+        <div className="cell-row cell-row--structure">
+            <div className="cell cell--tree">
                 <StructureTree fields={parsed.fields} selected={selected} expanded={expanded} onSelect={setSelected} onToggle={toggle} onHover={setHovered} />
             </div>
-            <div className="col-lg-7">
+            <div className="cell cell--bytes">
                 <FieldDetails field={field} data={data} fileName={fileName} />
                 <HexView data={data} leaves={leafList} overlays={parsed.overlays} selected={field} hovered={hovered} onPick={pick} />
             </div>

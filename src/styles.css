@@ -1,25 +1,153 @@
-/* Base theme: carried over from the Email Header Analyzer (gmariani/email). */
+/*
+ * Blueprint: a utility's drawing board. Deep blueprint blue, everything drawn
+ * in thin pale lines over a drafting grid, labels in small capitals like a
+ * drawing's annotations, and one bright marker color (the opposite of the
+ * mascot's purple) for what's active or focused.
+ */
+
+[data-bs-theme="dark"] {
+    --bp-ink: #0c2a4d;
+    --bp-ink-rgb: 12, 42, 77;
+    /* Panels a step up from the ground, so data never sits on the grid. */
+    --bp-panel: #0f335d;
+    --bp-panel-2: #133c6c;
+    --bp-deep: #081f3a;
+    /* The pale blue-white everything is drawn in. */
+    --bp-line: #cfe3f7;
+    --bp-line-rgb: 207, 227, 247;
+    --bp-rule: rgba(var(--bp-line-rgb), 0.26);
+    --bp-rule-strong: rgba(var(--bp-line-rgb), 0.5);
+    /* Chartreuse: across the color wheel from the mascot's purple (#6b3d98). */
+    --bp-accent: #9df042;
+    --bp-accent-rgb: 157, 240, 66;
+    /* The mascot's own purple. */
+    --bp-mascot: #6b3d98;
+    --bp-danger: #ff7a6b;
+    --bp-warning: #ffcc5c;
+    --bp-info: #7cc4ff;
+
+    --bs-body-bg: var(--bp-ink);
+    --bs-body-bg-rgb: var(--bp-ink-rgb);
+    --bs-body-color: var(--bp-line);
+    --bs-body-color-rgb: var(--bp-line-rgb);
+    --bs-emphasis-color: #f2f8fe;
+    --bs-secondary-color: rgba(var(--bp-line-rgb), 0.68);
+    --bs-tertiary-color: rgba(var(--bp-line-rgb), 0.45);
+    --bs-secondary-bg: var(--bp-panel);
+    --bs-tertiary-bg: var(--bp-panel);
+    --bs-border-color: var(--bp-rule);
+    --bs-border-color-translucent: var(--bp-rule);
+    --bs-heading-color: #f2f8fe;
+    --bs-link-color: var(--bp-line);
+    --bs-link-color-rgb: var(--bp-line-rgb);
+    --bs-link-hover-color: var(--bp-accent);
+    --bs-link-hover-color-rgb: var(--bp-accent-rgb);
+    --bs-border-radius: 2px;
+    --bs-border-radius-sm: 2px;
+    --bs-border-radius-lg: 3px;
+    --bs-border-radius-xl: 3px;
+    --bs-border-radius-pill: 2px;
+    --bs-box-shadow: none;
+    --bs-box-shadow-sm: none;
+    --bs-focus-ring-color: rgba(var(--bp-accent-rgb), 0.45);
+    --bs-font-monospace: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+    --bd-pre-bg: var(--bp-panel);
+    --bd-callout-code-color: var(--bp-accent);
+}
 
 body {
     font-family: "Lato", Helvetica, Arial, sans-serif;
     text-rendering: optimizeLegibility;
+    /* A faint drafting grid behind everything: fine squares within larger ones. */
+    background-color: var(--bp-ink);
+    background-image:
+        linear-gradient(rgba(var(--bp-line-rgb), 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(var(--bp-line-rgb), 0.04) 1px, transparent 1px),
+        linear-gradient(rgba(var(--bp-line-rgb), 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(var(--bp-line-rgb), 0.015) 1px, transparent 1px);
+    background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+    background-position: -1px -1px;
 }
 
-:root,
-[data-bs-theme="light"] {
-    --bd-violet: #712cf9;
-    --bd-violet-rgb: 112.520718, 44.062154, 249.437846;
-    --bd-teal-rgb: 32, 201, 151;
-    --bd-violet-bg: var(--bd-violet);
-    --bd-callout-code-color: #ab296a;
-    --bd-pre-bg: var(--bs-tertiary-bg);
+/* Rules run edge to edge; nothing should make the page scroll sideways. */
+html {
+    overflow-x: clip;
 }
 
+/* One short, gentle fade for every hover and focus change, so nothing snaps. */
 [data-bs-theme="dark"] {
-    --bd-violet: #9461fb;
-    --bd-violet-bg: #712cf9;
-    --bd-callout-code-color: #e685b5;
-    --bd-pre-bg: #1b1f22;
+    --bp-ease: 0.2s ease-out;
+}
+
+.bp-nav-brand,
+.bp-nav-cell,
+.brand-mark,
+.btn,
+.nav-link,
+.format-chip,
+.drop-target,
+.tree-row,
+.contents-row,
+.entry-name,
+.form-control,
+.form-select {
+    transition:
+        background-color var(--bp-ease),
+        color var(--bp-ease),
+        border-color var(--bp-ease),
+        box-shadow var(--bp-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    [data-bs-theme="dark"] {
+        --bp-ease: 0s;
+    }
+}
+
+::selection {
+    background: rgba(var(--bp-accent-rgb), 0.35);
+}
+
+/* Labels: small capitals in monospace, like a drawing's annotations. */
+.bp-label,
+.nav-pills .nav-link,
+.btn:not(.btn-link):not(.btn-icon):not(.btn-clipboard):not(.btn-close),
+.table > thead th,
+.breadcrumb,
+.badge,
+.modal-title,
+.offcanvas-title {
+    font-family: var(--bs-font-monospace);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.btn:not(.btn-link):not(.btn-icon):not(.btn-clipboard):not(.btn-close),
+.nav-pills .nav-link {
+    font-size: 0.78rem;
+}
+
+.table > thead th {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--bs-secondary-color);
+}
+
+/* A section heading with a thin rule running out to the right. */
+.bp-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--bs-secondary-color);
+}
+
+.bp-label::after {
+    content: "";
+    flex: 1;
+    border-top: 1px solid var(--bp-rule);
 }
 
 .bd-content h2,
@@ -34,6 +162,15 @@ body {
 
 .bd-title {
     --bs-heading-color: var(--bs-emphasis-color);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+/* A word set in italic serif, for emphasis in a headline. */
+.bd-title em {
+    font-family: Georgia, "Times New Roman", serif;
+    font-weight: 400;
+    letter-spacing: 0;
 }
 
 .bd-content dl > dt {
@@ -43,12 +180,17 @@ body {
 }
 
 .bd-content dl > dd {
-    color: rgb(251, 251, 254);
+    color: var(--bs-emphasis-color);
     margin-bottom: 0.25rem;
 }
 
 .bd-content dl.facts > dt {
+    font-family: var(--bs-font-monospace);
+    font-size: 0.75rem;
     font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    line-height: 1.9;
     color: var(--bs-secondary-color);
 }
 
@@ -58,20 +200,407 @@ body {
 }
 
 .bd-group-title {
-    border-bottom: 2px solid white;
+    border-bottom: 1px solid var(--bp-rule-strong);
     padding-bottom: 8px;
     margin-bottom: 0;
     display: inline-block;
+    font-weight: 300;
 }
 
-.bd-navbar {
-    padding: 0.75rem 0;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15), inset 0 -1px 0 rgba(255, 255, 255, 0.15);
-    background-image: linear-gradient(90deg, rgba(33, 62, 111, 1) 0%, rgba(33, 62, 111, 0.95) 100%);
+/*
+ * The page is drawn as a sheet: a framed column bounded by full-height rules,
+ * divided into numbered sections by rules that run edge to edge, with a small
+ * cross where each one meets the frame.
+ */
+/* The page: the bar, the frame filling what's left, the footer at the bottom. */
+.page {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
 }
 
-.navbar-brand {
-    font-size: 1.15rem;
+.frame {
+    position: relative;
+    flex: 1 0 auto;
+    width: 100%;
+    max-width: 1320px;
+    margin: 0 auto;
+    border-left: 1px solid var(--bp-rule);
+    border-right: 1px solid var(--bp-rule);
+}
+
+.frame-pad {
+    padding: 2rem 2.5rem;
+}
+
+/* The footer: the frame's last row, in the bars' small capitals. */
+.frame-footer {
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 1rem 2.5rem;
+    border-top: 1px solid var(--bp-rule);
+    font-family: var(--bs-font-monospace);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--bs-tertiary-color);
+}
+
+@media (max-width: 767.98px) {
+    .frame-footer {
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .frame-pad {
+        padding: 1.5rem 1rem;
+    }
+}
+
+.frame-section {
+    position: relative;
+}
+
+/* The rule under a section, out to both edges of the window. */
+.frame-section::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: -1px;
+    width: 100vw;
+    transform: translateX(-50%);
+    border-bottom: 1px solid var(--bp-rule);
+    pointer-events: none;
+}
+
+/* A cross where the rule meets each side of the frame. */
+.frame-section::before {
+    content: "";
+    position: absolute;
+    left: -6px;
+    right: -6px;
+    bottom: -6px;
+    height: 11px;
+    z-index: 1;
+    pointer-events: none;
+    background:
+        linear-gradient(var(--bp-line), var(--bp-line)) 0 5px / 11px 1px no-repeat,
+        linear-gradient(var(--bp-line), var(--bp-line)) 5px 0 / 1px 11px no-repeat,
+        linear-gradient(var(--bp-line), var(--bp-line)) 100% 5px / 11px 1px no-repeat,
+        linear-gradient(var(--bp-line), var(--bp-line)) calc(100% - 5px) 0 / 1px 11px no-repeat;
+}
+
+/* A section's header: "01 / OPEN" on the left, a note on the right. */
+.section-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.85rem 2.5rem;
+    border-bottom: 1px solid var(--bp-rule);
+    font-family: var(--bs-font-monospace);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--bs-body-color);
+}
+
+.section-index,
+.section-aside {
+    color: var(--bs-tertiary-color);
+}
+
+/* The promise that nothing is uploaded: brighter than the bar's other notes, with the shield in the accent. */
+.privacy-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--bs-body-color);
+}
+
+.privacy-note .bi {
+    font-size: 0.95rem;
+    color: var(--bp-accent);
+}
+
+.section-aside .btn-link {
+    font-size: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    vertical-align: baseline;
+}
+
+@media (max-width: 767.98px) {
+    .section-bar {
+        padding: 0.75rem 1rem;
+    }
+}
+
+/* Where a file came from, as the section's title: SOUNDS.MIX / AFFIRM1.V00. */
+.section-bar .breadcrumb {
+    display: inline-flex;
+    margin: 0;
+    font-size: inherit;
+    letter-spacing: inherit;
+    --bs-breadcrumb-divider-color: var(--bs-tertiary-color);
+    --bs-breadcrumb-item-active-color: var(--bs-body-color);
+}
+
+.section-bar .breadcrumb .btn-link {
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    vertical-align: baseline;
+    color: var(--bs-secondary-color);
+}
+
+.section-bar .breadcrumb .btn-link:hover {
+    color: var(--bp-accent);
+}
+
+/* The bar: the mark, then cells divided by thin rules; the main action a solid block at the right edge. */
+.bp-nav {
+    height: 3.25rem;
+    background: var(--bp-deep);
+    border-bottom: 1px solid var(--bp-rule-strong);
+}
+
+/* The bar's cells line up with the page's frame below. */
+.bp-nav-inner {
+    display: flex;
+    align-items: stretch;
+    height: 100%;
+    max-width: 1320px;
+    margin: 0 auto;
+    border-left: 1px solid var(--bp-rule);
+    border-right: 1px solid var(--bp-rule);
+}
+
+.bp-nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0 1.25rem;
+    border-right: 1px solid var(--bp-rule);
+    font-family: var(--bs-font-monospace);
+    font-size: 1.05rem;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+}
+
+/* Hovered, the cell takes the disc's chartreuse and the name the mascot's purple: the badge melts into the cell. */
+.bp-nav-brand:hover,
+.bp-nav-brand:focus-visible {
+    background: var(--bp-accent);
+    color: var(--bp-mascot) !important;
+    outline: none;
+}
+
+.bp-nav-brand:hover .brand-mark,
+.bp-nav-brand:focus-visible .brand-mark {
+    box-shadow: none;
+}
+
+.bp-nav-cell {
+    display: flex;
+    align-items: center;
+    padding: 0 1.25rem;
+    border: 0;
+    border-left: 1px solid var(--bp-rule);
+    background: transparent;
+    color: var(--bp-line);
+    font-family: var(--bs-font-monospace);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+}
+
+.bp-nav-cell:hover,
+.bp-nav-cell:focus-visible {
+    background: rgba(var(--bp-line-rgb), 0.08);
+    outline: none;
+}
+
+.bp-nav-cell--solid {
+    background: var(--bp-line);
+    color: var(--bp-ink);
+}
+
+.bp-nav-cell--solid:hover,
+.bp-nav-cell--solid:focus-visible {
+    background: var(--bp-accent);
+}
+
+/* The mascot in a chartreuse disc: the color opposite its purple, so it stands out. */
+.brand-mark {
+    display: inline-grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    background: var(--bp-accent);
+    box-shadow: 0 0 0 1px var(--bp-deep), 0 0 0 2px rgba(var(--bp-accent-rgb), 0.5);
+}
+
+.brand-mark img {
+    width: 1.75rem;
+    height: 1.75rem;
+}
+
+/* Buttons: thin outlines; the primary one is drawn solid in the line color. */
+.btn-primary {
+    --bs-btn-color: var(--bp-ink);
+    --bs-btn-bg: var(--bp-line);
+    --bs-btn-border-color: var(--bp-line);
+    --bs-btn-hover-color: var(--bp-ink);
+    --bs-btn-hover-bg: var(--bp-accent);
+    --bs-btn-hover-border-color: var(--bp-accent);
+    --bs-btn-active-color: var(--bp-ink);
+    --bs-btn-active-bg: var(--bp-accent);
+    --bs-btn-active-border-color: var(--bp-accent);
+    --bs-btn-disabled-color: var(--bp-ink);
+    --bs-btn-disabled-bg: rgba(var(--bp-line-rgb), 0.5);
+    --bs-btn-disabled-border-color: transparent;
+}
+
+.btn-outline-light,
+.btn-outline-secondary {
+    --bs-btn-color: var(--bp-line);
+    --bs-btn-border-color: var(--bp-rule-strong);
+    --bs-btn-hover-color: var(--bp-ink);
+    --bs-btn-hover-bg: var(--bp-line);
+    --bs-btn-hover-border-color: var(--bp-line);
+    --bs-btn-active-color: var(--bp-ink);
+    --bs-btn-active-bg: var(--bp-accent);
+    --bs-btn-active-border-color: var(--bp-accent);
+}
+
+.btn-outline-danger {
+    --bs-btn-color: var(--bp-danger);
+    --bs-btn-border-color: var(--bp-danger);
+    --bs-btn-hover-color: var(--bp-ink);
+    --bs-btn-hover-bg: var(--bp-danger);
+    --bs-btn-hover-border-color: var(--bp-danger);
+}
+
+.btn-link {
+    --bs-btn-color: var(--bp-line);
+    --bs-btn-hover-color: var(--bp-accent);
+}
+
+/* Tabs: ruled boxes; the open one drawn solid. */
+.nav-pills {
+    --bs-nav-pills-border-radius: 0;
+    --bs-nav-pills-link-active-bg: var(--bp-line);
+    --bs-nav-pills-link-active-color: var(--bp-ink);
+    --bs-nav-link-color: var(--bp-line);
+    --bs-nav-link-hover-color: var(--bp-accent);
+}
+
+/* Tabs: one segmented control, joined boxes; the open one drawn solid. */
+.nav-pills .nav-link {
+    border: 1px solid var(--bp-rule-strong);
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+}
+
+.nav-pills .nav-item + .nav-item .nav-link {
+    border-left: 0;
+}
+
+/* Alerts: a panel with a bar of their color down the left. */
+.alert {
+    --bs-alert-bg: var(--bp-panel);
+    border-left-width: 3px;
+}
+
+.alert-danger {
+    --bs-alert-color: #ffd9d4;
+    --bs-alert-border-color: var(--bp-danger);
+    --bs-alert-bg: rgba(255, 122, 107, 0.1);
+}
+
+.alert-warning {
+    --bs-alert-color: #ffeac0;
+    --bs-alert-border-color: var(--bp-warning);
+    --bs-alert-bg: rgba(255, 204, 92, 0.08);
+}
+
+.alert-info {
+    --bs-alert-color: #d6edff;
+    --bs-alert-border-color: var(--bp-info);
+    --bs-alert-bg: rgba(124, 196, 255, 0.08);
+}
+
+.text-danger {
+    color: var(--bp-danger) !important;
+}
+
+.badge.text-bg-danger {
+    background-color: var(--bp-danger) !important;
+    color: var(--bp-deep) !important;
+}
+
+/* Fields: dark wells with thin rules; focus in the marker color. */
+.form-control,
+.form-select {
+    background-color: var(--bp-deep);
+    border-color: var(--bp-rule);
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: var(--bp-deep);
+    border-color: var(--bp-accent);
+    box-shadow: 0 0 0 0.15rem rgba(var(--bp-accent-rgb), 0.3);
+}
+
+.form-check-input:checked {
+    background-color: var(--bp-accent);
+    border-color: var(--bp-accent);
+}
+
+.form-switch .form-check-input:checked {
+    --bs-form-switch-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%230c2a4d'/%3e%3c/svg%3e");
+}
+
+.form-range {
+    accent-color: var(--bp-accent);
+}
+
+.table {
+    --bs-table-bg: transparent;
+    --bs-table-border-color: var(--bp-rule);
+    --bs-table-hover-bg: rgba(var(--bp-line-rgb), 0.06);
+}
+
+.modal,
+.offcanvas {
+    --bs-modal-bg: var(--bp-panel);
+    --bs-modal-border-color: var(--bp-rule-strong);
+    --bs-modal-header-border-color: var(--bp-rule);
+    --bs-offcanvas-bg: var(--bp-panel);
+    --bs-offcanvas-border-color: var(--bp-rule-strong);
+}
+
+.list-group {
+    --bs-list-group-bg: transparent;
+    --bs-list-group-border-color: var(--bp-rule);
+}
+
+.tooltip {
+    --bs-tooltip-bg: var(--bp-line);
+    --bs-tooltip-color: var(--bp-ink);
+}
+
+.spinner-border {
+    color: var(--bp-accent);
 }
 
 .highlight {
@@ -129,7 +658,7 @@ body {
 }
 
 .btn-icon:hover {
-    color: var(--bd-violet);
+    color: var(--bp-accent);
 }
 
 .tip-multiline .tooltip-inner {
@@ -155,46 +684,259 @@ body {
 /* ---- Open panel ---- */
 
 .drop-zone {
-    border: 2px dashed transparent;
-    border-radius: var(--bs-border-radius-lg);
-    padding: 1rem;
-    margin: -1rem;
-    transition: border-color 0.15s, background-color 0.15s;
+    transition: background-color var(--bp-ease), box-shadow var(--bp-ease);
 }
 
 .drop-zone--active {
-    border-color: var(--bd-violet);
-    background-color: rgba(var(--bd-violet-rgb), 0.08);
+    background-color: rgba(var(--bp-accent-rgb), 0.06);
+    box-shadow: inset 0 0 0 1px var(--bp-accent);
 }
 
+/* The drop target: a dashed frame with corner marks, like a region marked out on a drawing. */
 .drop-target {
+    position: relative;
     padding: 3rem 1rem;
-    border: 2px dashed var(--bs-border-color);
-    border-radius: var(--bs-border-radius-lg);
+    border: 1px dashed var(--bp-rule-strong);
+    background-color: rgba(var(--bp-ink-rgb), 0.6);
     text-align: center;
     color: var(--bs-secondary-color);
     cursor: pointer;
-    transition: border-color 0.15s, color 0.15s;
+    --mark: var(--bp-line);
+    background-image:
+        linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark)),
+        linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark)),
+        linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark)),
+        linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark));
+    background-repeat: no-repeat;
+    background-size: 14px 1px, 1px 14px, 14px 1px, 1px 14px, 14px 1px, 1px 14px, 14px 1px, 1px 14px;
+    background-position: 0 0, 0 0, 100% 0, 100% 0, 0 100%, 0 100%, 100% 100%, 100% 100%;
 }
 
 .drop-target:hover,
 .drop-target:focus-visible {
-    border-color: var(--bd-violet);
+    border-color: var(--bp-accent);
     color: var(--bs-body-color);
     outline: none;
+    --mark: var(--bp-accent);
 }
 
 .format-chip {
     padding: 0.2rem 0.6rem;
-    margin-bottom: 0.4rem;
-    border: 1px solid var(--bs-border-color);
-    border-radius: 999px;
+    border: 1px solid var(--bp-rule);
+    background: rgba(var(--bp-ink-rgb), 0.7);
+    font-family: var(--bs-font-monospace);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+/* The formats glide slowly past, fading out at the edges; hovering or focusing holds them still. */
+.format-carousel {
+    margin: 1.25rem 2.5rem;
+    overflow: hidden;
+    cursor: pointer;
+    mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
+    border-radius: var(--bs-border-radius);
+    outline: none;
+}
+
+.format-carousel:focus-visible {
+    box-shadow: 0 0 0 0.2rem rgba(var(--bp-accent-rgb), 0.5);
+}
+
+.format-track {
+    display: flex;
+    gap: 0.5rem;
+    width: max-content;
+    margin: 0;
+    padding: 0.4rem 0 0.6rem;
+    list-style: none;
+    animation: format-glide linear infinite;
+}
+
+.format-carousel:hover .format-track,
+.format-carousel:focus-visible .format-track {
+    animation-play-state: paused;
+}
+
+.format-carousel:hover .format-chip {
+    border-color: var(--bp-accent);
+}
+
+/* The list is there twice, so moving by half of it loops without a jump (the gap is half of one more chip's spacing). */
+@keyframes format-glide {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(calc(-50% - 0.25rem));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .format-carousel {
+        overflow-x: auto;
+        mask-image: none;
+    }
+    .format-track {
+        animation: none;
+    }
+}
+
+/* Tiles that share their borders: each with a header row (its name, its number) over its text. */
+.tile-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    border-top: 1px solid var(--bp-rule);
+    border-left: 1px solid var(--bp-rule);
+}
+
+.tile {
+    border-right: 1px solid var(--bp-rule);
+    border-bottom: 1px solid var(--bp-rule);
+}
+
+.tile-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.7rem 1.25rem;
+    border-bottom: 1px solid var(--bp-rule);
+    font-family: var(--bs-font-monospace);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+}
+
+.tile-head h4 {
+    margin: 0;
+    font-size: inherit;
+    letter-spacing: inherit;
+    color: var(--bs-emphasis-color);
+}
+
+.tile-head span {
+    color: var(--bs-tertiary-color);
+}
+
+.tile p {
+    margin: 0;
+    padding: 1rem 1.25rem 1.25rem;
+    color: var(--bs-secondary-color);
 }
 
 /* ---- Inspector ---- */
 
-.summary {
-    max-width: 44rem;
+/*
+ * Cells: parts of a section side by side, divided by a rule, as the guide's
+ * tiles are. Stacked, divided by a rule across, on narrow screens.
+ */
+.cell-row {
+    display: flex;
+}
+
+.cell {
+    min-width: 0;
+}
+
+.cell + .cell {
+    border-left: 1px solid var(--bp-rule);
+}
+
+@media (max-width: 991.98px) {
+    .cell-row {
+        flex-direction: column;
+    }
+    .cell + .cell {
+        border-left: 0;
+        border-top: 1px solid var(--bp-rule);
+    }
+}
+
+/* The title block: the file on the left, its facts on the right. */
+.cell--title {
+    flex: 1 1 50%;
+    padding: 2rem 2.5rem;
+}
+
+.cell--facts {
+    flex: 1 1 50%;
+    display: flex;
+    align-items: center;
+    padding: 1.5rem 2.5rem;
+}
+
+.cell--facts .facts {
+    width: 100%;
+}
+
+@media (max-width: 767.98px) {
+    .cell--title,
+    .cell--facts {
+        padding: 1.5rem 1rem;
+    }
+}
+
+.checks > :last-child {
+    margin-bottom: 0;
+}
+
+/* The view switch, in the right of its section's bar. */
+.bar-tabs {
+    flex-wrap: wrap;
+}
+
+.bar-tabs .nav-link {
+    padding: 0.3rem 0.75rem;
+    font-size: 0.68rem;
+}
+
+/* The structure: the field tree and the bytes as cells of the frame, edge to edge. */
+.cell--tree {
+    flex: 0 0 40%;
+    background: var(--bp-panel);
+}
+
+.cell--bytes {
+    flex: 1 1 60%;
+}
+
+.cell-row--structure .structure-tree {
+    max-height: 78vh;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.cell-row--structure .field-details {
+    margin: 0;
+    border: 0;
+    border-bottom: 1px solid var(--bp-rule);
+    border-radius: 0;
+}
+
+.cell-row--structure .hex-view {
+    border: 0;
+    border-radius: 0;
+}
+
+/* A preview's stage and its controls: one ruled unit, divided down the middle. */
+.cell-row--boxed {
+    border: 1px solid var(--bp-rule);
+}
+
+.cell--stage {
+    flex: 1 1 66%;
+}
+
+.cell--side {
+    flex: 0 0 34%;
+    padding: 1.25rem 1.5rem;
+}
+
+.cell--stage .image-stage,
+.cell--stage .voxel-canvas {
+    border: 0;
+    border-radius: 0;
 }
 
 .breadcrumb .btn-link {
@@ -222,7 +964,7 @@ body {
 }
 
 .entry-name:hover {
-    color: var(--bd-violet) !important;
+    color: var(--bp-accent) !important;
 }
 
 .entry-unnamed {
@@ -252,12 +994,13 @@ body {
 }
 
 .tree-row:hover {
-    background: rgba(var(--bd-violet-rgb), 0.12);
+    background: rgba(var(--bp-line-rgb), 0.07);
 }
 
 .tree-row--selected,
 .tree-row--selected:hover {
-    background: rgba(var(--bd-violet-rgb), 0.35);
+    background: rgba(var(--bp-accent-rgb), 0.16);
+    box-shadow: inset 2px 0 0 var(--bp-accent);
 }
 
 .tree-caret {
@@ -297,6 +1040,7 @@ body {
 
 .field-details {
     min-height: 6.5rem;
+    background: var(--bp-panel);
     margin-bottom: 0.75rem;
     padding: 0.75rem 1rem;
     border: 1px solid var(--bs-border-color);
@@ -336,6 +1080,20 @@ body {
     display: flex;
 }
 
+/*
+ * The bytes keep the editor's original colors (neutral dark, light text, a
+ * violet selection) rather than the blueprint's: they read best, and the
+ * fields' tints stand out on them.
+ */
+.hex-body {
+    --hx-bg: #1b1f22;
+    --hx-text: #dee2e6;
+    --hx-dim: rgba(222, 226, 230, 0.45);
+    --hx-select: #712cf9;
+    background: var(--hx-bg);
+    color: var(--hx-text);
+}
+
 .hex-rows {
     flex: 1;
     min-width: 0;
@@ -348,17 +1106,19 @@ body {
 }
 
 .hex-rows:focus-visible {
-    box-shadow: inset 0 0 0 2px rgba(var(--bd-violet-rgb), 0.5);
+    box-shadow: inset 0 0 0 2px rgba(113, 44, 249, 0.6);
 }
 
-.hex-row {
+.hx-row {
     display: flex;
     gap: 1rem;
     white-space: nowrap;
 }
 
+/* The address, with room before the bytes' tints begin. */
 .hx-offset {
-    color: var(--bs-tertiary-color);
+    padding-right: 0.5rem;
+    color: var(--hx-dim);
     user-select: none;
 }
 
@@ -395,11 +1155,11 @@ body {
 .hx-tone-5 { background: rgba(253, 126, 20, 0.13); }
 
 .hx-hover {
-    box-shadow: inset 0 -2px 0 var(--bs-body-color);
+    box-shadow: inset 0 -2px 0 var(--hx-text);
 }
 
 .hx-selected {
-    background: var(--bd-violet-bg);
+    background: var(--hx-select);
     color: #fff;
 }
 
@@ -415,7 +1175,7 @@ body {
     writing-mode: vertical-lr;
     width: 1.25rem;
     margin: 0.5rem 0.25rem;
-    accent-color: var(--bd-violet);
+    accent-color: var(--hx-select);
 }
 
 /* Image preview */
@@ -430,8 +1190,9 @@ body {
     overflow: auto;
     border-radius: var(--bs-border-radius);
     /* A checkerboard behind transparent pixels. */
-    background-color: #2a2f35;
-    background-image: linear-gradient(45deg, #343a40 25%, transparent 25%), linear-gradient(-45deg, #343a40 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #343a40 75%), linear-gradient(-45deg, transparent 75%, #343a40 75%);
+    border: 1px solid var(--bp-rule);
+    background-color: var(--bp-deep);
+    background-image: linear-gradient(45deg, var(--bp-panel) 25%, transparent 25%), linear-gradient(-45deg, var(--bp-panel) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--bp-panel) 75%), linear-gradient(-45deg, transparent 75%, var(--bp-panel) 75%);
     background-size: 16px 16px;
     background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
@@ -457,7 +1218,8 @@ body {
     width: 100%;
     height: min(65vh, 36rem);
     border-radius: var(--bs-border-radius);
-    background: #2a2f35;
+    border: 1px solid var(--bp-rule);
+    background: var(--bp-deep);
     cursor: grab;
     touch-action: none;
 }

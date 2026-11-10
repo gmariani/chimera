@@ -1,8 +1,16 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+/** When the site was built, as the footer shows it: 2-November-2026. */
+const built = new Date();
+const BUILD_DATE = `${built.getDate()}-${built.toLocaleString('en-US', { month: 'long' })}-${built.getFullYear()}`;
+
 export default defineConfig({
     plugins: [react()],
+    define: {
+        __BUILD_DATE__: JSON.stringify(BUILD_DATE),
+        __BUILD_YEAR__: JSON.stringify(String(built.getFullYear())),
+    },
     // Relative asset URLs so the site works from a sub-directory (e.g. /projects/chimera/).
     base: './',
     build: {

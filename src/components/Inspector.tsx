@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Nav, Spinner, Tab } from 'react-bootstrap';
 import type { FormatDescriptor } from '../core/types';
 import type { Check } from '../formats/inspect';
-import { bytesLabel, formatSize } from '../core/bytes';
+import { formatSize } from '../core/bytes';
 import { download, safeName } from '../lib/download';
 import { useParsed, type OpenFile } from '../lib/inspect';
 import { useLibrary } from '../lib/library';
@@ -15,7 +15,7 @@ import { LinksTab } from '../tabs/LinksTab';
 import { StructureTab } from '../tabs/StructureTab';
 import { AddFilesButton } from './AddFiles';
 import { Guard } from './Guard';
-import { Dl } from './ui';
+import { Dl, SectionBar } from './ui';
 
 type TabKey = 'contents' | 'preview' | 'links' | 'structure';
 
@@ -111,98 +111,130 @@ export function Inspector({
     // A file with a preview opens on it, even when it holds files too (a photo's thumbnail).
     const active = tab && available.includes(tab) ? tab : available.includes('preview') ? 'preview' : available[0];
 
+    const labels: Record<TabKey, string> = { contents: `Contents (${parsed?.entries?.length ?? 0})`, preview: 'Preview', links: `Linked files (${links.length})`, structure: 'Structure' };
+    const warnings = parsed?.warnings ?? [];
+    // The sections are numbered as on the landing page; this file's is 01 (the bar above, with where it came from).
+    const hasChecks = parsed !== null && (checks.length > 0 || warnings.length > 0 || !!parsed.wanted || missing > 0 || !!file.as || (alternatives.length > 0 && checks.some((c) => c.level !== 'info')));
+    const checksIndex = '02';
+    const viewIndex = hasChecks ? '03' : '02';
+    const count = (n: number, one: string) => (n ? `${n} ${one}${n === 1 ? '' : 's'}` : null);
+    const checkCounts = [count(checks.filter((c) => c.level === 'danger').length, 'alert'), count(checks.filter((c) => c.level === 'warning').length + warnings.length, 'warning'), count(checks.filter((c) => c.level === 'info').length + (parsed?.wanted || missing ? 1 : 0), 'note')].filter(Boolean).join(' · ');
+
     return (
         <>
-            <div className="text-center mb-4">
-                <h1 className="display-6 bd-title mb-1 text-break">{file.name}</h1>
-                <p className="text-body-secondary mb-2">
-                    {checks.some((c) => c.level === 'danger') && (
-                        <span className="badge text-bg-danger me-2">
-                            <i className="bi bi-shield-exclamation me-1" />
-                            Suspicious
-                        </span>
+            {/* The title block: what the file is on the left, its facts on the right. */}
+            <section className="frame-section">
+                <div className="cell-row">
+                    <div className="cell cell--title">
+                        <h1 className="display-6 bd-title mb-1 text-break">{file.name}</h1>
+                        <p className="text-body-secondary mb-3">
+                            {checks.some((c) => c.level === 'danger') && (
+                                <span className="badge text-bg-danger me-2">
+                                    <i className="bi bi-shield-exclamation me-1" />
+                                    Suspicious
+                                </span>
+                            )}
+                            {parsed ? parsed.title : 'Reading'} · {formatSize(file.data.length)}
+                            {!file.knownName && ' · real name unknown'}
+                        </p>
+                        <Button size="sm" variant="outline-light" onClick={() => download(file.data, safeName(file.name))}>
+                            <i className="bi bi-download me-1" /> Save this file
+                        </Button>
+                    </div>
+                    {parsed && parsed.summary.length > 0 && (
+                        <div className="cell cell--facts">
+                            <Dl rows={parsed.summary.map(([k, v]) => [k, v])} labelCols={4} className="facts mb-0" />
+                        </div>
                     )}
-                    {parsed ? parsed.title : 'Reading'} · {formatSize(file.data.length)}
-                    {!file.knownName && ' · real name unknown'}
-                </p>
-                <Button size="sm" variant="outline-light" onClick={() => download(file.data, safeName(file.name))}>
-                    <i className="bi bi-download me-1" /> Save this file
-                </Button>
-            </div>
+                </div>
+            </section>
 
-            {state.status === 'loading' && <Reading size={file.data.length} since={state.since} />}
+            {state.status === 'loading' && (
+                <section className="frame-section">
+                    <Reading size={file.data.length} since={state.since} />
+                </section>
+            )}
+
+            {parsed && hasChecks && (
+                <section className="frame-section">
+                    <SectionBar index={checksIndex} title="Checks">
+                        {checkCounts}
+                    </SectionBar>
+                    <div className="frame-pad checks">
+                        <Checks checks={checks} alternatives={alternatives} openedAs={file.as} onOpenAs={onOpenAs} />
+                        {warnings.slice(0, 5).map((w) => (
+                            <Alert key={w} variant="warning" className="py-2 small">
+                                {w}
+                            </Alert>
+                        ))}
+                        {warnings.length > 5 && <Alert variant="warning" className="py-2 small">…and {warnings.length - 5} more problems.</Alert>}
+                        {parsed.wanted && <Wanted text={parsed.wanted} />}
+                        {missing > 0 && !parsed.wanted && (
+                            <Alert variant="info" className="py-2 small d-flex flex-wrap align-items-center gap-2">
+                                <span className="me-auto">
+                                    <i className="bi bi-link-45deg me-1" />
+                                    {missing} file{missing === 1 ? '' : 's'} this would use {missing === 1 ? 'isn\'t' : 'aren\'t'} in the files in use, so {missing === 1 ? 'it isn\'t' : 'they aren\'t'} shown.
+                                </span>
+                                <Button size="sm" variant="outline-light" onClick={() => setTab('links')}>
+                                    See which
+                                </Button>
+                            </Alert>
+                        )}
+                    </div>
+                </section>
+            )}
 
             {parsed && (
-                <>
-                    <Checks checks={checks} alternatives={alternatives} openedAs={file.as} onOpenAs={onOpenAs} />
-                    {parsed.warnings.slice(0, 5).map((w) => (
-                        <Alert key={w} variant="warning" className="py-2 small">
-                            {w}
-                        </Alert>
-                    ))}
-                    {parsed.warnings.length > 5 && <Alert variant="warning" className="py-2 small">…and {parsed.warnings.length - 5} more problems.</Alert>}
-                    {parsed.wanted && <Wanted text={parsed.wanted} />}
-                    {missing > 0 && !parsed.wanted && (
-                        <Alert variant="info" className="py-2 small d-flex flex-wrap align-items-center gap-2">
-                            <span className="me-auto">
-                                <i className="bi bi-link-45deg me-1" />
-                                {missing} file{missing === 1 ? '' : 's'} this would use {missing === 1 ? 'isn\'t' : 'aren\'t'} in the files in use, so {missing === 1 ? 'it isn\'t' : 'they aren\'t'} shown.
-                            </span>
-                            <Button size="sm" variant="outline-light" onClick={() => setTab('links')}>
-                                See which
-                            </Button>
-                        </Alert>
-                    )}
-
-                    <div className="summary mx-auto mb-4">
-                        <Dl rows={parsed.summary.map(([k, v]) => [k, v])} labelCols={4} className="facts mb-0" />
-                    </div>
-
-                    <Tab.Container activeKey={active} onSelect={(key) => key && setTab(key as TabKey)} mountOnEnter>
-                        <Nav variant="pills" className="mb-3 justify-content-center" role="tablist">
-                            {available.map((key) => (
-                                <Nav.Item key={key}>
-                                    <Nav.Link eventKey={key}>
-                                        {{ contents: `Contents (${parsed.entries?.length ?? 0})`, preview: 'Preview', links: `Linked files (${links.length})`, structure: 'Structure' }[key]}
-                                        {key === 'links' && missing > 0 && (
-                                            <span className="badge text-bg-warning ms-1" title={`${missing} not found`}>
-                                                {missing} missing
-                                            </span>
-                                        )}
-                                    </Nav.Link>
-                                </Nav.Item>
-                            ))}
-                        </Nav>
+                <Tab.Container activeKey={active} onSelect={(key) => key && setTab(key as TabKey)} mountOnEnter>
+                    <section className="frame-section">
+                        {/* The view's bar: its name on the left, the switch between views on the right. */}
+                        <SectionBar index={viewIndex} title={labels[active]}>
+                            <Nav variant="pills" className="bar-tabs" role="tablist">
+                                {available.map((key) => (
+                                    <Nav.Item key={key}>
+                                        <Nav.Link eventKey={key}>
+                                            {labels[key]}
+                                            {key === 'links' && missing > 0 && (
+                                                <span className="badge text-bg-warning ms-1" title={`${missing} not found`}>
+                                                    {missing} missing
+                                                </span>
+                                            )}
+                                        </Nav.Link>
+                                    </Nav.Item>
+                                ))}
+                            </Nav>
+                        </SectionBar>
                         <Tab.Content>
                             {parsed.entries && (
-                                <Tab.Pane eventKey="contents">
+                                <Tab.Pane eventKey="contents" className="frame-pad">
                                     <Guard what="contents list">
                                         <ContentsTab archiveName={file.name} entries={parsed.entries} formats={state.status === 'ready' ? state.entryFormats : []} names={names} memory={memory} onOpen={openInside} onNames={onNames} />
                                     </Guard>
                                 </Tab.Pane>
                             )}
                             {parsed.preview && (
-                                <Tab.Pane eventKey="preview">
+                                <Tab.Pane eventKey="preview" className="frame-pad">
                                     <Guard what="preview">
                                         <PreviewTab preview={parsed.preview} fileName={file.name} onOpenName={openName} />
                                     </Guard>
                                 </Tab.Pane>
                             )}
                             {links.length > 0 && (
-                                <Tab.Pane eventKey="links">
+                                <Tab.Pane eventKey="links" className="frame-pad">
                                     <Guard what="linked files list">
                                         <LinksTab links={links} onShowFiles={onShowFiles} />
                                     </Guard>
                                 </Tab.Pane>
                             )}
+                            {/* Edge to edge: the tree and the bytes are cells of the frame. */}
                             <Tab.Pane eventKey="structure">
                                 <Guard what="structure view">
                                     <StructureTab data={file.data} parsed={parsed} fileName={file.name} />
                                 </Guard>
                             </Tab.Pane>
                         </Tab.Content>
-                    </Tab.Container>
-                </>
+                    </section>
+                </Tab.Container>
             )}
         </>
     );
@@ -221,7 +253,7 @@ function Reading({ size, since }: { size: number; since: number }) {
     const seconds = Math.floor((Date.now() - since) / 1000);
     return (
         <div className="section-loading justify-content-center flex-wrap gap-2" aria-busy="true">
-            <Spinner animation="border" size="sm" role="status" /> <span>Reading {bytesLabel(size)}…</span>
+            <Spinner animation="border" size="sm" role="status" /> <span>Reading {formatSize(size)}…</span>
             {seconds >= OFFER_STOP && (
                 <>
                     <span className="text-body-secondary small">{seconds} s</span>

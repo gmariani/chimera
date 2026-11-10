@@ -73,3 +73,18 @@ export function CodeBlock({ children, copy }: { children: string; copy?: boolean
 export function Muted({ children }: { children: ReactNode }) {
     return <span className="text-body-secondary">{children}</span>;
 }
+
+/**
+ * A section's header bar, as on a drawing: its number and name on the left,
+ * a note or controls on the right, between thin rules.
+ */
+export function SectionBar({ index, title, children }: { index?: string; title: ReactNode; children?: ReactNode }) {
+    return (
+        <div className="section-bar">
+            <span className="section-title">
+                {index && <span className="section-index">{index} /</span>} {title}
+            </span>
+            {children && <div className="section-aside">{children}</div>}
+        </div>
+    );
+}

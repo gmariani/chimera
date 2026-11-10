@@ -253,13 +253,13 @@ function ImagesPreview({
     };
 
     return (
-        <div className="row g-4">
-            <div className="col-lg-8">
+        <div className="cell-row cell-row--boxed">
+            <div className="cell cell--stage">
                 <div className={`image-stage ${zoom === 'fit' ? '' : 'image-stage--pannable'}`} {...pan} onPointerCancel={pan.onPointerUp}>
                     <canvas ref={canvas} className={`image-canvas ${view === 'sheet' ? 'image-canvas--sheet' : ''}`} style={zoomStyle(zoom, (view === 'sheet' ? sheetCanvas?.width : frames[frame].width) ?? 0, (view === 'sheet' ? sheetCanvas?.height : frames[frame].height) ?? 0)} onClick={clickSheet} />
                 </div>
             </div>
-            <div className="col-lg-4">
+            <div className="cell cell--side">
                 {frames.length > 1 && (
                     <div className="mb-3">
                         <ButtonGroup size="sm" className="mb-2 d-flex">
@@ -404,13 +404,13 @@ function PicturePreview({ width, height, rgba, toggle, fileName }: { width: numb
     }, [width, height, shown]);
 
     return (
-        <div className="row g-4">
-            <div className="col-lg-8">
+        <div className="cell-row cell-row--boxed">
+            <div className="cell cell--stage">
                 <div className={`image-stage ${zoom === 'fit' ? '' : 'image-stage--pannable'}`} {...pan} onPointerCancel={pan.onPointerUp}>
                     <canvas ref={canvas} className="image-canvas" style={zoomStyle(zoom, width, height)} />
                 </div>
             </div>
-            <div className="col-lg-4">
+            <div className="cell cell--side">
                 <ZoomButtons zoom={zoom} onChange={setZoom} />
                 {toggle && <Form.Check type="switch" id="picture-toggle" className="mb-3" label={toggle.label} checked={on} onChange={(e) => setOn(e.target.checked)} />}
                 <OffNote waiting={off.waiting} error={off.error} />
@@ -581,13 +581,13 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
     };
 
     return (
-        <div className="row g-4">
-            <div className="col-lg-8">
+        <div className="cell-row cell-row--boxed">
+            <div className="cell cell--stage">
                 <div className="image-stage image-stage--pannable" {...pan} onPointerCancel={pan.onPointerUp}>
                     <canvas ref={canvas} width={width} height={height} className="image-canvas" style={{ width: width * zoom }} />
                 </div>
             </div>
-            <div className="col-lg-4">
+            <div className="cell cell--side">
                 <div className="d-flex align-items-center gap-2 mb-3">
                     <Button size="sm" variant="outline-light" onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
                         <i className={`bi ${playing ? 'bi-pause-fill' : 'bi-play-fill'}`} />

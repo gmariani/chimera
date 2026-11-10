@@ -314,8 +314,8 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
     };
 
     return (
-        <div className="row g-4">
-            <div className="col-lg-8">
+        <div className="cell-row cell-row--boxed">
+            <div className="cell cell--stage">
                 {error ? (
                     <div className="image-stage align-items-center" style={{ height: 'auto' }}>
                         <Muted>{error}</Muted>
@@ -343,7 +343,7 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
                     <Muted>Drag to turn, scroll to zoom, double-click to go back to the game's view.</Muted>
                 </div>
             </div>
-            <div className="col-lg-4">
+            <div className="cell cell--side">
                 <Form.Group className="mb-3">
                     <Form.Label className="small text-body-secondary mb-1">View</Form.Label>
                     <div className="d-flex flex-wrap gap-2">

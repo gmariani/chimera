@@ -1,15 +1,17 @@
 import { Badge } from 'react-bootstrap';
 import { useLibrary } from '../lib/library';
+import mark from '../images/chimera_48.png';
+import markLarge from '../images/chimera_128.png';
 
-/** The site's navbar, in the same style as the Email Header Analyzer's. */
+/** The site's bar: the mark at the left, then cells divided by thin rules; the main action is a solid block at the right edge. */
 export function TopBar({ onNew, onShowFiles }: { onNew?: () => void; onShowFiles: () => void }) {
     const { files } = useLibrary();
     return (
-        <header className="navbar navbar-expand-lg bd-navbar">
-            <nav className="container-xxl bd-gutter d-flex align-items-center gap-2">
+        <header className="bp-nav">
+            <div className="bp-nav-inner">
                 <a
                     href="./"
-                    className="navbar-brand d-flex align-items-center gap-2 text-reset me-auto"
+                    className="bp-nav-brand text-reset"
                     onClick={(e) => {
                         if (onNew) {
                             e.preventDefault();
@@ -17,20 +19,26 @@ export function TopBar({ onNew, onShowFiles }: { onNew?: () => void; onShowFiles
                         }
                     }}
                 >
-                    <i className="bi bi-file-earmark-binary" />
+                    <span className="brand-mark">
+                        <img src={mark} srcSet={`${mark} 1.5x, ${markLarge} 4x`} width={28} height={28} alt="" />
+                    </span>
                     <span>.chimera</span>
                 </a>
+                <span className="flex-grow-1" />
                 {files.length > 0 && (
-                    <button type="button" className="btn btn-outline-light btn-sm" onClick={onShowFiles}>
-                        <i className="bi bi-collection me-1" /> Files in use <Badge bg="secondary">{files.length}</Badge>
+                    <button type="button" className="bp-nav-cell" onClick={onShowFiles}>
+                        <i className="bi bi-collection me-2" /> Files in use{' '}
+                        <Badge bg="secondary" className="ms-2">
+                            {files.length}
+                        </Badge>
                     </button>
                 )}
                 {onNew && (
-                    <button type="button" className="btn btn-outline-light btn-sm" onClick={onNew}>
-                        <i className="bi bi-folder2-open me-1" /> Open another
+                    <button type="button" className="bp-nav-cell bp-nav-cell--solid" onClick={onNew}>
+                        <i className="bi bi-folder2-open me-2" /> Open another
                     </button>
                 )}
-            </nav>
+            </div>
         </header>
     );
 }

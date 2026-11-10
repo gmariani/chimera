@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { bytesLabel } from '../core/bytes';
 import type { Entry, FormatDescriptor } from '../core/types';
 import { detect, extensionOf, FORMATS, RAW } from '../formats';
@@ -55,32 +55,33 @@ function useEngineGeneration(): number {
 export function useParsed(file: OpenFile, names: readonly string[], { version, near }: { version: number; near?: string }): ParseState {
     const [state, setState] = useState<ParseState>(() => ({ status: 'loading', since: Date.now() }));
     const generation = useEngineGeneration();
-    /** What the last read was of, and whether its format uses other files. */
-    const last = useRef<{ file: OpenFile; names: readonly string[]; near?: string; version: number; generation: number; companions: boolean } | null>(null);
-    /** Only the latest read's result is shown. */
-    const token = useRef(0);
-    useEffect(() => () => void token.current++, []);
+    // More files in the session only matter to a format that uses them: for the rest, the version the last read saw
+    // stays the key, so a new file in the session doesn't read this one again.
+    const [read, setRead] = useState<{ file: OpenFile; version: number; companions: boolean }>({ file, version, companions: false });
+    const watched = read.file === file && !read.companions ? read.version : version;
 
     useEffect(() => {
-        const l = last.current;
-        // More files in the session only matter to a format that uses them.
-        if (l && l.file === file && l.names === names && l.near === near && l.generation === generation && (l.version === version || !l.companions)) return;
-        last.current = { file, names, near, version, generation, companions: l?.file === file ? l.companions : false };
-        const mine = ++token.current;
-        setState((s) => (s.status === 'ready' && l?.file === file ? s : { status: 'loading', since: Date.now() }));
+        // Each read is dropped only by its own cleanup (the file or what it's read with changing, or the page going).
+        let canceled = false;
+        setState((s) => (s.status === 'ready' && read.file === file ? s : { status: 'loading', since: Date.now() }));
         engine.inspect(file.data, { name: file.knownName, shownName: file.name, as: file.as, near }).then(
             (inspection) => {
-                if (mine !== token.current) return;
-                if (last.current) last.current.companions = inspection.companions;
+                if (canceled) return;
+                setRead({ file, version: watched, companions: inspection.companions });
                 setState({ status: 'ready', ...inspection });
             },
             (e: unknown) => {
-                if (mine !== token.current) return;
+                if (canceled) return;
                 if (!(e instanceof Stopped)) console.error(e);
                 setState({ status: 'ready', ...stoppedInspection(file.data, e instanceof Error ? e.message : String(e)) });
             },
         );
-    }, [file, names, near, version, generation]);
+        return () => {
+            canceled = true;
+        };
+        // `read` is only consulted to keep the old result on screen while the same file is read again.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [file, names, near, watched, generation]);
 
     return state;
 }
