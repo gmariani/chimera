@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Nav, Spinner, Tab } from 'react-bootstrap';
 import type { FormatDescriptor } from '../core/types';
 import type { Check } from '../formats/inspect';
@@ -7,8 +7,8 @@ import { download, safeName } from '../lib/download';
 import { useParsed, type OpenFile } from '../lib/inspect';
 import { useLibrary } from '../lib/library';
 import { useRemembered, type ViewMemory } from '../lib/view-memory';
-import { findPalettes, preferred } from '../lib/palette-sources';
-import { usePalettes } from '../lib/palettes';
+import { preferred, usePalettes } from '../lib/palettes';
+import { engine } from '../engine';
 import { ContentsTab } from '../tabs/ContentsTab';
 import { PreviewTab } from '../tabs/PreviewTab';
 import { LinksTab } from '../tabs/LinksTab';
@@ -47,11 +47,10 @@ export function Inspector({
     onShowFiles: () => void;
 }) {
     const library = useLibrary();
-    const { find: findAnywhere, add: addToLibrary, idOf } = library;
-    const find = useCallback((name: string) => findAnywhere(name, near), [findAnywhere, near]);
+    const { add: addToLibrary, idOf } = library;
     // The user's names and those learned from opened archives' INIs; `names` alone is what the user can edit.
     const allNames = library.names;
-    const state = useParsed(file, allNames, { find, version: library.version });
+    const state = useParsed(file, allNames, { version: library.version, near });
     const [tab, setTab] = useRemembered<TabKey | null>(memory, 'tab', null);
     const { add } = usePalettes();
 
@@ -71,15 +70,18 @@ export function Inspector({
         let canceled = false;
         // Listed while the file in use they're in is: this one, or the one it was opened from.
         const owner = near ? near.split(' › ')[0] : idOf(file.data) ?? file.name;
-        void findPalettes(file.name, file.data, allNames).then((found) => {
-            if (canceled || !found.length) return;
-            const best = preferred(found)!;
-            add([best, ...found.filter((p) => p !== best)].map((p) => ({ ...p, owner })), root);
-        });
+        void engine.palettes(file.name, file.data).then(
+            (found) => {
+                if (canceled || !found.length) return;
+                const best = preferred(found)!;
+                add([best, ...found.filter((p) => p !== best)].map((p) => ({ ...p, owner })), root);
+            },
+            () => {},
+        );
         return () => {
             canceled = true;
         };
-    }, [state, file, allNames, add, root, near, idOf]);
+    }, [state, file, add, root, near, idOf]);
 
     const parsed = state.status === 'ready' ? state.parsed : null;
     const checks = state.status === 'ready' ? state.checks : [];
@@ -98,15 +100,10 @@ export function Inspector({
         onOpen(inner);
     };
     /** Opens the first of these files found among the files in use (a unit's sprite, from a rules table). */
-    const openName = (candidates: string[]) => {
-        for (const name of candidates) {
-            const found = find(name)[0];
-            if (found) {
-                openInside({ name, knownName: name, data: found.data });
-                return true;
-            }
-        }
-        return false;
+    const openName = async (candidates: string[]) => {
+        const found = await engine.find(candidates, near).catch(() => null);
+        if (found) openInside({ name: found.name, knownName: found.name, data: found.data });
+        return found !== null;
     };
     const links = parsed?.links ?? [];
     const missing = links.filter((l) => !l.source).length;
@@ -122,10 +119,10 @@ export function Inspector({
                     {checks.some((c) => c.level === 'danger') && (
                         <span className="badge text-bg-danger me-2">
                             <i className="bi bi-shield-exclamation me-1" />
-                            Not what it claims
+                            Suspicious
                         </span>
                     )}
-                    {parsed ? parsed.title : state.format.name} · {formatSize(file.data.length)}
+                    {parsed ? parsed.title : 'Reading'} · {formatSize(file.data.length)}
                     {!file.knownName && ' · real name unknown'}
                 </p>
                 <Button size="sm" variant="outline-light" onClick={() => download(file.data, safeName(file.name))}>
@@ -133,11 +130,7 @@ export function Inspector({
                 </Button>
             </div>
 
-            {state.status === 'loading' && (
-                <div className="section-loading justify-content-center" aria-busy="true">
-                    <Spinner animation="border" size="sm" role="status" /> <span>Reading {bytesLabel(file.data.length)}…</span>
-                </div>
-            )}
+            {state.status === 'loading' && <Reading size={file.data.length} since={state.since} />}
 
             {parsed && (
                 <>
@@ -184,14 +177,14 @@ export function Inspector({
                             {parsed.entries && (
                                 <Tab.Pane eventKey="contents">
                                     <Guard what="contents list">
-                                        <ContentsTab archiveName={file.name} entries={parsed.entries} names={names} memory={memory} onOpen={openInside} onNames={onNames} />
+                                        <ContentsTab archiveName={file.name} entries={parsed.entries} formats={state.status === 'ready' ? state.entryFormats : []} names={names} memory={memory} onOpen={openInside} onNames={onNames} />
                                     </Guard>
                                 </Tab.Pane>
                             )}
                             {parsed.preview && (
                                 <Tab.Pane eventKey="preview">
                                     <Guard what="preview">
-                                        <PreviewTab preview={parsed.preview} fileName={file.name} names={allNames} onOpenName={openName} />
+                                        <PreviewTab preview={parsed.preview} fileName={file.name} onOpenName={openName} />
                                     </Guard>
                                 </Tab.Pane>
                             )}
@@ -212,6 +205,32 @@ export function Inspector({
                 </>
             )}
         </>
+    );
+}
+
+/** Seconds of reading before the page offers to stop it. */
+const OFFER_STOP = 3;
+
+/** The spinner while a file is read, and after a few seconds a way to stop it (a file made to hang the parser would otherwise wait out the watchdog). */
+function Reading({ size, since }: { size: number; since: number }) {
+    const [, setNow] = useState(0);
+    useEffect(() => {
+        const timer = setInterval(() => setNow(Date.now()), 500);
+        return () => clearInterval(timer);
+    }, []);
+    const seconds = Math.floor((Date.now() - since) / 1000);
+    return (
+        <div className="section-loading justify-content-center flex-wrap gap-2" aria-busy="true">
+            <Spinner animation="border" size="sm" role="status" /> <span>Reading {bytesLabel(size)}…</span>
+            {seconds >= OFFER_STOP && (
+                <>
+                    <span className="text-body-secondary small">{seconds} s</span>
+                    <Button size="sm" variant="outline-danger" onClick={() => engine.stop('It was stopped before it finished, at your say.')}>
+                        <i className="bi bi-stop-fill me-1" /> Stop
+                    </Button>
+                </>
+            )}
+        </div>
     );
 }
 

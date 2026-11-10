@@ -74,6 +74,10 @@ Some files need others: a map needs its theater's tiles and palette, and a TD ma
 
 MIX archives store a hash of each file name, not the name. Names come from the archive's own `local mix database.dat` (if XCC added one), a built-in list of common C&C names, the INIs in the archives you open (TS and RA2 keep no names, but `rules.ini`, `art.ini` and the theater INIs name nearly every asset; opening RA2's `ra2.mix` names 90–99% of most archives inside it), and any list you load with **Add names…**: XCC's `global mix database.dat`, a text file with one name per line, or the game's executable (TS's `Game.exe`, RA2's `gamemd.exe`), whose file names and name patterns (`E%02dSC%02d.MIX`) are read out of it. TS's speech files aren't named anywhere in the game, so they need XCC's list.
 
+## Where files are read
+
+Every file is parsed in a Web Worker (`src/engine`), never on the page: the session's files and everything inside them live there too, and the page only draws what comes back (video frames and other on-demand drawing are requests to the worker). If the worker goes quiet for 30 seconds in the middle of reading something, the page stops it, starts a new one with the session's files, and says so; after 3 seconds of reading, **Stop** does the same at once. A read that was stopped isn't tried again in the same session, so a file made to hang a parser can't take the page down in a loop, and its bytes are still shown. Each part of the page is also guarded, so a preview that fails says why while the rest stays usable.
+
 ## Adding a format
 
 Each format is a plain TypeScript module that turns bytes into data. It never renders anything, so the UI stays generic:
@@ -86,6 +90,8 @@ Each format is a plain TypeScript module that turns bytes into data. It never re
    - `wanted` (optional): which other file would let it show more.
 
    A parser that needs other files uses `context.find(name)`, and sets `companions: true` in the registry so it runs again when more files are opened.
+
+   Parsers run in the parsing worker, so they mustn't touch the DOM. A preview's functions (a video's `frame`, a toggle's `off`) are called through the worker, and anything else in a result must survive `postMessage` (plain data and typed arrays).
 
    Be strict, since a file isn't always what it claims to be:
    - **Throw** when the file isn't the format at all (its parts don't fit, a header field is impossible), with a message saying what's wrong. The next likely format is tried, and the message is shown.

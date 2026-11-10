@@ -11,6 +11,10 @@ export default defineConfig({
         // The Bink decoders (WebAssembly, ~670 kB) are one chunk, loaded only for .bik files.
         chunkSizeWarningLimit: 700,
     },
+    // The parsing worker loads each format's parser on demand, as the page used to, so it's built as a module.
+    worker: {
+        format: 'es',
+    },
     server: {
         port: 5173,
     },

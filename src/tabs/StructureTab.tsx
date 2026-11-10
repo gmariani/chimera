@@ -9,7 +9,7 @@ import { download, safeName } from '../lib/download';
 import { fieldAt, leaves, pathAt, pathKey, type FieldPath } from '../lib/fields';
 
 /** The structure tree beside the hex dump: pick a field to see its bytes, or a byte to see its field. */
-export function StructureTab({ data, parsed, fileName }: { data: Uint8Array; parsed: Parsed; fileName: string }) {
+export function StructureTab({ data, parsed, fileName }: { data: Uint8Array; parsed: Pick<Parsed, 'fields' | 'overlays'>; fileName: string }) {
     const [selected, setSelected] = useState<FieldPath | null>(null);
     const [hovered, setHovered] = useState<Field | null>(null);
     // Open the top level when it's short enough to take in at a glance.

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, ButtonGroup, Form, Spinner } from 'react-bootstrap';
-import type { AudioClip, IndexedImage, Preview } from '../core/types';
+import type { AudioClip, IndexedImage, VideoFrame } from '../core/types';
+import { engine, type UiPreview } from '../engine';
 import { CodeBlock, Muted, SectionTitle, Tip } from '../components/ui';
 import { download, safeName } from '../lib/download';
-import { findPalettes } from '../lib/palette-sources';
 import { PaletteSelect, usePalettes } from '../lib/palettes';
 import { zip } from '../lib/zip';
 import { TablePreview } from './TablePreview';
@@ -13,7 +13,33 @@ import { maxOf } from '../core/math';
 
 const stem = (name: string) => name.replace(/\.[^.]+$/, '');
 
-export function PreviewTab({ preview, fileName, names, onOpenName }: { preview: Preview; fileName: string; names: readonly string[]; /** Opens the first of these files found among the files in use; false if none is. */ onOpenName?: (names: string[]) => boolean }) {
+/**
+ * The other way of drawing a preview (its switch off), asked of the parsing
+ * worker the first time it's wanted, then kept.
+ */
+function useOff<T>(toggle: { off(): Promise<T> } | undefined, on: boolean): { other: T | null; waiting: boolean; error: string | null } {
+    const [got, setGot] = useState<{ toggle: unknown; other: T | null; error: string | null } | null>(null);
+    const asked = useRef<unknown>(null);
+    useEffect(() => {
+        if (on || !toggle || asked.current === toggle) return;
+        asked.current = toggle;
+        toggle.off().then(
+            (other) => setGot({ toggle, other, error: null }),
+            (e: unknown) => setGot({ toggle, other: null, error: e instanceof Error ? e.message : String(e) }),
+        );
+    }, [on, toggle]);
+    const mine = got?.toggle === toggle ? got : null;
+    return { other: mine?.other ?? null, waiting: !on && !!toggle && !mine, error: mine?.error ?? null };
+}
+
+/** A note beside a preview's switch while the other view is on its way, or why it couldn't be drawn. */
+function OffNote({ waiting, error }: { waiting: boolean; error: string | null }) {
+    if (waiting) return <p className="small mb-3"><Spinner animation="border" size="sm" className="me-1" /> Drawing…</p>;
+    if (error) return <p className="small text-danger mb-3">Couldn't draw it that way: {error}</p>;
+    return null;
+}
+
+export function PreviewTab({ preview, fileName, onOpenName }: { preview: UiPreview; fileName: string; /** Opens the first of these files found among the files in use; false if none is. */ onOpenName?: (names: string[]) => Promise<boolean> }) {
     switch (preview.kind) {
         case 'images':
             return (
@@ -27,7 +53,6 @@ export function PreviewTab({ preview, fileName, names, onOpenName }: { preview: 
                     remap={preview.remap}
                     toggle={preview.toggle}
                     fileName={fileName}
-                    names={names}
                 />
             );
         case 'palette':
@@ -50,7 +75,7 @@ export function PreviewTab({ preview, fileName, names, onOpenName }: { preview: 
                     {preview.items.map((item, i) => (
                         <section key={i} className="mb-5">
                             <SectionTitle className="mb-3">{item.title}</SectionTitle>
-                            <PreviewTab preview={item.preview} fileName={fileName} names={names} onOpenName={onOpenName} />
+                            <PreviewTab preview={item.preview} fileName={fileName} onOpenName={onOpenName} />
                         </section>
                     ))}
                 </>
@@ -147,10 +172,9 @@ function ImagesPreview({
     remap,
     toggle,
     fileName,
-    names,
 }: {
     frames: IndexedImage[];
-    toggle?: { label: string; off(): IndexedImage[] };
+    toggle?: { label: string; off(): Promise<IndexedImage[]> };
     ownPalette?: Uint8Array;
     transparentIndex?: number;
     shadowIndex?: number;
@@ -158,15 +182,11 @@ function ImagesPreview({
     legend?: { label: string; index: number }[];
     remap?: [number, number];
     fileName: string;
-    names: readonly string[];
 }) {
     // With the switch off, the pictures without what it draws (made the first time, then kept).
     const [on, setOn] = useState(true);
-    const off = useMemo(() => {
-        let pictures: IndexedImage[] | null = null;
-        return () => (pictures ??= toggle!.off());
-    }, [toggle]);
-    const frames = on || !toggle ? framesOn : off();
+    const off = useOff(toggle, on);
+    const frames = on || !toggle || !off.other ? framesOn : off.other;
     const { current, add } = usePalettes();
     const [useOwn, setUseOwn] = useState(true);
     const team = useTeamColor(ownPalette && useOwn ? ownPalette : current.colors, remap);
@@ -226,7 +246,7 @@ function ImagesPreview({
 
     const loadPalette = async (file: File | undefined) => {
         if (!file) return;
-        const found = await findPalettes(file.name, new Uint8Array(await file.arrayBuffer()), names);
+        const found = await engine.palettes(file.name, new Uint8Array(await file.arrayBuffer())).catch(() => []);
         add(found, true);
         setUseOwn(false);
         setNoPalettesIn(found.length ? null : file.name);
@@ -271,6 +291,7 @@ function ImagesPreview({
 
                 <ZoomButtons zoom={zoom} onChange={setZoom} />
                 {toggle && <Form.Check type="switch" id="images-toggle" className="mb-3" label={toggle.label} checked={on} onChange={(e) => setOn(e.target.checked)} />}
+                <OffNote waiting={off.waiting} error={off.error} />
 
                 {legend && (
                     <ul className="list-unstyled small mb-3 legend">
@@ -363,18 +384,15 @@ function useDragPan<T extends HTMLElement>() {
     };
 }
 
-function PicturePreview({ width, height, rgba, toggle, fileName }: { width: number; height: number; rgba: Uint8Array; toggle?: { label: string; off(): Uint8Array }; fileName: string }) {
+function PicturePreview({ width, height, rgba, toggle, fileName }: { width: number; height: number; rgba: Uint8Array; toggle?: { label: string; off(): Promise<Uint8Array> }; fileName: string }) {
     const canvas = useRef<HTMLCanvasElement>(null);
     const pan = useDragPan<HTMLDivElement>();
     // Big pictures (whole maps) start fitted to the page.
     const [zoom, setZoom] = useState<Zoom>(initialZoom(width));
     const [on, setOn] = useState(true);
     // The picture with the switch off is drawn the first time it's wanted, then kept.
-    const off = useMemo(() => {
-        let picture: Uint8Array | null = null;
-        return () => (picture ??= toggle!.off());
-    }, [toggle]);
-    const shown = on || !toggle ? rgba : off();
+    const off = useOff(toggle, on);
+    const shown = on || !toggle || !off.other ? rgba : off.other;
 
     useEffect(() => {
         const el = canvas.current;
@@ -395,6 +413,7 @@ function PicturePreview({ width, height, rgba, toggle, fileName }: { width: numb
             <div className="col-lg-4">
                 <ZoomButtons zoom={zoom} onChange={setZoom} />
                 {toggle && <Form.Check type="switch" id="picture-toggle" className="mb-3" label={toggle.label} checked={on} onChange={(e) => setOn(e.target.checked)} />}
+                <OffNote waiting={off.waiting} error={off.error} />
                 <Button size="sm" variant="outline-light" onClick={async () => canvas.current && download(await png(canvas.current), `${safeName(stem(fileName))}.png`)}>
                     <i className="bi bi-image me-1" /> Save PNG
                 </Button>
@@ -464,7 +483,7 @@ function AudioPreview({ clip, fileName }: { clip: AudioClip; fileName: string })
  * Plays a movie by decoding frames as they're needed. With sound, the sound is
  * the clock and the picture follows it.
  */
-function VideoPreview({ preview, fileName }: { preview: Extract<Preview, { kind: 'video' }>; fileName: string }) {
+function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kind: 'video' }>; fileName: string }) {
     const { width, height, frameCount, fps, audio } = preview;
     const [frame, setFrame] = useState(0);
     const [playing, setPlaying] = useState(false);
@@ -476,16 +495,31 @@ function VideoPreview({ preview, fileName }: { preview: Extract<Preview, { kind:
     const url = useWavUrl(audio?.wav);
     const shown = useRef(-1);
 
-    const frameImage = (index: number) => {
-        const f = preview.frame(index);
-        return 'rgba' in f ? new ImageData(new Uint8ClampedArray(f.rgba), width, height) : toImageData({ width, height, pixels: f.pixels }, { palette: f.palette });
-    };
+    const [error, setError] = useState<string | null>(null);
+    const image = (f: VideoFrame) => ('rgba' in f ? new ImageData(new Uint8ClampedArray(f.rgba), width, height) : toImageData({ width, height, pixels: f.pixels }, { palette: f.palette }));
 
+    // Frames are decoded in the parsing worker: one at a time, the latest wanted, so playing never queues up behind itself.
+    const wanted = useRef(0);
+    const drawing = useRef(false);
+    const draw = () => {
+        if (drawing.current || !canvas.current || shown.current === wanted.current) return;
+        const index = wanted.current;
+        drawing.current = true;
+        preview.frame(index).then(
+            (f) => canvas.current?.getContext('2d')!.putImageData(image(f), 0, 0),
+            (e: unknown) => {
+                setError(`Frame ${index + 1} couldn't be decoded: ${e instanceof Error ? e.message : String(e)}`);
+                setPlaying(false);
+            },
+        ).finally(() => {
+            shown.current = index;
+            drawing.current = false;
+            draw();
+        });
+    };
     useEffect(() => {
-        const el = canvas.current;
-        if (!el || shown.current === frame) return;
-        el.getContext('2d')!.putImageData(frameImage(frame), 0, 0);
-        shown.current = frame;
+        wanted.current = frame;
+        draw();
     });
 
     useEffect(() => {
@@ -521,11 +555,11 @@ function VideoPreview({ preview, fileName }: { preview: Extract<Preview, { kind:
         if (sound.current) sound.current.currentTime = index / fps;
     };
 
-    const framePng = (index: number) => {
+    const framePng = async (index: number) => {
         const c = document.createElement('canvas');
         c.width = width;
         c.height = height;
-        c.getContext('2d')!.putImageData(frameImage(index), 0, 0);
+        c.getContext('2d')!.putImageData(image(await preview.frame(index)), 0, 0);
         return png(c);
     };
 
@@ -564,6 +598,7 @@ function VideoPreview({ preview, fileName }: { preview: Extract<Preview, { kind:
                     </span>
                 </div>
                 {url && <audio ref={sound} src={url} preload="auto" />}
+                {error && <p className="small text-danger">{error}</p>}
 
                 <Form.Group className="mb-3">
                     <Form.Label className="small text-body-secondary mb-1">Zoom</Form.Label>

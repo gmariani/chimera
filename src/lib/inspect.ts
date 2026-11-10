@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { Companion, Entry, FormatDescriptor } from '../core/types';
-import { detect, extensionOf, FORMATS } from '../formats';
-import { inspect, type Inspection } from '../formats/inspect';
+import { useEffect, useRef, useState } from 'react';
+import { bytesLabel } from '../core/bytes';
+import type { Entry, FormatDescriptor } from '../core/types';
+import { detect, extensionOf, FORMATS, RAW } from '../formats';
+import { engine, Stopped, type UiInspection } from '../engine';
 
 /** A file being looked at: opened from disk, or pulled out of another file. */
 export interface OpenFile {
@@ -14,44 +15,72 @@ export interface OpenFile {
     as?: string;
 }
 
-export type ParseState = { status: 'loading'; format: FormatDescriptor } | ({ status: 'ready' } & Inspection);
+export type ParseState =
+    | {
+          status: 'loading';
+          /** Since when, so the page can offer to stop a read that's taking long. */
+          since: number;
+      }
+    | ({ status: 'ready' } & UiInspection);
 
-/** Other opened files, for formats that use companions; `version` changes when there are more. */
-export interface Companions {
-    find(name: string): Companion[];
-    version: number;
+/** What's shown for a file whose reading was stopped: its bytes, and why. Made here, without parsing anything. */
+function stoppedInspection(data: Uint8Array, reason: string): UiInspection {
+    return {
+        format: RAW,
+        companions: false,
+        parsed: {
+            title: 'Not read',
+            summary: [['Size', bytesLabel(data.length)]],
+            fields: [{ name: 'Data', offset: 0, length: data.length, note: 'Reading this file was stopped, so only its bytes are shown.' }],
+            warnings: [],
+        },
+        entryFormats: [],
+        checks: [{ level: 'danger', text: `${reason} Its bytes are still here to look at.` }],
+        alternatives: [],
+    };
 }
 
-/** The format a file is opened as at first: the one asked for, or the one detected. */
-function firstFormat(file: OpenFile): FormatDescriptor {
-    return (file.as && FORMATS.find((f) => f.id === file.as)) || detect(file.data, file.knownName ?? file.name);
+/** Counts restarts of the parsing worker, so what was read in the old one is read again. */
+function useEngineGeneration(): number {
+    const [generation, setGeneration] = useState(engine.generation);
+    useEffect(() => engine.on((e) => e.kind === 'restarted' && setGeneration(e.generation)), []);
+    return generation;
 }
 
-/** Detects the file's format, loads that parser, parses, and checks the file is what it claims. Re-parses when `names` changes, or the companions do and the format uses them. */
-export function useParsed(file: OpenFile, names: readonly string[], companions?: Companions): ParseState {
-    const [state, setState] = useState<ParseState>(() => ({ status: 'loading', format: firstFormat(file) }));
-
-    const usesCompanions = useMemo(() => firstFormat(file).companions === true, [file]);
-    const find = usesCompanions ? companions?.find : undefined;
-    const version = usesCompanions ? companions?.version : undefined;
+/**
+ * Reads the file in the parsing worker, with the checks every file gets.
+ * Reads again when `names` changes, when the session's files do (if the
+ * format uses them), and when the worker was restarted.
+ */
+export function useParsed(file: OpenFile, names: readonly string[], { version, near }: { version: number; near?: string }): ParseState {
+    const [state, setState] = useState<ParseState>(() => ({ status: 'loading', since: Date.now() }));
+    const generation = useEngineGeneration();
+    /** What the last read was of, and whether its format uses other files. */
+    const last = useRef<{ file: OpenFile; names: readonly string[]; near?: string; version: number; generation: number; companions: boolean } | null>(null);
+    /** Only the latest read's result is shown. */
+    const token = useRef(0);
+    useEffect(() => () => void token.current++, []);
 
     useEffect(() => {
-        let canceled = false;
-        const format = firstFormat(file);
-        setState((s) => (s.status === 'ready' && s.format.id === format.id ? s : { status: 'loading', format }));
-        // Give the browser a frame to show the spinner before a long parse.
-        const timer = setTimeout(() => {
-            inspect(file.data, { name: file.knownName, names, find }, { as: file.as, shownName: file.name }).then(
-                (inspection) => !canceled && setState({ status: 'ready', ...inspection }),
-                (e: unknown) => console.error(e),
-            );
-        }, 0);
-        return () => {
-            canceled = true;
-            clearTimeout(timer);
-        };
-        // `version` isn't read here, but a new one means `find` has more to give.
-    }, [file, names, find, version]);
+        const l = last.current;
+        // More files in the session only matter to a format that uses them.
+        if (l && l.file === file && l.names === names && l.near === near && l.generation === generation && (l.version === version || !l.companions)) return;
+        last.current = { file, names, near, version, generation, companions: l?.file === file ? l.companions : false };
+        const mine = ++token.current;
+        setState((s) => (s.status === 'ready' && l?.file === file ? s : { status: 'loading', since: Date.now() }));
+        engine.inspect(file.data, { name: file.knownName, shownName: file.name, as: file.as, near }).then(
+            (inspection) => {
+                if (mine !== token.current) return;
+                if (last.current) last.current.companions = inspection.companions;
+                setState({ status: 'ready', ...inspection });
+            },
+            (e: unknown) => {
+                if (mine !== token.current) return;
+                if (!(e instanceof Stopped)) console.error(e);
+                setState({ status: 'ready', ...stoppedInspection(file.data, e instanceof Error ? e.message : String(e)) });
+            },
+        );
+    }, [file, names, near, version, generation]);
 
     return state;
 }
@@ -63,9 +92,14 @@ export interface TypedEntry {
     fileName: string;
 }
 
-export function typeEntries(entries: Entry[]): TypedEntry[] {
-    return entries.map((entry) => {
-        const format = detect(entry.data, entry.name);
+/**
+ * The entries with their formats: those the worker detected them as (by id,
+ * in the same order), which is what the page uses, since detecting runs a
+ * file's bytes through the sniffers; or, without them (tests), detected here.
+ */
+export function typeEntries(entries: Entry[], formats?: string[]): TypedEntry[] {
+    return entries.map((entry, i) => {
+        const format = formats ? (FORMATS.find((f) => f.id === formats[i]) ?? RAW) : detect(entry.data, entry.name);
         const ext = entry.label.match(/\.([a-z0-9]{2,5})$/i)?.[1].toLowerCase();
         const ownExtension = ext !== undefined && (format.id === 'raw' || format.extensions.includes(ext));
         return { entry, format, fileName: entry.name ?? (ownExtension ? entry.label : `${entry.label}.${extensionOf(format)}`) };

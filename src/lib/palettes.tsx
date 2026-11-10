@@ -108,3 +108,8 @@ export function PaletteSelect() {
         </Form.Select>
     );
 }
+
+/** The palette a file's sprites most likely want: the temperate one if there is one. */
+export function preferred(palettes: NamedPalette[]): NamedPalette | undefined {
+    return palettes.find((p) => /(^|› )temperat\.pal$/i.test(p.label)) ?? palettes[0];
+}

@@ -7,7 +7,7 @@ import { download, safeName } from '../lib/download';
 import { openEntry, typeEntries, type OpenFile, type TypedEntry } from '../lib/inspect';
 import { useRemembered, type ViewMemory } from '../lib/view-memory';
 import { zip } from '../lib/zip';
-import { readNameList } from '../formats/mix/names';
+import { engine } from '../engine';
 
 const PAGE = 500;
 
@@ -17,6 +17,7 @@ type SortKey = 'index' | 'name' | 'type' | 'size' | 'offset';
 export function ContentsTab({
     archiveName,
     entries,
+    formats,
     names,
     memory,
     onOpen,
@@ -24,13 +25,15 @@ export function ContentsTab({
 }: {
     archiveName: string;
     entries: Entry[];
+    /** The format each entry was detected as, by id (detected in the parsing worker). */
+    formats: string[];
     names: readonly string[];
     /** Where the filter and sort are kept while the user looks inside a file. */
     memory?: ViewMemory;
     onOpen: (file: OpenFile) => void;
     onNames: (names: string[]) => void;
 }) {
-    const typed = useMemo(() => typeEntries(entries), [entries]);
+    const typed = useMemo(() => typeEntries(entries, formats), [entries, formats]);
     const [filter, setFilter] = useRemembered(memory, 'filter', '');
     const [type, setType] = useRemembered(memory, 'type', '');
     const [sort, setSort] = useRemembered<{ key: SortKey; descending: boolean }>(memory, 'sort', { key: 'index', descending: false });
@@ -75,7 +78,13 @@ export function ContentsTab({
 
     const loadNames = async (file: File | undefined) => {
         if (!file) return;
-        const added = readNameList(new Uint8Array(await file.arrayBuffer()));
+        let added: string[];
+        try {
+            added = await engine.readNames(file.name, new Uint8Array(await file.arrayBuffer()));
+        } catch (e) {
+            setMessage(`No names read from ${file.name}: ${e instanceof Error ? e.message : String(e)}`);
+            return;
+        }
         onNames([...new Set([...names, ...added])]);
         setMessage(`Added ${added.length.toLocaleString('en-US')} names from ${file.name}.`);
     };

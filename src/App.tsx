@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { EngineNotices } from './components/EngineNotices';
 import { FilesPanel } from './components/FilesPanel';
 import { Inspector } from './components/Inspector';
 import { OpenPanel } from './components/OpenPanel';
@@ -55,6 +56,7 @@ export function App() {
             <PaletteProvider>
                 <TopBar onNew={current ? () => setTrail([]) : undefined} onShowFiles={() => setShowFiles(true)} />
                 <FilesPanel show={showFiles} onHide={() => setShowFiles(false)} />
+                <EngineNotices />
                 {current ? (
                     <main className="container-xxl bd-gutter mt-3 my-md-4 bd-content">
                         {trail.length > 1 && (

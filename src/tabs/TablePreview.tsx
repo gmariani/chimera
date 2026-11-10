@@ -9,7 +9,7 @@ const PAGE = 500;
  * Rows of values in groups: pick a group, filter, sort by any column. A cell
  * that names files opens the first one found among the files in use.
  */
-export function TablePreview({ columns, groups, rows, onOpenName }: { columns: TableColumn[]; groups: string[]; rows: TableRow[]; onOpenName?: (names: string[]) => boolean }) {
+export function TablePreview({ columns, groups, rows, onOpenName }: { columns: TableColumn[]; groups: string[]; rows: TableRow[]; onOpenName?: (names: string[]) => Promise<boolean> }) {
     const [group, setGroup] = useState('');
     const [filter, setFilter] = useState('');
     const [sort, setSort] = useState<{ key: string; descending: boolean } | null>(null);
@@ -30,8 +30,8 @@ export function TablePreview({ columns, groups, rows, onOpenName }: { columns: T
         return list;
     }, [rows, columns, group, filter, sort]);
 
-    const open = (names: string[]) => {
-        if (onOpenName?.(names)) setMissing(null);
+    const open = async (names: string[]) => {
+        if (await onOpenName?.(names)) setMissing(null);
         else setMissing(names[0]);
     };
 
