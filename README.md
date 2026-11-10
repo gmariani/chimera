@@ -29,6 +29,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Voxel models (.vxl) and animations (.hva) | headers, limbs, matrices | 3D viewer (turn, zoom, animate; turret and barrel placed by art.ini; lit by each voxel's normal), each limb from four sides | PNG |
 | Voxel lighting tables (voxels.vpl) | header, tables | the palette at each light level | PNG |
 | WAV sound (PCM, IMA ADPCM, and Microsoft ADPCM as the Remastered Collection's music uses) | chunks, format | player | WAV |
+| Creative Voice (.voc: 8- and 16-bit PCM, A-law, µ-law, Creative ADPCM at 4, 2.6 and 2 bits; Dune II's sounds) | header, every block (sound, silence, markers, text, repeats) | player | WAV |
 | RA2 sound banks (audio.idx with audio.bag) | every sound | each sound as a WAV | WAV |
 | CSF string tables (RA2) | every label | text | — |
 | LOC string tables (the Remastered Collection's text and credits, in Config.meg) | header, every record, value and key | text | — |

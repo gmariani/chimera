@@ -121,7 +121,7 @@ async function gatherSeeds(roots: string[]): Promise<Seed[]> {
         }
         for (const e of entries) {
             const id = detect(e.data, e.name ?? e.label).id;
-            if (id === 'mix' || id === 'meg') {
+            if (id === 'mix' || id === 'meg' || id === 'pak') {
                 if (depth < 2) await visit(e.name ?? e.label, `${from} › ${e.label}`, e.data, depth + 1);
                 continue;
             }
@@ -132,7 +132,7 @@ async function gatherSeeds(roots: string[]): Promise<Seed[]> {
     };
     for (const root of roots) {
         for (const path of files(root)) {
-            if (!/\.(mix|meg)$/i.test(path) || statSync(path).size > 600 << 20) continue;
+            if (!/\.(mix|meg|pak)$/i.test(path) || statSync(path).size > 600 << 20) continue;
             await visit(basename(path), path, new Uint8Array(readFileSync(path)), 0);
         }
     }

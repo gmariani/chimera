@@ -5,6 +5,7 @@ import { sniffJpeg } from './jpeg/sniff';
 import { sniffLoc, sniffMeg } from './meg/sniff';
 import { sniffMix, sniffXccDatabase } from './mix/sniff';
 import { sniffOgg } from './ogg/sniff';
+import { sniffVoc } from './voc-sniff';
 import { sniffTiff } from './tiff/sniff';
 import { sniffPng } from './png/sniff';
 import { sniffFont as sniffSfnt } from './font/sniff';
@@ -90,6 +91,7 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'sfnt', name: 'Font (TrueType, OpenType)', extensions: ['ttf', 'otf', 'ttc', 'otc'], sniff: sniffSfnt, load: parserOf(() => import('./font')) },
     { id: 'pbj', name: 'Pixel Bender kernel (PBJ)', extensions: ['pbj'], sniff: sniffPbj, load: parserOf(() => import('./pbj')) },
     { id: 'mp3', name: 'Sound (MP3)', extensions: ['mp3', 'mp2'], sniff: sniffMp3, load: parserOf(() => import('./mp3')) },
+    { id: 'voc', name: 'Sound (VOC)', extensions: ['voc'], sniff: sniffVoc, load: parserOf(() => import('./voc')) },
     { id: 'ogg', name: 'Sound or video (Ogg)', extensions: ['ogg', 'oga', 'ogv', 'ogx', 'opus', 'spx'], sniff: sniffOgg, load: parserOf(() => import('./ogg')) },
     { id: 'pcx', name: 'Picture (PCX)', extensions: ['pcx'], sniff: sniffPcx, load: parserOf(() => import('./pcx')) },
     { id: 'vqp', name: 'Palette blending tables (VQP)', extensions: ['vqp'], sniff: sniffVqp, load: parserOf(() => import('./westwood/vqp')) },
