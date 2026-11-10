@@ -4,6 +4,7 @@ import type { Entry, Field, FormatParser, Preview } from '../../core/types';
 import { extractAssets, type TagRef } from './assets';
 import { SwfReader } from './reader';
 import { readTag, TAG_NAMES } from './tags';
+import { append } from '../../core/math';
 
 /**
  * Flash movies (SWF 19 spec). An 8-byte header ("FWS", or "CWS" when the rest
@@ -42,6 +43,8 @@ const parser: FormatParser = {
             swf[0] = 0x46; // F
             swf.set(body, 8);
             if (swf.length !== declared) warnings.push(`The header says ${bytesLabel(declared)} uncompressed; it inflates to ${bytesLabel(swf.length)}.`);
+        } else if (data.length !== declared) {
+            warnings.push(`The header says the file is ${bytesLabel(declared)}, but it's ${bytesLabel(data.length)}.`);
         }
 
         const r = new SwfReader(swf, 8, swf.length, version);
@@ -58,6 +61,8 @@ const parser: FormatParser = {
         let as3 = false;
 
         /** Reads tags from `at` to `end`, grouped into the frames they belong to; returns where it stopped. */
+        let unknown = 0;
+        let ended = false;
         const readTags = (at: number, end: number, sprite: number | null, out: Field[]): number => {
             let frame: Field[] = [];
             let frameStart = at;
@@ -79,6 +84,7 @@ const parser: FormatParser = {
                     length = end - at;
                 }
                 const name = TAG_NAMES[code] ?? `Unknown tag ${code}`;
+                if (!TAG_NAMES[code]) unknown++;
                 counts.set(code, (counts.get(code) ?? 0) + 1);
                 refs.push({ code, at, length, sprite });
                 const tr = new SwfReader(swf, at, at + length, version);
@@ -107,14 +113,19 @@ const parser: FormatParser = {
                     frame = [];
                     frameStart = at;
                 }
-                if (code === 0) break;
+                if (code === 0) {
+                    if (sprite === null) ended = true;
+                    break;
+                }
             }
-            out.push(...frame);
+            append(out, frame);
             return at;
         };
 
         const tags: Field[] = [];
         const end = readTags(r.at, swf.length, null, tags);
+        if (!ended) warnings.push('The movie has no End tag, so it may be cut short.');
+        if (unknown) warnings.push(`${unknown} tag${unknown === 1 ? ' has a code' : 's have codes'} the SWF spec doesn't define.`);
         const assets = extractAssets(swf, refs, rate);
         warnings.push(...assets.warnings);
 
@@ -146,6 +157,8 @@ const parser: FormatParser = {
             fields,
             entries: entries.length ? entries : undefined,
             preview: items.length === 1 ? items[0].preview : items.length ? { kind: 'stack', items } : undefined,
+            // In a compressed movie the bytes after the End tag are in the uncompressed one, which gets its own checks.
+            end: signature === 'CWS' ? undefined : end,
             warnings,
         };
     },

@@ -5,6 +5,7 @@ import { decodeJpeg, segmentsOf } from '../jpeg/decode';
 import { IMA_STEPS, wav } from '../westwood/adpcm';
 import { decodeNellymoser } from './nellymoser';
 import { soundFormat } from './tags';
+import { pixelBuffer } from '../../core/limits';
 
 /**
  * The files a SWF carries, pulled out whole: bitmaps (as JPEG, PNG or GIF;
@@ -219,7 +220,7 @@ function lossless(data: Uint8Array, t: TagRef, alpha: boolean): { width: number;
     const mapped = format === 3;
     const colors = mapped ? data[t.at + 7] + 1 : 0;
     const raw = inflate(data.subarray(t.at + (mapped ? 8 : 7), t.at + t.length));
-    const rgba = new Uint8Array(width * height * 4);
+    const rgba = pixelBuffer(width, height, 4);
     if (mapped) {
         const size = alpha ? 4 : 3;
         const stride = (width + 3) & ~3;

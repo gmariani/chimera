@@ -2,6 +2,7 @@ import { inflate } from '../../core/inflate';
 import { decodeJpeg, segmentsOf } from '../jpeg/decode';
 import { decodeCcitt } from './ccitt';
 import { COMPRESSIONS, PHOTOMETRICS, type Ifd, type Tiff } from './ifd';
+import { checkBytes, checkPixels, pixelBuffer } from '../../core/limits';
 
 /**
  * Draws a TIFF picture: its strips (or tiles) decompressed, the samples read
@@ -40,9 +41,6 @@ const TAG = {
     referenceBlackWhite: 0x214,
 } as const;
 
-/** Pictures bigger than this many pixels aren't drawn: the RGBA alone would be 400 MB. */
-const MAX_PIXELS = 100_000_000;
-
 export interface Picture {
     width: number;
     height: number;
@@ -64,7 +62,7 @@ export function decodeTiff(data: Uint8Array, tiff: Tiff, ifd: Ifd): Picture {
     // A camera's preview: an IFD that only says where a JPEG is.
     if ((!width || !height) && jpeg) return decodeJpeg(jpeg, segmentsOf(jpeg).segments);
     if (!width || !height) throw new Error('It has no width or height.');
-    if (width * height > MAX_PIXELS) throw new Error(`At ${width} × ${height} it's too big to draw here.`);
+    checkPixels(width, height);
     const compression = one(TAG.compression, 1);
     const spp = one(TAG.samples, 1);
     const bitsList = all(TAG.bits);
@@ -97,7 +95,7 @@ export function decodeTiff(data: Uint8Array, tiff: Tiff, ifd: Ifd): Picture {
     const down = Math.ceil(height / chunkHeight);
     const planes = planar === 2 ? spp : 1;
     const perPixel = planar === 2 ? 1 : spp;
-    const rgba = new Uint8Array(width * height * 4);
+    const rgba = pixelBuffer(width, height, 4);
 
     if (compression === 7) {
         // Each strip or tile is a JPEG stream; JPEGTables holds the tables they share.
@@ -121,7 +119,7 @@ export function decodeTiff(data: Uint8Array, tiff: Tiff, ifd: Ifd): Picture {
 
     // Each pixel's samples, scaled to 8 bits (a palette's are left as indexes).
     const indexed = photometric === 3 || (photometric <= 1 && bits === 1) || photometric === 4;
-    const samples = new Uint16Array(width * height * spp);
+    const samples = new Uint16Array(checkBytes(width * height * spp * 2, 'The samples') / 2);
     const [subX, subY] = photometric === 6 ? [one(TAG.yccSubsampling, 2), all(TAG.yccSubsampling)[1] ?? 2] : [1, 1];
     const fillOrder = one(TAG.fillOrder, 1);
     const predictor = one(TAG.predictor, 1);

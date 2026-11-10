@@ -1,5 +1,6 @@
 import type { Hva, Vxl } from './voxel-data';
 import { normalTable } from './voxel-normals';
+import { minOf, maxOf } from '../../core/math';
 
 /**
  * Voxel units drawn into a TS or RA2 map: each limb placed by its bounds and
@@ -149,10 +150,10 @@ function drawVoxelsAt(parts: VoxelPartInput[], facing: number, tw: number, th: n
 
     // Each voxel covers about this many pixels across.
     const dot = Math.max(1, Math.ceil(tw / VOXELS_PER_CELL / Math.SQRT2 + 0.5));
-    const left0 = Math.floor(Math.min(...points.map((p) => p.sx))) - dot;
-    const top0 = Math.floor(Math.min(...points.map((p) => p.sy))) - dot;
-    const width = Math.ceil(Math.max(...points.map((p) => p.sx))) - left0 + dot * 2;
-    const height = Math.ceil(Math.max(...points.map((p) => p.sy))) - top0 + dot * 2;
+    const left0 = Math.floor(minOf(points.map((p) => p.sx))) - dot;
+    const top0 = Math.floor(minOf(points.map((p) => p.sy))) - dot;
+    const width = Math.ceil(maxOf(points.map((p) => p.sx))) - left0 + dot * 2;
+    const height = Math.ceil(maxOf(points.map((p) => p.sy))) - top0 + dot * 2;
     const rgba = new Uint8Array(width * height * 4);
     const depth = new Float32Array(width * height).fill(-Infinity);
     for (const p of points) {

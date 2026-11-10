@@ -2,6 +2,7 @@ import { Bytes, bytesLabel, field, hex } from '../../core/bytes';
 import type { Field, FormatParser, IndexedImage } from '../../core/types';
 import { lcw } from './compression';
 import { shpD2Offsets } from './sniff';
+import { Budget, pixelBuffer } from '../../core/limits';
 
 /**
  * Dune II-style sprites, which TD and RA still use for their mouse cursors.
@@ -34,6 +35,7 @@ const parser: FormatParser = {
         const frames: IndexedImage[] = [];
         const frameFields: Field[] = [];
         const warnings: string[] = [];
+        const budget = new Budget('The frames');
 
         for (let i = 0; i < count; i++) {
             const at = offsets[i];
@@ -61,7 +63,8 @@ const parser: FormatParser = {
             const compressed = data.subarray(start, at + frameSize);
             children.push(field('Data', start, compressed.length, bytesLabel(compressed.length)));
 
-            const pixels = new Uint8Array(width * height);
+            budget.take(width * height + decodedSize);
+            const pixels = pixelBuffer(width, height);
             if (flags & FLAG_NOT_LCW) {
                 unzero(compressed, pixels);
             } else {

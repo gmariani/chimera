@@ -423,7 +423,7 @@ export function readTiff(data: Uint8Array, base: number, end: number, mode: 'exi
                 value = String.fromCharCode(...data.subarray(valueAt, valueAt + Math.min(n, 4)));
             } else if (type === 7 && tag === 'UserComment') {
                 const charset = String.fromCharCode(...data.subarray(valueAt, valueAt + 8)).replace(/\0+$/, '');
-                const text = charset === 'ASCII' ? String.fromCharCode(...data.subarray(valueAt + 8, valueAt + n)).replace(/\0+$/, '').trim() : '';
+                const text = charset === 'ASCII' ? new TextDecoder('latin1').decode(data.subarray(valueAt + 8, valueAt + n)).replace(/\0+$/, '').trim() : '';
                 value = text || (charset ? `${charset} text` : bytesLabel(n));
             } else if (type === 1 && tag.startsWith('XP')) {
                 // Windows' tags: UTF-16LE text in bytes.

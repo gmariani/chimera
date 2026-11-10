@@ -1,4 +1,5 @@
 import { Bytes, bytesLabel, field } from '../../core/bytes';
+import { checkBytes } from '../../core/limits';
 import type { Field, FormatParser } from '../../core/types';
 import { decodeIma, decodeWestwood, wav } from './adpcm';
 
@@ -22,7 +23,11 @@ const parser: FormatParser = {
         const sixteen = compression === 99 || (flags & 2) !== 0;
         const warnings: string[] = [];
 
-        const pcm = sixteen ? new Int16Array(outSize / 2) : new Uint8Array(outSize);
+        // Both compressions make at most 4 bytes of sound from each byte, so a header that claims more is wrong (or made to exhaust memory).
+        const most = Math.max(0, data.length - 12) * 4;
+        if (outSize > most) warnings.push(`The header says ${bytesLabel(outSize)} of sound, but ${bytesLabel(data.length)} can hold at most ${bytesLabel(most)}; only what's there is decoded.`);
+        const room = checkBytes(Math.min(outSize, most), 'The sound');
+        const pcm = sixteen ? new Int16Array(room >> 1) : new Uint8Array(room);
         const state = { index: 0, sample: 0 };
         const chunks: Field[] = [];
         let at = 12;

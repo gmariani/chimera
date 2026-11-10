@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Companion, Entry, FormatDescriptor, Parsed } from '../core/types';
-import { detect, extensionOf } from '../formats';
+import type { Companion, Entry, FormatDescriptor } from '../core/types';
+import { detect, extensionOf, FORMATS } from '../formats';
+import { inspect, type Inspection } from '../formats/inspect';
 
 /** A file being looked at: opened from disk, or pulled out of another file. */
 export interface OpenFile {
@@ -9,12 +10,11 @@ export interface OpenFile {
     /** The real file name, when known (an archive may only store a hash). */
     knownName: string | null;
     data: Uint8Array;
+    /** Open as this format (an id) rather than the one detected. */
+    as?: string;
 }
 
-export type ParseState =
-    | { status: 'loading'; format: FormatDescriptor }
-    | { status: 'ready'; format: FormatDescriptor; parsed: Parsed }
-    | { status: 'error'; format: FormatDescriptor; error: string };
+export type ParseState = { status: 'loading'; format: FormatDescriptor } | ({ status: 'ready' } & Inspection);
 
 /** Other opened files, for formats that use companions; `version` changes when there are more. */
 export interface Companions {
@@ -22,42 +22,33 @@ export interface Companions {
     version: number;
 }
 
-/** Detects the file's format, loads that parser, and parses. Re-parses when `names` changes, or the companions do and the format uses them. */
-export function useParsed(file: OpenFile, names: readonly string[], companions?: Companions): ParseState {
-    const [state, setState] = useState<ParseState>(() => ({ status: 'loading', format: detect(file.data, file.knownName ?? file.name) }));
+/** The format a file is opened as at first: the one asked for, or the one detected. */
+function firstFormat(file: OpenFile): FormatDescriptor {
+    return (file.as && FORMATS.find((f) => f.id === file.as)) || detect(file.data, file.knownName ?? file.name);
+}
 
-    const usesCompanions = useMemo(() => detect(file.data, file.knownName ?? file.name).companions === true, [file]);
+/** Detects the file's format, loads that parser, parses, and checks the file is what it claims. Re-parses when `names` changes, or the companions do and the format uses them. */
+export function useParsed(file: OpenFile, names: readonly string[], companions?: Companions): ParseState {
+    const [state, setState] = useState<ParseState>(() => ({ status: 'loading', format: firstFormat(file) }));
+
+    const usesCompanions = useMemo(() => firstFormat(file).companions === true, [file]);
     const find = usesCompanions ? companions?.find : undefined;
     const version = usesCompanions ? companions?.version : undefined;
 
     useEffect(() => {
         let canceled = false;
-        const format = detect(file.data, file.knownName ?? file.name);
+        const format = firstFormat(file);
         setState((s) => (s.status === 'ready' && s.format.id === format.id ? s : { status: 'loading', format }));
-        format
-            .load()
-            .then((parser) => {
-                // Give the browser a frame to show the spinner before a long parse.
-                return new Promise<Parsed>((resolve, reject) =>
-                    setTimeout(() => {
-                        try {
-                            resolve(parser.parse(file.data, { name: file.knownName, names, find }));
-                        } catch (e) {
-                            reject(e);
-                        }
-                    }, 0),
-                );
-            })
-            .then(
-                (parsed) => !canceled && setState({ status: 'ready', format, parsed }),
-                (e: unknown) => {
-                    if (canceled) return;
-                    console.error(e);
-                    setState({ status: 'error', format, error: e instanceof Error ? e.message : String(e) });
-                },
+        // Give the browser a frame to show the spinner before a long parse.
+        const timer = setTimeout(() => {
+            inspect(file.data, { name: file.knownName, names, find }, { as: file.as, shownName: file.name }).then(
+                (inspection) => !canceled && setState({ status: 'ready', ...inspection }),
+                (e: unknown) => console.error(e),
             );
+        }, 0);
         return () => {
             canceled = true;
+            clearTimeout(timer);
         };
         // `version` isn't read here, but a new one means `find` has more to give.
     }, [file, names, find, version]);

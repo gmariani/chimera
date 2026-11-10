@@ -1,5 +1,6 @@
 import { bytesLabel, field, hex } from '../../core/bytes';
 import type { Entry, Field, FormatParser } from '../../core/types';
+import { minOf } from '../../core/math';
 
 /**
  * Petroglyph's MEG archives (Star Wars: Empire at War, Grey Goo, the Command
@@ -106,7 +107,7 @@ const parser: FormatParser = {
         if (names.length > 5000 || l.files > 5000) warnings.push('The first 5,000 names and records are listed.');
 
         const recordsEnd = namesEnd + l.files * 20;
-        const dataStart = entries.length ? Math.min(...entries.map((e) => e.offset)) : recordsEnd;
+        const dataStart = entries.length ? minOf(entries.map((e) => e.offset)) : recordsEnd;
         const total = entries.reduce((n, e) => n + e.size, 0);
         const folders = new Set(entries.map((e) => e.meta!.Folder));
         return {

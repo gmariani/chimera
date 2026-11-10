@@ -1,5 +1,7 @@
 import { Bytes, bytesLabel, field } from '../../core/bytes';
 import type { Field, FormatParser, Preview } from '../../core/types';
+import { checkPixels, TooBig } from '../../core/limits';
+import { append } from '../../core/math';
 
 /**
  * GIF (87a and 89a): a screen size and an optional global color table, then
@@ -125,6 +127,9 @@ function gcd(a: number, b: number): number {
     while (b) [a, b] = [b, a % b];
     return a;
 }
+
+/** The most pixels drawn to check every frame as the file opens; past it, frames are only drawn as they're shown. */
+const PREDECODE_PIXELS = 1 << 28;
 
 /** Draws frames one after another onto the screen, as the disposals say. */
 class Screen {
@@ -364,47 +369,60 @@ const parser: FormatParser = {
         if (!ended && !warnings.some((w) => /stopped there|past the end/.test(w))) warnings.push('There is no trailer (3B), so the file may be cut short.');
         if (blockFields.length >= MAX_FRAME_FIELDS * 2) warnings.push(`The first ${MAX_FRAME_FIELDS.toLocaleString('en-US')} or so blocks are in the fields.`);
         fields.push({ name: 'Blocks', offset: 13 + globalSize, length: at - 13 - globalSize, value: `${frames.length} frame${frames.length === 1 ? '' : 's'}`, children: blockFields });
+        const trailerEnd = at;
         if (at < data.length) fields.push(field('After the trailer', at, data.length - at, bytesLabel(data.length - at), "Not part of the picture; it's ignored."));
         if (!frames.length) throw new Error('No frames to draw.');
 
-        // The screen, drawn frame by frame.
-        const screen = new Screen(width, height, frames);
-        const first = screen.frame(0);
-        let preview: Preview;
+        // The screen, drawn frame by frame, unless the sizes are past what the app will draw (the structure is still all there).
+        let screen: Screen | null = null;
+        let preview: Preview | undefined;
+        try {
+            checkPixels(width, height, 'The screen');
+            for (const [i, f] of frames.entries()) checkPixels(f.width, f.height, `Frame ${i + 1}`);
+            screen = new Screen(width, height, frames);
+        } catch (e) {
+            if (!(e instanceof TooBig)) throw e;
+            warnings.push(`Not drawn: ${e.message} Sizes like that mean a damaged file, or one made to exhaust memory.`);
+        }
         const shown = frames.map((f) => shownFor(f.delay));
         const seconds = shown.reduce((n, d) => n + d, 0) / 100;
-        if (frames.length === 1) {
-            preview = { kind: 'picture', width, height, rgba: first };
-        } else {
-            // A video has one rate: tick at the delays' common divisor, and show each frame for as many ticks as its delay.
-            const tick = shown.reduce(gcd);
-            const ends: number[] = [];
-            let total = 0;
-            for (const d of shown) ends.push((total += d / tick));
-            preview = {
-                kind: 'video',
-                width,
-                height,
-                frameCount: total,
-                fps: 100 / tick,
-                frame(index) {
-                    let lo = 0;
-                    let hi = ends.length - 1;
-                    while (lo < hi) {
-                        const mid = (lo + hi) >> 1;
-                        if (ends[mid] > index) hi = mid;
-                        else lo = mid + 1;
-                    }
-                    return { rgba: screen.frame(lo) };
-                },
-            };
-        }
-        if (comments.length) preview = { kind: 'stack', items: [{ title: frames.length === 1 ? 'Picture' : 'Animation', preview }, { title: 'Comments', preview: { kind: 'text', text: comments.join('\n\n') } }] };
+        if (screen) {
+            const drawn = screen;
+            const first = drawn.frame(0);
+            if (frames.length === 1) {
+                preview = { kind: 'picture', width, height, rgba: first };
+            } else {
+                // A video has one rate: tick at the delays' common divisor, and show each frame for as many ticks as its delay.
+                const tick = shown.reduce(gcd);
+                const ends: number[] = [];
+                let total = 0;
+                for (const d of shown) ends.push((total += d / tick));
+                preview = {
+                    kind: 'video',
+                    width,
+                    height,
+                    frameCount: total,
+                    fps: 100 / tick,
+                    frame(index) {
+                        let lo = 0;
+                        let hi = ends.length - 1;
+                        while (lo < hi) {
+                            const mid = (lo + hi) >> 1;
+                            if (ends[mid] > index) hi = mid;
+                            else lo = mid + 1;
+                        }
+                        return { rgba: drawn.frame(lo) };
+                    },
+                };
+            }
+            if (comments.length) preview = { kind: 'stack', items: [{ title: frames.length === 1 ? 'Picture' : 'Animation', preview }, { title: 'Comments', preview: { kind: 'text', text: comments.join('\n\n') } }] };
 
-        // Check every frame decodes, so damage shows up as the file opens rather than partway through playing.
-        if (frames.length > 1) for (let i = 1; i < frames.length; i++) screen.frame(i);
-        warnings.push(...screen.damaged);
-        if (screen.outOfRange) warnings.push(`${screen.outOfRange.toLocaleString('en-US')} pixel${screen.outOfRange === 1 ? '' : 's'} use a color past the end of the color table, drawn black.`);
+            // Check every frame decodes, so damage shows up as the file opens rather than partway through playing (unless that's too much work to do up front).
+            const work = frames.reduce((n, f) => n + width * height + f.width * f.height, 0);
+            if (frames.length > 1 && work <= PREDECODE_PIXELS) for (let i = 1; i < frames.length; i++) screen.frame(i);
+            append(warnings, screen.damaged);
+            if (screen.outOfRange) warnings.push(`${screen.outOfRange.toLocaleString('en-US')} pixel${screen.outOfRange === 1 ? '' : 's'} use a color past the end of the color table, drawn black.`);
+        }
 
         const interlaced = frames.filter((f) => f.interlaced).length;
         return {
@@ -419,6 +437,7 @@ const parser: FormatParser = {
             ],
             fields,
             preview,
+            end: trailerEnd,
             warnings,
         };
     },

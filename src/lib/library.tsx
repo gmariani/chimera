@@ -4,6 +4,7 @@ import { detect } from '../formats';
 import { namesFromText } from '../formats/mix/names';
 import { sniffText } from '../formats/westwood/sniff';
 import { typeEntries } from './inspect';
+import { append } from '../core/math';
 
 /**
  * The session's files: every file opened from disk or added for others to use,
@@ -62,7 +63,7 @@ async function texts(name: string, data: Uint8Array, names: readonly string[], d
     }
     const found: string[] = [];
     for (const typed of typeEntries(entries)) {
-        if (typed.format.id === 'mix') found.push(...(await texts(typed.fileName, typed.entry.data, names, depth + 1)));
+        if (typed.format.id === 'mix') append(found, (await texts(typed.fileName, typed.entry.data, names, depth + 1)));
         else if (sniffText(typed.entry.data)) found.push(new TextDecoder('latin1').decode(typed.entry.data));
     }
     return found;

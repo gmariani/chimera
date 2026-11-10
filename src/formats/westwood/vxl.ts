@@ -5,6 +5,7 @@ import { Ini } from '../ini-sections';
 import { decodeVxl, LIMB_HEADER, readHva, VXL_HEADER, type Limb } from './voxel-data';
 import { normalTable } from './voxel-normals';
 import { VOXELS_PER_CELL } from './voxel-sprite';
+import { maxOf } from '../../core/math';
 
 /**
  * TS and RA2 voxel models (.vxl): units drawn from 3D blocks. A header (with a
@@ -168,7 +169,7 @@ const parser: FormatParser = {
         ];
 
         const ownPalette = vxl.palette.some((v) => v) ? vxl.palette : undefined;
-        const frameCount = Math.max(...all.map((p) => p.frames));
+        const frameCount = maxOf(all.map((p) => p.frames));
         return {
             title: 'Voxel model (TS/RA2)',
             summary: [

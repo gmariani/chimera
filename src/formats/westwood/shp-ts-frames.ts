@@ -1,4 +1,5 @@
 import { Bytes } from '../../core/bytes';
+import { Budget, checkCount, pixelBuffer } from '../../core/limits';
 
 /**
  * Decoding TS and RA2 sprite frames, shared by the SHP parser and the map
@@ -24,14 +25,17 @@ export function decodeShpTs(data: Uint8Array): { width: number; height: number; 
     const b = new Bytes(data);
     const width = b.u16(2);
     const height = b.u16(4);
-    const count = b.u16(6);
+    const count = checkCount(b.u16(6), 24, data.length - 8, 'The frame count');
     const frames: ShpTsFrame[] = [];
+    // Each frame gets a whole canvas, so the frames together are what to keep in bounds.
+    const budget = new Budget('The frames');
     for (let i = 0; i < count; i++) {
         const at = 8 + i * 24;
         const [x, y, w, h] = [b.u16(at), b.u16(at + 2), b.u16(at + 4), b.u16(at + 6)];
         const compression = b.u8(at + 8);
         const offset = b.u32(at + 20);
-        const canvas = new Uint8Array(width * height);
+        budget.take(width * height);
+        const canvas = pixelBuffer(width, height);
         let s = offset;
         if (offset !== 0 && w && h && x + w <= width && y + h <= height) {
             for (let row = 0; row < h; row++) {

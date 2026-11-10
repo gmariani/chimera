@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { Alert, Button, Nav, Spinner, Tab } from 'react-bootstrap';
+import type { FormatDescriptor } from '../core/types';
+import type { Check } from '../formats/inspect';
 import { bytesLabel, formatSize } from '../core/bytes';
 import { download, safeName } from '../lib/download';
 import { useParsed, type OpenFile } from '../lib/inspect';
@@ -12,6 +14,7 @@ import { PreviewTab } from '../tabs/PreviewTab';
 import { LinksTab } from '../tabs/LinksTab';
 import { StructureTab } from '../tabs/StructureTab';
 import { AddFilesButton } from './AddFiles';
+import { Guard } from './Guard';
 import { Dl } from './ui';
 
 type TabKey = 'contents' | 'preview' | 'links' | 'structure';
@@ -24,6 +27,7 @@ export function Inspector({
     names,
     memory,
     onOpen,
+    onOpenAs,
     onNames,
     onShowFiles,
 }: {
@@ -36,6 +40,8 @@ export function Inspector({
     memory?: ViewMemory;
     names: readonly string[];
     onOpen: (file: OpenFile) => void;
+    /** Shows this file as another format instead (or, with no format, as detected). */
+    onOpenAs: (format: string | undefined) => void;
     onNames: (names: string[]) => void;
     /** Opens the list of files in use this session. */
     onShowFiles: () => void;
@@ -76,6 +82,8 @@ export function Inspector({
     }, [state, file, allNames, add, root, near, idOf]);
 
     const parsed = state.status === 'ready' ? state.parsed : null;
+    const checks = state.status === 'ready' ? state.checks : [];
+    const alternatives = state.status === 'ready' ? state.alternatives : [];
 
     // Coming back from a file inside this one: back to where the user had scrolled, once the page is drawn.
     const ready = parsed !== null;
@@ -111,6 +119,12 @@ export function Inspector({
             <div className="text-center mb-4">
                 <h1 className="display-6 bd-title mb-1 text-break">{file.name}</h1>
                 <p className="text-body-secondary mb-2">
+                    {checks.some((c) => c.level === 'danger') && (
+                        <span className="badge text-bg-danger me-2">
+                            <i className="bi bi-shield-exclamation me-1" />
+                            Not what it claims
+                        </span>
+                    )}
                     {parsed ? parsed.title : state.format.name} · {formatSize(file.data.length)}
                     {!file.knownName && ' · real name unknown'}
                 </p>
@@ -125,14 +139,9 @@ export function Inspector({
                 </div>
             )}
 
-            {state.status === 'error' && (
-                <Alert variant="warning">
-                    This looked like {state.format.name.toLowerCase()}, but couldn't be read as one: {state.error}
-                </Alert>
-            )}
-
             {parsed && (
                 <>
+                    <Checks checks={checks} alternatives={alternatives} openedAs={file.as} onOpenAs={onOpenAs} />
                     {parsed.warnings.slice(0, 5).map((w) => (
                         <Alert key={w} variant="warning" className="py-2 small">
                             {w}
@@ -174,28 +183,66 @@ export function Inspector({
                         <Tab.Content>
                             {parsed.entries && (
                                 <Tab.Pane eventKey="contents">
-                                    <ContentsTab archiveName={file.name} entries={parsed.entries} names={names} memory={memory} onOpen={openInside} onNames={onNames} />
+                                    <Guard what="contents list">
+                                        <ContentsTab archiveName={file.name} entries={parsed.entries} names={names} memory={memory} onOpen={openInside} onNames={onNames} />
+                                    </Guard>
                                 </Tab.Pane>
                             )}
                             {parsed.preview && (
                                 <Tab.Pane eventKey="preview">
-                                    <PreviewTab preview={parsed.preview} fileName={file.name} names={allNames} onOpenName={openName} />
+                                    <Guard what="preview">
+                                        <PreviewTab preview={parsed.preview} fileName={file.name} names={allNames} onOpenName={openName} />
+                                    </Guard>
                                 </Tab.Pane>
                             )}
                             {links.length > 0 && (
                                 <Tab.Pane eventKey="links">
-                                    <LinksTab links={links} onShowFiles={onShowFiles} />
+                                    <Guard what="linked files list">
+                                        <LinksTab links={links} onShowFiles={onShowFiles} />
+                                    </Guard>
                                 </Tab.Pane>
                             )}
                             <Tab.Pane eventKey="structure">
-                                <StructureTab data={file.data} parsed={parsed} fileName={file.name} />
+                                <Guard what="structure view">
+                                    <StructureTab data={file.data} parsed={parsed} fileName={file.name} />
+                                </Guard>
                             </Tab.Pane>
                         </Tab.Content>
                     </Tab.Container>
                 </>
             )}
+        </>
+    );
+}
 
-            {state.status === 'error' && <StructureTab data={file.data} parsed={{ title: '', summary: [], fields: [], warnings: [] }} fileName={file.name} />}
+const ICONS: Record<Check['level'], string> = { danger: 'bi-shield-exclamation', warning: 'bi-exclamation-triangle', info: 'bi-info-circle' };
+
+/** What the checks every file gets found (is it what it claims, is anything hidden), and other ways to open it. */
+function Checks({ checks, alternatives, openedAs, onOpenAs }: { checks: Check[]; alternatives: FormatDescriptor[]; openedAs?: string; onOpenAs: (format: string | undefined) => void }) {
+    const suspicious = checks.some((c) => c.level !== 'info');
+    return (
+        <>
+            {checks.map((c) => (
+                <Alert key={c.text} variant={c.level} className="py-2 small">
+                    <i className={`bi ${ICONS[c.level]} me-1`} />
+                    {c.text}
+                </Alert>
+            ))}
+            {(openedAs || (alternatives.length > 0 && suspicious)) && (
+                <div className="d-flex flex-wrap align-items-center justify-content-center gap-2 mb-3 small">
+                    <span className="text-body-secondary">Open as</span>
+                    {openedAs && (
+                        <Button size="sm" variant="outline-light" onClick={() => onOpenAs(undefined)}>
+                            Detected format
+                        </Button>
+                    )}
+                    {alternatives.map((f) => (
+                        <Button key={f.id} size="sm" variant="outline-light" onClick={() => onOpenAs(f.id)}>
+                            {f.name}
+                        </Button>
+                    ))}
+                </div>
+            )}
         </>
     );
 }

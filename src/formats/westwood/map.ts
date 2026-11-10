@@ -8,6 +8,7 @@ import { RA_TEMPLATES, TD_TEMPLATES, type Template } from './templates';
 import { RA_REMAP, TD_REMAP, TEAM_COLORS, teamRemap } from './team-colors';
 import { EMPTY_CELL, readTileSet, type TileSet } from './tileset';
 import { expandPalette } from './vga';
+import { pixelBuffer } from '../../core/limits';
 
 /**
  * Map terrain: for each cell, a template and which of its tiles. TD keeps a
@@ -442,7 +443,7 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
 
     const width = area.width * TILE;
     const height = area.height * TILE;
-    const pixels = new Uint8Array(width * height);
+    const pixels = pixelBuffer(width, height);
     const blit = (src: Uint8Array, srcWidth: number, srcHeight: number, x: number, y: number, sprite: boolean, remap?: Uint8Array) => {
         for (let sy = 0; sy < srcHeight; sy++) {
             const dy = y + sy;
@@ -613,7 +614,7 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
             const [side, scale, border] = [52, 6, 4];
             const left = (x - area.x) * TILE + TILE / 2 - side / 2;
             const top = (y - area.y) * TILE + TILE / 2 - side / 2;
-            const badge = new Uint8Array(side * side);
+            const badge = pixelBuffer(side, side);
             for (let j = 0; j < side; j++) {
                 for (let i = 0; i < side; i++) {
                     const r = Math.hypot(i + 0.5 - side / 2, j + 0.5 - side / 2);

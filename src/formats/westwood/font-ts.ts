@@ -1,5 +1,6 @@
 import { Bytes, field } from '../../core/bytes';
 import type { FormatParser, IndexedImage } from '../../core/types';
+import { pixelBuffer } from '../../core/limits';
 
 /**
  * TS and RA2 bitmap fonts. Unicode ones (game.fnt, "fonT"): a 28-byte header,
@@ -32,7 +33,7 @@ const parser: FormatParser = {
         }
         const frames: IndexedImage[] = mapped.slice(0, MAX_SHOWN).map(([, at]) => {
             const width = Math.max(1, Math.min(b.u8(at), rowBytes * 8));
-            const pixels = new Uint8Array(width * height);
+            const pixels = pixelBuffer(width, height);
             for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (data[at + 1 + y * rowBytes + (x >> 3)] & (0x80 >> (x & 7))) pixels[y * width + x] = 1;
             return { width, height, pixels };
         });

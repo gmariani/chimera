@@ -1,5 +1,6 @@
 import { Bytes, bytesLabel, field } from '../core/bytes';
 import type { FormatParser } from '../core/types';
+import { pixelBuffer } from '../core/limits';
 
 /**
  * ZSoft PCX pictures. A 128-byte header, run-length encoded rows (a byte with
@@ -22,11 +23,13 @@ const parser: FormatParser = {
         if (bits !== 8 || (planes !== 1 && planes !== 3)) throw new Error(`Only 256-color and 24-bit PCX pictures are supported (this one is ${bits}-bit, ${planes} plane${planes === 1 ? '' : 's'}).`);
         const trueColor = planes === 3;
 
-        const pixels = new Uint8Array(width * height);
-        const rgba = trueColor ? new Uint8Array(width * height * 4) : null;
-        const row = new Uint8Array(stride * planes);
+        const pixels = pixelBuffer(width, height);
+        const rgba = trueColor ? pixelBuffer(width, height, 4) : null;
+        const row = pixelBuffer(stride, planes);
         let s = 128;
+        let short = false;
         for (let y = 0; y < height; y++) {
+            if (s >= data.length) short = true;
             // Runs can carry on from one plane into the next.
             for (let x = 0; x < row.length && s < data.length; ) {
                 const v = data[s++];
@@ -43,9 +46,13 @@ const parser: FormatParser = {
                 pixels.set(row.subarray(0, width), y * width);
             }
         }
+        if (short) warnings.push('The picture data ends before the last row.');
         const paletteAt = data.length - 769;
-        const hasPalette = !trueColor && paletteAt >= s && data[paletteAt] === 0x0c;
+        const paletteBlock = paletteAt >= s && data[paletteAt] === 0x0c;
+        const hasPalette = !trueColor && paletteBlock;
         if (!trueColor && !hasPalette) warnings.push('There\'s no palette at the end of the file.');
+        // TS writes the palette marker after a 24-bit picture, with nothing after it.
+        const loneMarker = trueColor && !paletteBlock && s === data.length - 1 && data[s] === 0x0c;
 
         return {
             title: 'Picture (PCX)',
@@ -79,7 +86,10 @@ const parser: FormatParser = {
                     ],
                 },
                 field('Picture data', 128, s - 128, bytesLabel(s - 128), trueColor ? 'Run-length encoded, row by row; each row a red, green and blue plane.' : 'Run-length encoded, row by row.'),
-                ...(hasPalette ? [{ name: 'Palette', offset: paletteAt, length: 769, children: [field('Marker', paletteAt, 1, '0x0C'), field('Colors', paletteAt + 1, 768, '256 colors, 8-bit')] }] : []),
+                ...(paletteBlock
+                    ? [{ name: trueColor ? 'Palette (unused)' : 'Palette', offset: paletteAt, length: 769, note: trueColor ? 'A 24-bit picture has no use for one, but some programs (TS\'s) write it anyway.' : undefined, children: [field('Marker', paletteAt, 1, '0x0C'), field('Colors', paletteAt + 1, 768, '256 colors, 8-bit')] }]
+                    : []),
+                ...(loneMarker ? [field('Palette marker', s, 1, '0x0C', 'With no palette after it; a 24-bit picture needs none.')] : []),
             ],
             preview: rgba ? { kind: 'picture', width, height, rgba } : { kind: 'images', frames: [{ width, height, pixels }], palette: hasPalette ? data.slice(paletteAt + 1) : undefined },
             warnings,

@@ -49,6 +49,7 @@ const parser: FormatParser = {
                 kind: 'text',
                 text: strings.length === 1 ? strings[0].text : strings.map((s, i) => `${String(i).padStart(width)}  ${s.text.replace(/\r?\n/g, '\\n')}`).join('\n'),
             },
+            end,
             warnings: [],
         };
     },

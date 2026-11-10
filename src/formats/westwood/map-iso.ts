@@ -10,6 +10,8 @@ import { TEAM_COLORS, teamPalette, TS_REMAP } from './team-colors';
 import { expandPalette } from './vga';
 import { decodeVxl, readHva, type Hva, type Vxl } from './voxel-data';
 import { drawVoxels, VOXELS_PER_CELL, type VoxelPartInput } from './voxel-sprite';
+import { pixelBuffer } from '../../core/limits';
+import { minOf, maxOf } from '../../core/math';
 
 /**
  * TS and RA2 maps: INIs (.map, .mpr, .yrm, and inside RA2's .mmx and .yro)
@@ -273,7 +275,7 @@ class Canvas {
     ) {
         this.width = Math.ceil(fullWidth / step);
         this.height = Math.ceil(fullHeight / step);
-        this.rgba = new Uint8Array(this.width * this.height * 4);
+        this.rgba = pixelBuffer(this.width, this.height, 4);
         this.groundDepth = new Int16Array(this.width * this.height).fill(-1);
         this.groundLevel = new Int8Array(this.width * this.height);
         this.groundOwner = new Int32Array(this.width * this.height).fill(-1);
@@ -523,10 +525,10 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const ys = cells.map((c) => place(c)[1]);
     // Room for cliffs and trees that reach above and beside their cells.
     const pad = real ? th * 2 : 0;
-    const left = Math.min(...xs) - pad;
-    const top = Math.min(...ys) - pad * 2;
-    const fullW = Math.max(...xs) + tw + pad - left;
-    const fullH = Math.max(...ys) + th + pad - top;
+    const left = minOf(xs) - pad;
+    const top = minOf(ys) - pad * 2;
+    const fullW = maxOf(xs) + tw + pad - left;
+    const fullH = maxOf(ys) + th + pad - top;
     const step = Math.max(1, Math.ceil(Math.max(fullW / MAX_SIDE, fullH / MAX_SIDE, Math.sqrt((fullW * fullH) / MAX_PIXELS))));
     const canvas = new Canvas(left, top, fullW, fullH, step);
     canvas.terrainPalettes.add(isoPalette);
@@ -565,7 +567,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             // lamps overlapping (sov01t's 27 yellow ones) would otherwise wash a map out.
             const amb = Math.min(Math.max(intensity, 0), 2);
             const t = tint.map((v) => Math.min(Math.max(v, 0), 2));
-            const most = Math.max(...t);
+            const most = maxOf(t);
             const strength = most < 0.001 ? 0 : Math.min(amb * most, 2);
             light = most < 0.001 ? [0, 0, 0] : [strength * (t[0] / most), strength * (t[1] / most), strength * (t[2] / most)];
             lights.set(key, light);
@@ -1067,7 +1069,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
 
 /** The map's own preview picture, as RGBA. */
 function previewPicture(p: NonNullable<IsoMap['preview']>): Preview {
-    const rgba = new Uint8Array(p.width * p.height * 4);
+    const rgba = pixelBuffer(p.width, p.height, 4);
     for (let i = 0; i < p.width * p.height; i++) rgba.set([p.rgb[i * 3], p.rgb[i * 3 + 1], p.rgb[i * 3 + 2], 255], i * 4);
     return { kind: 'picture', width: p.width, height: p.height, rgba };
 }
@@ -1088,7 +1090,7 @@ export function isoMapPreviews(ini: Ini, find: Finder | undefined, fileName: str
         summary: [
             ['Map', `${map.size[0]} × ${map.size[1]}, ${map.cells.length} cells`],
             ['Theater', map.theater],
-            ['Heights', `${Math.min(...levels)}–${Math.max(...levels)}`],
+            ['Heights', `${minOf(levels)}–${maxOf(levels)}`],
             ['Trees and terrain objects', String(map.terrain.length)],
             ['Overlays', String(map.overlays ? map.overlays.reduce((n, v) => n + (v !== 0xff ? 1 : 0), 0) : 0)],
         ],

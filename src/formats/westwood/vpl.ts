@@ -1,5 +1,6 @@
 import { Bytes, field } from '../../core/bytes';
 import type { FormatParser, IndexedImage } from '../../core/types';
+import { checkCount } from '../../core/limits';
 
 /**
  * TS and RA2's voxel lighting tables (voxels.vpl). The games light each voxel
@@ -23,6 +24,7 @@ const parser: FormatParser = {
     parse(data) {
         const b = new Bytes(data);
         const [start, end, sections] = [b.u32(0), b.u32(4), b.u32(8)];
+        checkCount(sections, 256, data.length - 784, 'The number of lighting tables');
         const tables = Array.from({ length: sections }, (_, i) => data.subarray(784 + i * 256, 784 + (i + 1) * 256));
         // The palette is 6-bit in some files and 8-bit in others.
         const raw = data.subarray(16, 784);

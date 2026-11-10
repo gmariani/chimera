@@ -9,6 +9,7 @@ import { zip } from '../lib/zip';
 import { TablePreview } from './TablePreview';
 import { VoxelViewer } from './VoxelViewer';
 import { TeamColorSelect, useTeamColor } from '../components/TeamColor';
+import { maxOf } from '../core/math';
 
 const stem = (name: string) => name.replace(/\.[^.]+$/, '');
 
@@ -116,8 +117,8 @@ function ZoomButtons({ zoom, onChange }: { zoom: Zoom; onChange: (zoom: Zoom) =>
 /** All frames in a grid, as one canvas. */
 function sheet(frames: IndexedImage[], paint: Paint, columnsWanted?: number): HTMLCanvasElement {
     const columns = sheetColumns(frames, columnsWanted);
-    const w = Math.max(...frames.map((f) => f.width));
-    const h = Math.max(...frames.map((f) => f.height));
+    const w = maxOf(frames.map((f) => f.width));
+    const h = maxOf(frames.map((f) => f.height));
     const canvas = document.createElement('canvas');
     canvas.width = columns * w;
     canvas.height = Math.ceil(frames.length / columns) * h;
@@ -174,7 +175,7 @@ function ImagesPreview({
     const [frame, setFrame] = useState(0);
     const [playing, setPlaying] = useState(false);
     const [view, setView] = useState<'frame' | 'sheet'>(frames.length > 1 ? 'sheet' : 'frame');
-    const width = Math.max(...frames.map((f) => f.width));
+    const width = maxOf(frames.map((f) => f.width));
     const [zoom, setZoom] = useState<Zoom>(initialZoom(width));
     const pan = useDragPan<HTMLDivElement>();
     const [busy, setBusy] = useState(false);
@@ -203,7 +204,7 @@ function ImagesPreview({
         if (view !== 'sheet') return;
         const rect = e.currentTarget.getBoundingClientRect();
         const across = sheetColumns(frames, columns);
-        const h = Math.max(...frames.map((f) => f.height));
+        const h = maxOf(frames.map((f) => f.height));
         const x = Math.floor(((e.clientX - rect.left) / rect.width) * across);
         const y = Math.floor(((e.clientY - rect.top) / rect.height) * e.currentTarget.height / h);
         const index = y * across + x;

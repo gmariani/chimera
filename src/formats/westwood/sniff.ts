@@ -265,6 +265,9 @@ export function stringOffsets(data: Uint8Array): number[] | null {
     }
     let text = 0;
     for (let i = first; i < data.length; i++) if (data[i] === 0 || data[i] === 9 || data[i] === 10 || data[i] === 13 || data[i] >= 32) text++;
+    // The last string ends the file (give or take padding): otherwise this is something else that happens to start like one.
+    const last = data.indexOf(0, offsets[offsets.length - 1]);
+    if (last < 0 || data.length - (last + 1) >= 16) return null;
     return text / (data.length - first) > 0.95 && data.indexOf(0, first) >= 0 ? offsets : null;
 }
 

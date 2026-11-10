@@ -2,6 +2,7 @@ import { bytesLabel, field } from '../../core/bytes';
 import type { Entry, Field, FormatParser, Preview } from '../../core/types';
 import { chunksOf, decodeTiff } from './decode';
 import { COMPRESSIONS, exifSummary, PHOTOMETRICS, readTiff, type Ifd, type Tiff } from './ifd';
+import { minOf, maxOf } from '../../core/math';
 
 /**
  * TIFF pictures (TIFF 6.0): a header, then a chain of IFDs, each a page with
@@ -47,8 +48,8 @@ const parser: FormatParser = {
                 const kind = tiled ? 'Tile' : 'Strip';
                 const children = offsets.slice(0, MAX_CHUNKS).map((at, k) => field(`${kind} ${k + 1}`, at, counts[k] ?? 0, bytesLabel(counts[k] ?? 0)));
                 const total = counts.reduce((a, b) => a + b, 0);
-                const start = Math.min(...offsets);
-                const end = Math.max(...offsets.map((at, k) => at + (counts[k] ?? 0)));
+                const start = minOf(offsets);
+                const end = maxOf(offsets.map((at, k) => at + (counts[k] ?? 0)));
                 fields.push({ name: `${ifd.name} data`, offset: start, length: end - start, value: `${offsets.length} ${kind.toLowerCase()}${offsets.length === 1 ? '' : 's'}, ${bytesLabel(total)}`, children });
                 if (offsets.length > MAX_CHUNKS) warnings.push(`${ifd.name} has ${offsets.length} ${kind.toLowerCase()}s; the first ${MAX_CHUNKS} are listed.`);
             }

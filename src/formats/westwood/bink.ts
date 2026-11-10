@@ -59,7 +59,14 @@ function layout(data: Uint8Array): Layout {
     const tracks = b.u32(40);
     const trackInfo = base + tracks * 4;
     const index = base + tracks * 12;
+    // Checked before anything is sized by them: a damaged or fake header can claim billions.
+    if (tracks > 256) throw new Error(`The header says there are ${tracks.toLocaleString('en-US')} sound tracks; no movie has more than a few.`);
+    if (index + (count + 1) * 4 > data.length) throw new Error(`The header says there are ${count.toLocaleString('en-US')} frames, but the frame index wouldn't fit in the file.`);
     const offsets = Array.from({ length: count + 1 }, (_, i) => b.u32(index + i * 4));
+    // The last frame may run a little past the end (it's cut to fit); the others must be inside.
+    for (let i = 0; i < count; i++) {
+        if ((offsets[i] & ~1) < index + (count + 1) * 4 || (offsets[i] & ~1) > (offsets[i + 1] & ~1) || (i + 1 < count && (offsets[i + 1] & ~1) > data.length)) throw new Error(`Frame ${i}'s place in the frame index (${offsets[i] & ~1} to ${offsets[i + 1] & ~1}) isn't inside the file, in order.`);
+    }
     return {
         tag: b.u32(0),
         two,

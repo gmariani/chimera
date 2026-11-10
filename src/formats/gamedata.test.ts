@@ -36,6 +36,8 @@ function distinct(paths: string[]): string[] {
 
 interface Report {
     archives: number;
+    /** Files refused by the format their name suggested, which nothing else read: named wrong (TD's 64 KB tables named .pal). */
+    misnamed: string[];
     encrypted: number;
     files: number;
     named: number;
@@ -86,7 +88,8 @@ async function walk(name: string, data: Uint8Array, names: string[], report: Rep
             // Movies decode on demand, so play each one through.
             if (result.preview?.kind === 'video') for (let i = 0; i < result.preview.frameCount; i++) result.preview.frame(i);
         } catch (e) {
-            report.problems.push(`${path} (${format.id}) threw: ${e instanceof Error ? e.message : e}`);
+            if (!format.sniff(entry.data)) report.misnamed.push(`${entry.label}: ${e instanceof Error ? e.message : e}`);
+            else report.problems.push(`${path} (${format.id}) threw: ${e instanceof Error ? e.message : e}`);
         }
     }
 }
@@ -99,9 +102,9 @@ describe.skipIf(!roots.length)('game data', () => {
         return learned.get(root)!;
     };
     it.each(archives.map(({ root, path }) => [join(basename(root), path.slice(root.length + 1)), root, path]))('%s', async (label, root, path) => {
-        const report: Report = { archives: 0, encrypted: 0, files: 0, named: 0, types: {}, problems: [] };
+        const report: Report = { archives: 0, encrypted: 0, files: 0, named: 0, types: {}, misnamed: [], problems: [] };
         await walk(basename(path), new Uint8Array(readFileSync(path)), namesFor(root), report);
-        console.log(`${label}: ${report.archives} archives (${report.encrypted} encrypted), ${report.named}/${report.files} named, ${JSON.stringify(report.types)}`);
+        console.log(`${label}: ${report.archives} archives (${report.encrypted} encrypted), ${report.named}/${report.files} named, ${JSON.stringify(report.types)}${report.misnamed.length ? `; named for a format they aren't: ${report.misnamed.join('; ')}` : ''}`);
         expect(report.problems).toEqual([]);
     }, 600_000);
 });

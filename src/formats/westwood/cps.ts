@@ -2,6 +2,7 @@ import { Bytes, bytesLabel, field } from '../../core/bytes';
 import type { FormatParser } from '../../core/types';
 import { lcw } from './compression';
 import { expandPalette } from './vga';
+import { checkBytes } from '../../core/limits';
 
 /** Full-screen 320×200 pictures (title screens, backgrounds), LCW-compressed. */
 const parser: FormatParser = {
@@ -11,7 +12,8 @@ const parser: FormatParser = {
         const size = b.u32(4);
         const paletteSize = b.u16(8);
         const start = 10 + paletteSize;
-        const pixels = new Uint8Array(size);
+        // Always 64,000 (320 × 200) in the games; anything much bigger is a damaged or crafted header.
+        const pixels = new Uint8Array(checkBytes(size, 'The picture', 1 << 22));
         if (compression === 4) lcw(data, pixels, start);
         else pixels.set(data.subarray(start, start + size));
         const palette = paletteSize === 768 ? expandPalette(data.subarray(10, 10 + 768)) : undefined;

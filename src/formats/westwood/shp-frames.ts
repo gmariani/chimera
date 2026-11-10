@@ -2,6 +2,7 @@ import { Bytes } from '../../core/bytes';
 import type { IndexedImage } from '../../core/types';
 import { format40, lcw } from './compression';
 import { SHP_FORMAT_LCW, SHP_FORMAT_XOR_LCW } from './sniff';
+import { Budget, checkCount, pixelBuffer } from '../../core/limits';
 
 /**
  * Decoding TD/RA sprites, shared by the SHP parser and the map renderer (which
@@ -34,6 +35,8 @@ export function decodeShp(data: Uint8Array): Shp {
     const height = b.u16(8);
     const warnings: string[] = [];
 
+    checkCount(count + 2, 8, data.length - 14, 'The frame count');
+    const budget = new Budget('The frames');
     const raw = Array.from({ length: count + 2 }, (_, i) => {
         const at = 14 + i * 8;
         const ref = b.u32(at + 4);
@@ -47,7 +50,8 @@ export function decodeShp(data: Uint8Array): Shp {
     for (let i = 0; i < count; i++) {
         const h = raw[i];
         const src = data.subarray(h.offset, raw[i + 1].offset);
-        const pixels = new Uint8Array(width * height);
+        budget.take(width * height);
+        const pixels = pixelBuffer(width, height);
         let keyframe = -1;
         if (h.format === SHP_FORMAT_LCW) {
             lcw(src, pixels);

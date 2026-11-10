@@ -1,6 +1,7 @@
 import { Bytes, bytesLabel, field } from '../../core/bytes';
 import type { Entry, FormatParser } from '../../core/types';
 import { imaWav, wav } from './adpcm';
+import { checkCount } from '../../core/limits';
 
 /**
  * RA2's sound bank index (audio.idx, "GABA"). Each entry names a sound and
@@ -18,6 +19,7 @@ const parser: FormatParser = {
         const b = new Bytes(data);
         const [version, count] = [b.u32(4), b.u32(8)];
         const size = version === 2 ? 36 : 32;
+        checkCount(count, size, data.length - 12, 'The number of sounds');
         const bagName = `${(context.name ?? 'audio.idx').replace(/\.[^.]+$/, '')}.bag`;
         const bagFile = context.find?.(bagName)[0];
         const bag = bagFile?.data;

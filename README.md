@@ -60,6 +60,14 @@ Voxels are lit by each voxel's normal, against the light the TS/RA2 mission edit
 
 Template names, TD template sizes, overlay and tree names, how ore and walls pick their frames, and the remap table and vortex layouts come from the GPL source of the Remastered Collection (`DEFINES.H`, `CDATA.CPP`, `ODATA.CPP`, `TDATA.CPP`, `CELL.CPP`, `DISPLAY.CPP`, `VORTEX.CPP`).
 
+## Is it what it claims?
+
+Every file gets the same checks, whatever its format, so a file that isn't what it's expected to be is called out, for looking into suspicious files as much as for learning formats:
+
+- **Name and signature:** if the extension or the first bytes say one format (loosely: `GIF` is enough to claim a GIF) and the file doesn't read as it, that's flagged, with why it doesn't read as one and what it is instead. Each format that could fit is tried in turn, and **Open as** shows it as any of them.
+- **After the end:** bytes past where the format ends (after a GIF's trailer, a PNG's IEND, a JPEG's last marker, or the last byte any field covers) are flagged and listed under Contents to open, unless they're a few zeros of padding.
+- **What it really is:** files no parser reads are identified by signature (Windows, DOS, Linux and Mac programs, archives, PDFs, Office documents, shortcuts and more) and by how random their bytes are. Nothing is guessed beyond that: what a disguised file holds is for you to work out, in the hex view.
+
 Anything else opens in the hex view. The only files in the TD and RA Remastered data that still do are `record.bin` (a recorded game: TD writes its in-memory structures straight to disk, so the layout depends on the build) and two empty files; in TS and RA2's archives, nothing.
 
 Some files need others: a map needs its theater's tiles and palette, and a TD map's `.bin` and `.ini` need each other. Every file opened or added in a session (and the archives inside it) stays available, and files find their companions there by name. **Files in use** (top right) lists them, with what each brought, and removes or adds them; they're kept until removed or the tab closes. A file's **Linked files** tab shows which files it used, from which archive and what for, and which it looked for but couldn't find, with **Add files…** to fix that. Drop several files at once to open the first with the rest alongside it. For TD, that's GENERAL.MIX with TEMPERAT.MIX (or DESERT.MIX, WINTER.MIX) and CONQUER.MIX for walls; for RA, MAIN.MIX with REDALERT.MIX for the palettes; for TS and RA2, the maps' archive with TIBSUN.MIX or RA2.MIX (and RA2MD.MIX for Yuri's Revenge). Voxel models find their animation, turret and barrel the same way.
@@ -78,6 +86,17 @@ Each format is a plain TypeScript module that turns bytes into data. It never re
    - `wanted` (optional): which other file would let it show more.
 
    A parser that needs other files uses `context.find(name)`, and sets `companions: true` in the registry so it runs again when more files are opened.
+
+   Be strict, since a file isn't always what it claims to be:
+   - **Throw** when the file isn't the format at all (its parts don't fit, a header field is impossible), with a message saying what's wrong. The next likely format is tried, and the message is shown.
+   - **Warn** about anything else the spec doesn't allow: sizes that disagree, values out of range, a missing end marker.
+   - **Don't trust sizes, counts or offsets from the file.** Files made to crash parsers claim billions. Check them before allocating or looping with them, using `src/core/limits.ts`: `checkCount` (records must fit in the bytes there are), `pixelBuffer`/`checkPixels` (at most 64 megapixels), `checkBytes` (at most 512 MB), and a `Budget` for what all of a file's frames add up to. A limit stopping a parser is reported as a sign of a crafted file.
+   - **Bound every loop** by the data, not just by a marker the file may never have.
+   - **Don't spread file-sized lists into arguments** (`Math.max(...list)`, `push(...list)`): past a hundred thousand or so it overflows the stack. Use `minOf`, `maxOf` and `append` from `src/core/math.ts`.
+   - **Mark every byte** in `fields`, including padding, so whatever comes after the format's end is caught. If the parser marks bytes past the end itself, it sets `end`.
+   - If the format's files also go by other extensions in practice (TD's theater sprites named `.tem`), list them in `alsoNamed` so they aren't called misnamed.
+
+   `src/formats/inspect.test.ts` puts each sample's first 16 bytes in front of the rest in base64, and expects each parser to refuse or flag it. Then run `npm run fuzz` (below), with game data if the format comes from there: it should report no findings.
 2. Add a cheap `sniff()` and register both in `src/formats/index.ts`. The parser is loaded on demand.
 
 ## Development
@@ -91,6 +110,13 @@ npm test         # also checks the files in samples/ (westwood, flash, images, f
 CHIMERA_GAME_DATA=/path/to/CnCRemastered/Data/CNCDATA npx vitest run src/formats/gamedata.test.ts
 # Several installs at once, separated by ":" (";" on Windows), e.g. adding TS's and RA2's folders.
 npm run build    # static site in build/
+
+# Broken and crafted versions of every sample (cut short, extreme header values, flipped bytes)
+# through every parser, each in a worker capped in memory (1.5 GB, no swap, via systemd on Linux)
+# and time (10 s), to find inputs that crash, hang or allocate wildly. Those are saved to fuzz/findings/.
+npm run fuzz
+npm run fuzz -- /path/to/CnCRemastered/Data   # also small files of each format from the archives there
+npm run fuzz:repro -- fuzz/findings/<file>     # one finding, run through everything the app does with it
 ```
 
 The original webpack/JPG/SWF attempt is kept in `legacy/`.

@@ -1,3 +1,5 @@
+import { checkBytes, checkPixels, pixelBuffer } from '../../core/limits';
+import { maxOf } from '../../core/math';
 /**
  * A JPEG decoder for the Huffman-coded DCT processes: baseline, extended
  * (12-bit samples too) and progressive, which is nearly every JPEG there is.
@@ -232,13 +234,14 @@ export function decodeJpeg(data: Uint8Array, segments: Segment[], ycc?: boolean)
                 const height = u16(p + 1);
                 const width = u16(p + 3);
                 if (!width || !height) throw new Error('The frame has no size (a later DNL marker gives the height), which isn\'t drawn here.');
+                checkPixels(width, height);
                 const components: Component[] = [];
                 for (let i = 0; i < data[p + 5]; i++) {
                     const c = p + 6 + i * 3;
                     components.push({ id: data[c], h: data[c + 1] >> 4 || 1, v: data[c + 1] & 15 || 1, tq: data[c + 2], blocksAcross: 0, blocksDown: 0, stride: 0, rows: 0, coefficients: new Int16Array(0), pred: 0 });
                 }
-                const maxH = Math.max(...components.map((c) => c.h));
-                const maxV = Math.max(...components.map((c) => c.v));
+                const maxH = maxOf(components.map((c) => c.h));
+                const maxV = maxOf(components.map((c) => c.v));
                 const mcusAcross = Math.ceil(width / (8 * maxH));
                 const mcusDown = Math.ceil(height / (8 * maxV));
                 for (const c of components) {
@@ -246,7 +249,7 @@ export function decodeJpeg(data: Uint8Array, segments: Segment[], ycc?: boolean)
                     c.blocksDown = Math.ceil(Math.ceil((height * c.v) / maxV) / 8);
                     c.stride = mcusAcross * c.h;
                     c.rows = mcusDown * c.v;
-                    c.coefficients = new Int16Array(c.stride * c.rows * 64);
+                    c.coefficients = new Int16Array(checkBytes(c.stride * c.rows * 64 * 2, `Component ${c.id}'s coefficients`) / 2);
                 }
                 frame = { marker: s.marker, precision, width, height, components, maxH, maxV, mcusAcross, mcusDown };
                 break;
@@ -455,13 +458,13 @@ function toRgba(frame: { width: number; height: number; components: Component[];
         const c = frame.components[i];
         if (c.h === frame.maxH && c.v === frame.maxV) {
             if (plane.width === width) return plane.pixels;
-            const out = new Uint8Array(width * height);
+            const out = pixelBuffer(width, height);
             for (let y = 0; y < height; y++) out.set(plane.pixels.subarray(y * plane.width, y * plane.width + width), y * width);
             return out;
         }
         const xs = taps(width, c.h / frame.maxH, Math.ceil((width * c.h) / frame.maxH));
         const ys = taps(height, c.v / frame.maxV, Math.ceil((height * c.v) / frame.maxV));
-        const out = new Uint8Array(width * height);
+        const out = pixelBuffer(width, height);
         const p = plane.pixels;
         for (let y = 0; y < height; y++) {
             const r0 = ys.a[y] * plane.width;
@@ -477,7 +480,7 @@ function toRgba(frame: { width: number; height: number; components: Component[];
         return out;
     });
 
-    const rgba = new Uint8Array(width * height * 4);
+    const rgba = pixelBuffer(width, height, 4);
     const clamp = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : Math.round(v));
     const n = full.length;
     // Three components are YCbCr unless an Adobe marker says RGB, or (with no JFIF or Adobe marker) they're named R, G and B.

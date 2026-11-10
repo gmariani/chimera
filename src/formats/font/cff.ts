@@ -56,6 +56,8 @@ export interface DictEntry {
 
 /** A DICT: operands (numbers in several encodings) then an operator. */
 export function readDict(data: Uint8Array, start: number, end: number): DictEntry[] {
+    // The end comes from the file: no further than the data goes.
+    end = Math.min(end, data.length);
     const out: DictEntry[] = [];
     let operands: number[] = [];
     let entryStart = start;
@@ -76,7 +78,8 @@ export function readDict(data: Uint8Array, start: number, end: number): DictEntr
         } else if (b === 30) {
             // A real number, as nibbles: digits, a point, E, E-, a minus sign, and an end.
             let text = '';
-            for (at++; ; at++) {
+            // It ends at a nibble of 15, or (damaged) where the dictionary does.
+            for (at++; at < end; at++) {
                 const nibbles = [data[at] >> 4, data[at] & 15];
                 const stop = nibbles.some((n) => n === 15);
                 for (const n of nibbles) {

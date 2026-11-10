@@ -2,6 +2,7 @@ import { bytesLabel, field, hex } from '../../core/bytes';
 import { crc32 } from '../../core/crc32';
 import { inflate } from '../../core/inflate';
 import type { Field, FormatParser, Preview } from '../../core/types';
+import { pixelBuffer } from '../../core/limits';
 
 /**
  * PNG pictures (ISO/IEC 15948, the W3C PNG spec): an 8-byte signature, then
@@ -173,6 +174,7 @@ const parser: FormatParser = {
             at = body + length + 4;
             if (type === 'IEND') break;
         }
+        const iendEnd = at;
         if (at < data.length) fields.push(field('After the end', at, data.length - at, bytesLabel(data.length - at), 'Not part of the PNG.'));
         if (!header) throw new Error('There\'s no IHDR chunk.');
 
@@ -196,6 +198,7 @@ const parser: FormatParser = {
             ],
             fields,
             preview,
+            end: iendEnd,
             warnings,
         };
     },
@@ -206,7 +209,7 @@ export function decodePng(h: { width: number; height: number; depth: number; col
     const channels = CHANNELS[h.color];
     if (!channels) throw new Error(`Unknown color type ${h.color}.`);
     const bpp = Math.max(1, (channels * h.depth) >> 3);
-    const rgba = new Uint8Array(h.width * h.height * 4);
+    const rgba = pixelBuffer(h.width, h.height, 4);
     const max = (1 << h.depth) - 1;
     // The transparent color, for types 0 and 2.
     const key = trns && h.color === 0 ? [(trns[0] << 8) | trns[1]] : trns && h.color === 2 ? [0, 2, 4].map((i) => (trns[i] << 8) | trns[i + 1]) : null;

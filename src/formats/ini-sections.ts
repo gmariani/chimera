@@ -1,3 +1,5 @@
+import { append } from '../core/math';
+
 /** Reading INI sections, shared by the INI parser and TD maps (which read their mission's INI). */
 
 export interface IniSection {
@@ -68,7 +70,7 @@ export class Ini {
                 byName.set(s.name.toLowerCase(), copy);
             } else if (/Types$/i.test(s.name)) {
                 const values = new Set(mine.entries.map((e) => e.value.toLowerCase()));
-                mine.entries.push(...s.entries.filter((e) => !values.has(e.value.toLowerCase())).map((e, i) => ({ ...e, key: `+${i}` })));
+                append(mine.entries, s.entries.filter((e) => !values.has(e.value.toLowerCase())).map((e, i) => ({ ...e, key: `+${i}` })));
             } else {
                 for (const e of s.entries) {
                     const at = mine.entries.findIndex((m) => m.key.toLowerCase() === e.key.toLowerCase());

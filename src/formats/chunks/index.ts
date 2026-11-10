@@ -2,6 +2,7 @@ import { bytesLabel, field, formatSize, hex } from '../../core/bytes';
 import { inflate } from '../../core/inflate';
 import type { Field, FormatParser, Parsed } from '../../core/types';
 import { sniffCompressedChunks } from './sniff';
+import { append } from '../../core/math';
 
 /**
  * Petroglyph's compiled data in the Remastered Collection (.bui UI layouts, and
@@ -171,7 +172,7 @@ function ownStrings(data: Uint8Array, chunk: Chunk): { name: string | null; othe
         const strings = stringsIn(data, c);
         // Chunk 5 next to chunk 0's properties is the name, the first time it comes up.
         if (c.id === 5 && name === null && strings.length === 1) name = strings[0];
-        else others.push(...strings);
+        else append(others, strings);
     };
     chunk.children?.forEach(visit);
     return { name, others };
@@ -236,9 +237,12 @@ function chunkFields(data: Uint8Array, top: Chunk[]): { fields: Field[]; capped:
     let capped = false;
     const build = (chunks: Chunk[]): Field[] => {
         const out: Field[] = [];
-        for (const chunk of chunks) {
+        for (const [i, chunk] of chunks.entries()) {
             if (count >= MAX_FIELDS) {
+                // The rest as one field, so every byte is still accounted for.
                 capped = true;
+                const last = chunks[chunks.length - 1];
+                out.push(field(`${chunks.length - i} more chunks`, chunk.offset, last.offset + last.length - chunk.offset, undefined, 'Past the limit on fields shown.'));
                 break;
             }
             count++;

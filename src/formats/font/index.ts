@@ -3,6 +3,8 @@ import type { Field, FormatParser, Preview } from '../../core/types';
 import { readCff, type Cff } from './cff';
 import { trueTypeGlyph } from './glyf';
 import { Raster, type PathCommand } from './raster';
+import { pixelBuffer } from '../../core/limits';
+import { minOf, maxOf } from '../../core/math';
 
 /**
  * TrueType and OpenType fonts (the sfnt structure, OpenType 1.9): a header and
@@ -264,7 +266,7 @@ const parser: FormatParser = {
             const rows = Math.ceil(shown / COLUMNS);
             const width = COLUMNS * CELL;
             const height = rows * CELL;
-            const rgba = new Uint8Array(width * height * 4).fill(255);
+            const rgba = pixelBuffer(width, height, 4).fill(255);
             const scale = (CELL - 10) / Math.max(1, ascender - descender);
             let failed = 0;
             for (let g = 0; g < shown; g++) {
@@ -284,8 +286,8 @@ const parser: FormatParser = {
                 }
                 // Centered across by the outline's extent; the baseline where the ascender puts it.
                 const xs = path.flatMap((c) => (c[0] === 'Z' ? [] : c.filter((_, k) => k % 2 === 1) as number[]));
-                const left = xs.length ? Math.min(...xs) : 0;
-                const right = xs.length ? Math.max(...xs) : 0;
+                const left = xs.length ? minOf(xs) : 0;
+                const right = xs.length ? maxOf(xs) : 0;
                 const raster = new Raster(CELL, CELL);
                 raster.fill(path, scale, CELL / 2 - ((left + right) / 2) * scale, 5 + ascender * scale);
                 const cover = raster.coverage();

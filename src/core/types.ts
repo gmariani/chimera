@@ -163,6 +163,12 @@ export interface Parsed {
     wanted?: string;
     /** The other files it used, and those it looked for but didn't find. */
     links?: Link[];
+    /**
+     * Where the format's own data stops, when the parser marks bytes past it
+     * in its fields (data after a GIF's trailer). Those bytes then get the
+     * same checks as any found after the last field.
+     */
+    end?: number;
     warnings: string[];
 }
 
@@ -199,6 +205,8 @@ export interface FormatDescriptor {
     sniff(data: Uint8Array): boolean;
     /** False when the extension is shared by other files too (.dat, .bin), so it only counts alongside a sniff. */
     byNameAlone?: boolean;
+    /** Other extensions its files go by, which don't by themselves suggest it (TD's sprites named for a theater: .tem, .sno). Only used to tell a misnamed file from one named the way the games name them. */
+    alsoNamed?: string[];
     /** The parser uses `find`, so its result can change when the user opens more files. */
     companions?: boolean;
     load(): Promise<FormatParser>;

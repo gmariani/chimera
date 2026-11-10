@@ -3,6 +3,7 @@ import type { AudioClip, Field, FormatParser, VideoFrame } from '../../core/type
 import { decodeIma, decodeWestwood, imaSample, wav } from './adpcm';
 import { lcw } from './compression';
 import { expandPalette } from './vga';
+import { append } from '../../core/math';
 
 /**
  * Westwood's VQA video: an IFF file of big-endian chunks. TD and RA use
@@ -379,7 +380,7 @@ const parser: FormatParser = {
                     frameChunks.push([...ahead, ...subs]);
                     ahead = [];
                 } else {
-                    ahead.push(...subs.filter((c) => !c.id.startsWith('VPT')));
+                    append(ahead, subs.filter((c) => !c.id.startsWith('VPT')));
                 }
             }
             if (listed.length < MAX_LISTED) listed.push({ name: id, offset: at, length: end - at, value: bytesLabel(size), note: CHUNKS[id], children });

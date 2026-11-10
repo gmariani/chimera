@@ -1,8 +1,9 @@
+import { pixelBuffer } from '../../core/limits';
 /** Isometric tiles store just the diamond; shared by the tile parser and the map renderer. */
 
 /** A diamond's pixels, from the bytes that store just the diamond, into a width × height rectangle (0 outside it). */
 export function unpackDiamond(src: Uint8Array, width: number, height: number): Uint8Array {
-    const out = new Uint8Array(width * height);
+    const out = pixelBuffer(width, height);
     let row = 4;
     let s = 0;
     for (let y = 0; y < height; y++) {

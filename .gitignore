@@ -13,3 +13,8 @@ npm-debug.log
 /dune2k
 /wasm/bink/build
 /SWF Samples
+
+# Fuzzer output
+/fuzz/build
+/fuzz/findings
+/fuzz/last-run.json

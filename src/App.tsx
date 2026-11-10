@@ -74,7 +74,7 @@ export function App() {
                                 </ol>
                             </nav>
                         )}
-                        <Inspector key={trail.length + current.name} file={current} root={trail.length === 1} near={trail.length > 1 ? trail.slice(0, -1).map((f) => f.name).join(' › ') : undefined} names={names} memory={memoryOf(current)} onShowFiles={() => setShowFiles(true)} onOpen={(file) => setTrail((t) => [...t, file])} onNames={updateNames} />
+                        <Inspector key={`${trail.length}${current.name}${current.as ?? ''}`} file={current} root={trail.length === 1} near={trail.length > 1 ? trail.slice(0, -1).map((f) => f.name).join(' › ') : undefined} names={names} memory={memoryOf(current)} onShowFiles={() => setShowFiles(true)} onOpen={(file) => setTrail((t) => [...t, file])} onOpenAs={(as) => setTrail((t) => [...t.slice(0, -1), { ...t[t.length - 1], as }])} onNames={updateNames} />
                     </main>
                 ) : (
                     <OpenPanel onOpen={(file) => setTrail([file])} />

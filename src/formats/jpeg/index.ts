@@ -2,6 +2,7 @@ import { bytesLabel, field, hex } from '../../core/bytes';
 import type { Entry, Field, FormatParser, Preview } from '../../core/types';
 import { decodable, decodeJpeg, isFrame, processOf, segmentsOf, ZIGZAG, type Segment } from './decode';
 import { exifSummary, readExif, type Tiff } from '../tiff/ifd';
+import { maxOf } from '../../core/math';
 
 /**
  * JPEG pictures (ITU T.81, with JFIF or EXIF around them). A string of
@@ -53,12 +54,12 @@ function ijgQuality(table: number[]): number | null {
     const mean = scales.reduce((a, b) => a + b, 0) / 64;
     // A table that isn't one scaled whole (a camera's own) has no IJG quality.
     const spread = scales.reduce((a, s) => a + Math.abs(s - mean), 0) / 64 / mean;
-    if (spread > 0.15 && Math.max(...table) > 1) return null;
+    if (spread > 0.15 && maxOf(table) > 1) return null;
     const quality = mean <= 100 ? (200 - mean) / 2 : 5000 / mean;
     return Math.max(1, Math.min(100, Math.round(quality)));
 }
 
-const ascii = (data: Uint8Array, at: number, length: number) => String.fromCharCode(...data.subarray(at, at + Math.max(0, length)));
+const ascii = (data: Uint8Array, at: number, length: number) => new TextDecoder('latin1').decode(data.subarray(at, at + Math.max(0, length)));
 
 const parser: FormatParser = {
     parse(data) {
@@ -206,6 +207,7 @@ const parser: FormatParser = {
         }
 
         if (segments.at(-1)?.marker !== 0xd9) warnings.push('The file ends before the end-of-image marker (FF D9).');
+        let formatEnd: number | undefined;
         if (end < data.length) {
             // Other pictures can follow the main one (a phone's depth map, MPF's preview), or just padding.
             const trailing = data.subarray(end);
@@ -219,6 +221,8 @@ const parser: FormatParser = {
                 embedded.push(field(`Picture ${entries.length + 1}`, end + at, picture.length, bytesLabel(picture.length), 'Another JPEG after the main one.'));
                 at += next.end - 1;
             }
+            // More pictures account for what's after the main one; anything else gets the usual checks.
+            if (!embedded.length) formatEnd = end;
             fields.push(embedded.length ? { name: 'After the picture', offset: end, length: trailing.length, children: embedded } : field('After the picture', end, trailing.length, bytesLabel(trailing.length), 'Not part of the JPEG.'));
         }
         if (!frame) warnings.push('There\'s no frame header (SOF), so no size or picture.');
@@ -256,6 +260,7 @@ const parser: FormatParser = {
             fields,
             entries: entries.length ? entries : undefined,
             preview,
+            end: formatEnd,
             warnings,
         };
     },

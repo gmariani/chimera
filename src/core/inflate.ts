@@ -1,3 +1,5 @@
+import { checkBytes, MAX_BYTES } from './limits';
+
 /**
  * Inflate (RFC 1951), for Deflate-compressed data: zlib streams (RFC 1950,
  * with their 2-byte header) or raw. Synchronous, unlike the browser's
@@ -31,12 +33,19 @@ function huffman(lengths: ArrayLike<number>): Huffman {
 const FIXED_LITERALS = huffman(Array.from({ length: 288 }, (_, i) => (i < 144 ? 8 : i < 256 ? 9 : i < 280 ? 7 : 8)));
 const FIXED_DISTANCES = huffman(new Array(30).fill(5));
 
-export function inflate(input: Uint8Array, expected = 0): Uint8Array {
+/**
+ * `expected` is how big the output should be (a header's say-so, to size the
+ * buffer once); `limit` is the most it may grow to before it's refused, since
+ * a small stream can claim, or inflate to, gigabytes.
+ */
+export function inflate(input: Uint8Array, expected = 0, limit = MAX_BYTES): Uint8Array {
     // A zlib header: CM 8 (deflate) and a check that makes the first two bytes a multiple of 31.
     let pos = (input[0] & 0x0f) === 8 && ((input[0] << 8) | input[1]) % 31 === 0 ? 2 : 0;
     let bitBuffer = 0;
     let bitCount = 0;
-    let out = new Uint8Array(Math.max(expected, input.length * 4, 1024));
+    // Deflate can't do better than about 1032 to 1, so a bigger claim is wrong; it's only a hint.
+    const hint = Math.min(expected, input.length * 1032 + 1024, limit);
+    let out = new Uint8Array(Math.max(hint, Math.min(input.length * 4, limit), 1024));
     let size = 0;
 
     const bits = (n: number): number => {
@@ -66,7 +75,8 @@ export function inflate(input: Uint8Array, expected = 0): Uint8Array {
     };
     const room = (n: number) => {
         if (size + n <= out.length) return;
-        const grown = new Uint8Array(Math.max(out.length * 2, size + n));
+        checkBytes(size + n, 'The uncompressed data', limit);
+        const grown = new Uint8Array(Math.min(Math.max(out.length * 2, size + n), limit));
         grown.set(out.subarray(0, size));
         out = grown;
     };

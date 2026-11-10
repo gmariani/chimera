@@ -1,3 +1,4 @@
+import { pixelBuffer } from '../../core/limits';
 /**
  * Fills outlines with antialiasing: each line adds the area it covers to an
  * accumulation buffer, and a running sum across it gives each pixel's
@@ -117,7 +118,7 @@ export class Raster {
 
     /** Each pixel's coverage, 0 to 255. */
     coverage(): Uint8Array {
-        const out = new Uint8Array(this.width * this.height);
+        const out = pixelBuffer(this.width, this.height);
         let sum = 0;
         for (let i = 0; i < out.length; i++) {
             sum += this.acc[i];
