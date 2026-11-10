@@ -46,6 +46,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | JPEG pictures (baseline, extended, progressive; JFIF, EXIF, XMP, ICC, Adobe and other APPn segments) | every segment to the T.81 parameters, EXIF tags | image | PNG, EXIF and JFIF thumbnails |
 | TIFF pictures (strips and tiles; none, PackBits, LZW, Deflate, JPEG, CCITT fax; bilevel to CMYK, YCbCr and L\*a\*b\*; DNG, NEF and CR2 previews) | header, every IFD and tag | every page | PNG, embedded JPEGs |
 | PNG pictures (every color type and depth, Adam7) | every chunk, text | image | PNG |
+| GIF pictures and animations (87a, 89a; interlaced, transparency, local color tables, every disposal) | header, screen, color tables, every extension and frame | image; animations play with their own timing | PNG frame, all frames |
 | MP3 and other MPEG audio | ID3 tags, frames | player | MP3 |
 | Ogg (Vorbis, Opus, FLAC; Speex and Theora described, not played) | every page, codec headers, tags | player | Ogg |
 | Flash movies (SWF, plain or zlib-compressed) | header and every tag by frame, to the SWF 19 fields | metadata | bitmaps (JPEG, PNG), sounds (MP3; PCM, ADPCM and Nellymoser as WAV), streamed sound, video as FLV, binary data, fonts, ABC bytecode, the uncompressed movie |

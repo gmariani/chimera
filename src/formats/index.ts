@@ -1,5 +1,6 @@
 import type { FormatDescriptor, FormatParser } from '../core/types';
 import { sniffChunkFile } from './chunks/sniff';
+import { sniffGif } from './gif/sniff';
 import { sniffJpeg } from './jpeg/sniff';
 import { sniffLoc, sniffMeg } from './meg/sniff';
 import { sniffMix, sniffXccDatabase } from './mix/sniff';
@@ -77,6 +78,7 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'fnt', name: 'Font', extensions: ['fnt'], sniff: sniffFont, load: parserOf(() => import('./westwood/font')) },
     { id: 'jpeg', name: 'Picture (JPEG)', extensions: ['jpg', 'jpeg', 'jpe', 'jfif'], sniff: sniffJpeg, load: parserOf(() => import('./jpeg')) },
     { id: 'tiff', name: 'Picture (TIFF)', extensions: ['tif', 'tiff', 'dng', 'nef', 'cr2', 'arw', 'orf', 'pef', 'rw2'], sniff: sniffTiff, load: parserOf(() => import('./tiff')) },
+    { id: 'gif', name: 'Picture (GIF)', extensions: ['gif'], sniff: sniffGif, load: parserOf(() => import('./gif')) },
     { id: 'png', name: 'Picture (PNG)', extensions: ['png', 'apng'], sniff: sniffPng, load: parserOf(() => import('./png')) },
     { id: 'swf', name: 'Flash movie (SWF)', extensions: ['swf'], sniff: sniffSwf, load: parserOf(() => import('./swf')) },
     { id: 'sfnt', name: 'Font (TrueType, OpenType)', extensions: ['ttf', 'otf', 'ttc', 'otc'], sniff: sniffSfnt, load: parserOf(() => import('./font')) },
