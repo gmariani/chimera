@@ -173,6 +173,101 @@ export function emcScript({ entries = [4, 4, 14, 4, 4], change }: { entries?: nu
     return bytes(text('FORM'), be32(8 + body.length), body);
 }
 
+/** A note for xmidiMusic: when it starts and how long it lasts, in the player's 120ths of a second, on which channel. */
+export interface XmidiNote {
+    time: number;
+    channel: number;
+    note: number;
+    velocity: number;
+    length: number;
+}
+
+/** The notes of xmidiMusic's two sequences: a phrase on channel 1 with a pause of 300 ticks, and a chord on channel 2. */
+export const XMIDI_NOTES: XmidiNote[][] = [
+    [
+        { time: 0, channel: 0, note: 60, velocity: 100, length: 60 },
+        { time: 60, channel: 0, note: 64, velocity: 90, length: 60 },
+        { time: 420, channel: 0, note: 67, velocity: 80, length: 240 },
+    ],
+    [
+        { time: 10, channel: 1, note: 48, velocity: 70, length: 120 },
+        { time: 10, channel: 1, note: 52, velocity: 70, length: 120 },
+        { time: 10, channel: 1, note: 55, velocity: 70, length: 200 },
+    ],
+];
+
+/** Where xmidiMusic's loop ends, in ticks: after the first sequence's last note (420 + 240). */
+export const LOOP_END = 700;
+
+/**
+ * XMIDI music as Miles's MIDIFORM wrote it: FORM XDIR with INFO (2 sequences, little-endian), then CAT XMID with a FORM
+ * XMID for each. The first has a TIMB chunk (one instrument, patch 5 of bank 1), a program change, a tempo event, and
+ * XMIDI_NOTES[0]; the second an RBRN chunk (branch 0 at its first note) and XMIDI_NOTES[1]. Times are interval bytes below
+ * 0x80, added up; each note-on carries its length; there are no note-offs. With `loop`, the first sequence's notes are
+ * wrapped in a FOR (controller 116, the count given) at time 0 and a NEXT (117, the value given) at LOOP_END; `loops` nests
+ * that many FORs (each count 1) around them.
+ */
+export function xmidiMusic({ loop, loops = 1 }: { loop?: [count: number, next: number]; loops?: number } = {}): Uint8Array {
+    const vlq = (v: number) => {
+        const out = [v & 0x7f];
+        for (v >>= 7; v > 0; v >>= 7) out.unshift((v & 0x7f) | 0x80);
+        return out;
+    };
+    const intervals = (ticks: number) => {
+        const out: number[] = [];
+        for (; ticks > 127; ticks -= 127) out.push(127);
+        if (ticks) out.push(ticks);
+        return out;
+    };
+    const chunk = (id: string, body: number[]) => [...text(id), ...be32(body.length), ...body, ...(body.length & 1 ? [0] : [])];
+    const events = (notes: XmidiNote[], before: number[], wrap?: [number, number]) => {
+        const out = [...before];
+        if (wrap) for (let k = 0; k < loops; k++) out.push(0xb0, 116, k === loops - 1 ? wrap[0] : 1);
+        let now = 0;
+        for (const n of notes) {
+            out.push(...intervals(n.time - now), 0x90 | n.channel, n.note, n.velocity, ...vlq(n.length));
+            now = n.time;
+        }
+        if (wrap) {
+            out.push(...intervals(LOOP_END - now));
+            now = LOOP_END;
+            for (let k = 0; k < loops; k++) out.push(0xb0, 117, k === 0 ? wrap[1] : 127);
+        }
+        return [...out, 0xff, 0x2f, 0x00];
+    };
+    const form0 = [
+        ...text('XMID'),
+        ...chunk('TIMB', [...u16(1), 5, 1]),
+        // Program 5 on channel 1, and a tempo event (which the player ignores) of 400,000 µs a beat.
+        ...chunk('EVNT', events(XMIDI_NOTES[0], [0xc0, 5, 0xff, 0x51, 0x03, 0x06, 0x1a, 0x80], loop)),
+    ];
+    const form1 = [...text('XMID'), ...chunk('RBRN', [...u16(1), ...u16(0), ...u32(1)]), ...chunk('EVNT', events(XMIDI_NOTES[1], []))];
+    const cat = [...text('XMID'), ...[form0, form1].flatMap((f) => [...text('FORM'), ...be32(f.length), ...f])];
+    return bytes(chunk('FORM', [...text('XDIR'), ...chunk('INFO', u16(2))]), text('CAT '), be32(cat.length), cat);
+}
+
+/**
+ * A standard MIDI file, format 1 at 480 ticks a beat: track 1 the tempo (500,000 µs a beat, then 250,000 from tick 480),
+ * track 2 named "Melody", program 40 on channel 1, a note from 0 to 480 and one from 960 to 1440, the second pair written
+ * with running status (and a velocity-0 note-on for its note-off), and a system-exclusive message.
+ */
+export function standardMidi(): Uint8Array {
+    const track = (events: number[]) => [...text('MTrk'), ...be32(events.length), ...events];
+    // A delay of 480 is 0x83 0x60 as a variable-length number.
+    const tempo = track([0x00, 0xff, 0x51, 0x03, 0x07, 0xa1, 0x20, 0x83, 0x60, 0xff, 0x51, 0x03, 0x03, 0xd0, 0x90, 0x00, 0xff, 0x2f, 0x00]);
+    const melody = track([
+        ...[0x00, 0xff, 0x03, 0x06, ...text('Melody')],
+        ...[0x00, 0xc0, 40],
+        ...[0x00, 0xf0, 0x03, 0x41, 0x10, 0xf7],
+        ...[0x00, 0x90, 60, 100],
+        ...[0x83, 0x60, 0x80, 60, 64],
+        ...[0x83, 0x60, 0x90, 64, 90],
+        ...[0x83, 0x60, 64, 0],
+        ...[0x00, 0xff, 0x2f, 0x00],
+    ]);
+    return bytes(text('MThd'), be32(6), [0, 1, 0, 2, 0x01, 0xe0], tempo, melody);
+}
+
 /**
  * A remap like Dune II's GRAYRMAP.TBL, for that palette: color 0 (see-through) and the grays stay as they are, and each
  * EGA color becomes the gray of its brightness.
@@ -707,6 +802,8 @@ export function samples(): Sample[] {
             data: iconFile([{ image: cursorDib(), width: 32, height: 32, colors: 2, planes: 0, bits: 0 }], 2),
         },
         { name: 'icons.icl', format: 'ne', about: 'Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon', data: iconLibrary() },
+        { name: 'music.mid', format: 'midi', about: 'Standard MIDI file, two tracks: a tempo change halfway, a named melody written with running status', data: standardMidi() },
+        { name: 'music.xmi', format: 'xmi', about: 'XMIDI music, two sequences: a phrase with an instrument from the bank, and a chord with a branch point', data: xmidiMusic() },
         { name: 'team.emc', format: 'emc', about: 'Dune II script for the computer’s teams, in the game’s own style: a subroutine, a loop, a call to it', data: emcScript() },
         { name: 'mentat.eng', format: 'mentat', about: 'Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does', data: mentat() },
         { name: 'music.adl', format: 'adl', about: 'Westwood AdLib music, as Dune II’s: a conductor starting two voices, one looping as Westwood’s tools do', data: adlMusic() },

@@ -1,6 +1,7 @@
 import { bytesLabel, field } from '../../core/bytes';
 import type { Field, FormatParser } from '../../core/types';
 import { ADL_REACH, adlLayout } from './adl-layout';
+import { DUNE2_MUSIC } from './dune2-music';
 
 /**
  * Westwood's AdLib music (.adl): the music and sound effects of Eye of the
@@ -122,31 +123,6 @@ const DRUMS = 65;
 const INSTRUMENT_SIZE = 11;
 /** The player's own offset for version 1's jumps (and 1 and 2's calls): they count from 191 bytes before the end of the track table. */
 const ABSOLUTE_BIAS = 191;
-
-/** The game's music, by file and track (OpenDUNE's g_table_musics, src/table/sound.c). */
-const DUNE2_MUSIC: Record<string, number[]> = {
-    DUNE0: [2, 3, 4, 5],
-    DUNE1: [2, 3, 4, 5, 6, 8],
-    DUNE2: [6],
-    DUNE3: [6],
-    DUNE4: [6],
-    DUNE5: [6],
-    DUNE6: [6],
-    DUNE7: [2, 3, 4, 6],
-    DUNE8: [2, 3],
-    DUNE9: [4, 5],
-    DUNE10: [7],
-    DUNE11: [7],
-    DUNE12: [7],
-    DUNE13: [7],
-    DUNE14: [7],
-    DUNE15: [7],
-    DUNE16: [7, 8],
-    DUNE17: [4],
-    DUNE18: [6],
-    DUNE19: [2, 3, 4],
-    DUNE20: [2],
-};
 
 const INSTRUMENT_BYTES: [string, string][] = [
     ['Modulator: tremolo, vibrato, sustain, key scaling, multiple', 'Chip register 0x20.'],

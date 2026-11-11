@@ -9,6 +9,7 @@ import { sniffIco } from './ico-sniff';
 import { sniffNe } from './ne-sniff';
 import { sniffPif } from './pif-sniff';
 import { sniffAil } from './ail-sniff';
+import { sniffMidi } from './midi/midi-sniff';
 import { sniffAdl } from './westwood/adl-layout';
 import { sniffVoc } from './voc-sniff';
 import { sniffTiff } from './tiff/sniff';
@@ -27,6 +28,7 @@ import {
     sniffIcnD2,
     sniffIconMap,
     sniffEmc,
+    sniffXmi,
     sniffDuneCfg,
     sniffDuneOptions,
     sniffMentat,
@@ -127,6 +129,8 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'vqp', name: 'Palette blending tables (VQP)', extensions: ['vqp'], sniff: sniffVqp, load: parserOf(() => import('./westwood/vqp')) },
     { id: 'chunks', name: 'Petroglyph chunk file', extensions: ['bui', 'cfx', 'bfd', 'gtl', 'gpd', 'cpd', 'sob', 'chunks'], sniff: sniffChunkFile, load: parserOf(() => import('./chunks')) },
     { id: 'xcc-names', name: 'File names (XCC)', extensions: ['dat'], sniff: sniffXccDatabase, byNameAlone: false, load: parserOf(() => import('./mix/database')) },
+    { id: 'midi', name: 'Music (MIDI)', extensions: ['mid', 'midi', 'smf'], sniff: sniffMidi, load: parserOf(() => import('./midi/midi')) },
+    { id: 'xmi', name: 'Music (XMIDI)', extensions: ['xmi', 'c55', 'pcs', 'tan'], sniff: sniffXmi, load: parserOf(() => import('./westwood/xmi')) },
     { id: 'emc', name: 'Script (Dune II EMC)', extensions: ['emc'], sniff: sniffEmc, load: parserOf(() => import('./westwood/emc')) },
     { id: 'mentat', name: 'Mentat encyclopedia (Dune II)', extensions: ['eng', 'fre', 'ger', 'ita', 'spa'], sniff: sniffMentat, load: parserOf(() => import('./westwood/mentat')) },
     { id: 'strings', name: 'String table', extensions: ['eng', 'ger', 'fre', 'ita', 'spa'], sniff: sniffStrings, load: parserOf(() => import('./westwood/strings')) },

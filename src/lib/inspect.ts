@@ -47,26 +47,57 @@ function useEngineGeneration(): number {
     return generation;
 }
 
+/** What a file was last read as, and what with: kept while the file is (in the trail of files opened), so going back to it shows it at once. */
+interface Kept {
+    names: readonly string[];
+    near?: string;
+    generation: number;
+    version: number;
+    inspection: UiInspection;
+}
+const kept = new WeakMap<OpenFile, Kept>();
+
+/** The kept reading of a file, if it was read with the same names, from the same place, in the same worker, and (if it uses other files) the same session. */
+function keptFor(file: OpenFile, names: readonly string[], near: string | undefined, generation: number, version: number): UiInspection | null {
+    const k = kept.get(file);
+    if (!k || k.names !== names || k.near !== near || k.generation !== generation) return null;
+    return k.inspection.companions && k.version !== version ? null : k.inspection;
+}
+
 /**
  * Reads the file in the parsing worker, with the checks every file gets.
  * Reads again when `names` changes, when the session's files do (if the
- * format uses them), and when the worker was restarted.
+ * format uses them), and when the worker was restarted. A file already read
+ * with all of those the same (coming back to it from a file inside it) isn't
+ * read again: its reading is kept while the file is.
  */
 export function useParsed(file: OpenFile, names: readonly string[], { version, near }: { version: number; near?: string }): ParseState {
-    const [state, setState] = useState<ParseState>(() => ({ status: 'loading', since: Date.now() }));
     const generation = useEngineGeneration();
+    const [state, setState] = useState<ParseState>(() => {
+        const inspection = keptFor(file, names, near, generation, version);
+        return inspection ? { status: 'ready', ...inspection } : { status: 'loading', since: Date.now() };
+    });
     // More files in the session only matter to a format that uses them: for the rest, the version the last read saw
     // stays the key, so a new file in the session doesn't read this one again.
-    const [read, setRead] = useState<{ file: OpenFile; version: number; companions: boolean }>({ file, version, companions: false });
+    const [read, setRead] = useState<{ file: OpenFile; version: number; companions: boolean }>(() => {
+        const k = kept.get(file);
+        return { file, version: k?.version ?? version, companions: k?.inspection.companions ?? false };
+    });
     const watched = read.file === file && !read.companions ? read.version : version;
 
     useEffect(() => {
+        const already = keptFor(file, names, near, generation, watched);
+        if (already) {
+            setState((s) => (s.status === 'ready' && s.parsed === already.parsed ? s : { status: 'ready', ...already }));
+            return;
+        }
         // Each read is dropped only by its own cleanup (the file or what it's read with changing, or the page going).
         let canceled = false;
         setState((s) => (s.status === 'ready' && read.file === file ? s : { status: 'loading', since: Date.now() }));
         engine.inspect(file.data, { name: file.knownName, shownName: file.name, as: file.as, near }).then(
             (inspection) => {
                 if (canceled) return;
+                kept.set(file, { names, near, generation, version: watched, inspection });
                 setRead({ file, version: watched, companions: inspection.companions });
                 setState({ status: 'ready', ...inspection });
             },

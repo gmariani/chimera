@@ -630,3 +630,11 @@ export function sniffEmc(data: Uint8Array): boolean {
     const b = new Bytes(data);
     return data.length > 20 && b.ascii(0, 4) === 'FORM' && b.ascii(8, 4) === 'EMC2';
 }
+
+/** XMIDI music: an IFF "FORM" of type "XDIR" or "XMID", or a "CAT " of type "XMID". */
+export function sniffXmi(data: Uint8Array): boolean {
+    const b = new Bytes(data);
+    const id = b.ascii(0, 4);
+    const type = b.ascii(8, 4);
+    return data.length > 20 && ((id === 'FORM' && (type === 'XDIR' || type === 'XMID')) || (id === 'CAT ' && type === 'XMID'));
+}

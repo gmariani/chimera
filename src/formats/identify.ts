@@ -95,6 +95,7 @@ export function signature(data: Uint8Array): Signature | null {
     if (ascii(data, 0, 'II*\0') || ascii(data, 0, 'MM\0*')) return { name: 'TIFF picture', ext: 'tif', format: 'tiff', length: 4 };
     if (ascii(data, 0, 'FWS') || ascii(data, 0, 'CWS') || ascii(data, 0, 'ZWS')) return { name: 'Flash movie', ext: 'swf', format: 'swf', length: 3 };
     if (ascii(data, 0, 'OggS')) return { name: 'Ogg', ext: 'ogg', format: 'ogg', length: 4 };
+    if (ascii(data, 0, 'MThd') && data[7] >= 6) return { name: 'MIDI music', ext: 'mid', format: 'midi', length: 8 };
     if (ascii(data, 0, 'RIFF') && ascii(data, 8, 'WAVE')) return { name: 'WAV sound', ext: 'wav', format: 'wav', length: 12 };
     if (ascii(data, 0, 'Creative Voice')) return { name: 'Creative Voice sound', ext: 'voc', format: 'voc', length: ascii(data, 14, ' File\x1a') ? 20 : 14 };
     if (ascii(data, 0, 'ID3')) return { name: 'MP3 sound', ext: 'mp3', format: 'mp3', length: 3 };
