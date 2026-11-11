@@ -20,7 +20,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Westwood PAK archives (versions 1–3: Eye of the Beholder, Dune II, the Legend of Kyrandia, Lands of Lore) | header, every entry and end marker; duplicates and hidden data called out | — | single files, all as ZIP |
 | Petroglyph MEG archives (versions 1–3: Empire at War, the C&C Remastered Collection's music, sound, textures and config) | header, names, records | — | single files, all as ZIP |
 | SHP sprites (TD/RA, TS/RA2, Dune II, and TD/RA's Dune II-style cursors) | headers, frame table | all frames, animation, any palette | PNG frame, sheet, all frames |
-| AUD audio (IMA and Westwood ADPCM) | headers, chunks | player | WAV |
+| AUD audio (plain PCM, IMA and Westwood ADPCM) | header, every chunk; sizes that don't add up and hidden data called out | player | WAV |
 | CPS and PCX pictures (256-color and 24-bit) | headers | image | PNG |
 | WSA animations (C&C and Kyrandia; Dune II 1.00 and 1.07) | header, frame offsets, palette, every frame; buffer overruns and broken loops called out | all frames, animation | PNG frame, sheet, all frames |
 | Terrain tile sets (.tem, .des, .win, .sno, .int, .icn) | header, tiles, cell map | the template assembled, each tile | PNG |

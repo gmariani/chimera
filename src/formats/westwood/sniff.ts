@@ -104,7 +104,9 @@ export function sniffAud(data: Uint8Array): boolean {
     const b = new Bytes(data);
     const rate = b.u16(0);
     const compression = b.u8(11);
-    return data.length > 20 && rate >= 4000 && rate <= 48000 && b.u8(10) <= 3 && (compression === 1 || compression === 99) && b.u32(16) === 0xdeaf;
+    // Compression 0, plain PCM, stores each chunk as it plays: the first chunk's two sizes match.
+    const plain = compression === 0 && b.u16(12) === b.u16(14) && b.u16(12) > 0;
+    return data.length > 20 && rate >= 4000 && rate <= 48000 && b.u8(10) <= 3 && (compression === 1 || compression === 99 || plain) && b.u32(16) === 0xdeaf;
 }
 
 /** 320x200 pictures, LCW-compressed, optionally with a palette. */
