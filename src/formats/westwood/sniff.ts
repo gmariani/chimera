@@ -109,11 +109,28 @@ export function sniffAud(data: Uint8Array): boolean {
     return data.length > 20 && rate >= 4000 && rate <= 48000 && b.u8(10) <= 3 && (compression === 1 || compression === 99 || plain) && b.u32(16) === 0xdeaf;
 }
 
-/** 320x200 pictures, LCW-compressed, optionally with a palette. */
-export function sniffCps(data: Uint8Array): boolean {
+/**
+ * 320 × 200 pictures: a 10-byte header (the file size, compression 0 to 4, the
+ * decoded size, the palette size), the palette, then the picture. The decoded
+ * size says which machine: 64,000 bytes on the PC (with a 768-byte palette or
+ * none), 40,000 or 40,064 on the Amiga (five bit planes, 64-byte palettes).
+ */
+export function cpsKind(data: Uint8Array): 'pc' | 'amiga' | null {
+    if (data.length <= 10) return null;
     const b = new Bytes(data);
+    const compression = b.u16(2);
+    const decoded = b.u32(4);
     const paletteSize = b.u16(8);
-    return data.length > 10 && b.u16(0) + 2 === data.length && (b.u16(2) === 0 || b.u16(2) === 4) && b.u32(4) === 64000 && (paletteSize === 0 || paletteSize === 768);
+    // The size doesn't count itself (types 0 and 4, the ones checked; the older types aren't known to differ, but might).
+    const sized = b.u16(0) + 2 === data.length || (compression >= 1 && compression <= 3 && b.u16(0) === data.length);
+    if (!sized || compression > 4 || 10 + paletteSize > data.length) return null;
+    if (decoded === 64000 && (paletteSize === 0 || paletteSize === 768)) return 'pc';
+    if ((decoded === 40000 || decoded === 40064) && paletteSize % 64 === 0 && paletteSize <= 256) return 'amiga';
+    return null;
+}
+
+export function sniffCps(data: Uint8Array): boolean {
+    return cpsKind(data) !== null;
 }
 
 /** Video: an IFF "FORM" of type "WVQA". */

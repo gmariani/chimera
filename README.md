@@ -21,7 +21,8 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Petroglyph MEG archives (versions 1–3: Empire at War, the C&C Remastered Collection's music, sound, textures and config) | header, names, records | — | single files, all as ZIP |
 | SHP sprites (TD/RA, TS/RA2, Dune II, and TD/RA's Dune II-style cursors) | headers, frame table | all frames, animation, any palette | PNG frame, sheet, all frames |
 | AUD audio (plain PCM, IMA and Westwood ADPCM) | header, every chunk; sizes that don't add up and hidden data called out | player | WAV |
-| CPS and PCX pictures (256-color and 24-bit) | headers | image | PNG |
+| CPS pictures (PC and Amiga; uncompressed, LZW 12- and 14-bit, RLE, LCW) | header, palettes; damaged compressed data and hidden data called out | image (each palette, on the Amiga) | PNG |
+| PCX pictures (256-color and 24-bit) | headers | image | PNG |
 | WSA animations (C&C and Kyrandia; Dune II 1.00 and 1.07) | header, frame offsets, palette, every frame; buffer overruns and broken loops called out | all frames, animation | PNG frame, sheet, all frames |
 | Terrain tile sets (.tem, .des, .win, .sno, .int, .icn) | header, tiles, cell map | the template assembled, each tile | PNG |
 | VQA video (TD/RA version 2; TS's high-color version 3) | chunk map, VQHD | player with sound | PNG frame, all frames, WAV |
