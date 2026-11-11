@@ -270,15 +270,15 @@ const OFFER_STOP = 3;
 
 /** The spinner while a file is read, and after a few seconds a way to stop it (a file made to hang the parser would otherwise wait out the watchdog). */
 function Reading({ size, since }: { size: number; since: number }) {
-    const [, setNow] = useState(0);
+    const [now, setNow] = useState(() => Date.now());
     useEffect(() => {
         const timer = setInterval(() => setNow(Date.now()), 500);
         return () => clearInterval(timer);
     }, []);
-    const seconds = Math.floor((Date.now() - since) / 1000);
+    const seconds = Math.floor((now - since) / 1000);
     return (
         <div className='section-loading justify-content-center flex-wrap gap-2' aria-busy='true'>
-            <Spinner animation='border' size='sm' role='status' /> <span>Reading {formatSize(size)}…</span>
+            <Spinner animation='border' size='sm' aria-hidden='true' /> <output>Reading {formatSize(size)}…</output>
             {seconds >= OFFER_STOP && (
                 <>
                     <span className='text-body-secondary small'>{seconds} s</span>

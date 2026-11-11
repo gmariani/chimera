@@ -18,6 +18,8 @@ export interface Signature {
     length: number;
     /** Programs, scripts and other things that run. */
     runs?: boolean;
+    /** A program's container with no code in it (a 16-bit Windows module holding only icons or fonts): nothing to run, but it isn't what another name says either. */
+    codeless?: boolean;
 }
 
 /** What DOS and Windows programs and libraries are named. */
@@ -28,12 +30,43 @@ export function namedAs(sig: Signature, ext: string | null): boolean {
     return ext !== null && (sig.exts ?? [sig.ext]).includes(ext);
 }
 
+/** The resource types a 16-bit Windows module names, for saying what one holds. */
+const NE_RESOURCES: Record<number, string> = { 0x8001: 'cursors', 0x8002: 'bitmaps', 0x8003: 'icons', 0x8004: 'menus', 0x8005: 'dialogs', 0x8006: 'strings', 0x8008: 'fonts', 0x8009: 'shortcut keys' };
+
+/**
+ * A 16-bit Windows (or OS/2) module: "NE" where the MZ header points. One with
+ * no code segments and no entry points can't run: it only holds resources,
+ * as icon libraries (.icl) and Windows' bitmap fonts (.fon) do.
+ */
+function newExecutable(data: Uint8Array, ne: number): Signature | null {
+    if (ne < 64 || ne + 64 > data.length || !(data[ne] === 0x4e && data[ne + 1] === 0x45)) return null;
+    const os = data[ne + 0x36] === 1 ? 'OS/2' : 'Windows';
+    const segments = u16le(data, ne + 0x1c);
+    const entries = u16le(data, ne + 0x06);
+    if (segments || entries) return { name: `16-bit ${os} program or library (NE)`, ext: 'exe', exts: PROGRAMS, length: 2, runs: true };
+    // What it holds, from its resource table: a shift, then for each type an ID, a count and a word, then that many 12-byte entries.
+    const held = new Set<string>();
+    let at = ne + u16le(data, ne + 0x24) + 2;
+    for (let guard = 0; guard < 64 && at + 8 <= data.length; guard++) {
+        const type = u16le(data, at);
+        if (type === 0) break;
+        const name = NE_RESOURCES[type & 0xffff];
+        if (name) held.add(name);
+        at += 8 + u16le(data, at + 2) * 12;
+    }
+    const kinds = [...held].filter((k) => k !== 'shortcut keys');
+    const what = kinds.length ? kinds.join(' and ') : 'resources';
+    const ext = held.has('fonts') ? 'fon' : held.has('icons') ? 'icl' : 'dll';
+    return { name: `16-bit ${os} module with no code (NE), holding ${what}`, ext, exts: ['icl', 'fon', 'dll', 'exe'], length: 2, codeless: true };
+}
+
 const ascii = (data: Uint8Array, at: number, text: string) => {
     if (at + text.length > data.length) return false;
     for (let i = 0; i < text.length; i++) if (data[at + i] !== text.charCodeAt(i)) return false;
     return true;
 };
 const bytes = (data: Uint8Array, at: number, values: number[]) => at + values.length <= data.length && values.every((v, i) => data[at + i] === v);
+const u16le = (data: Uint8Array, at: number) => (at + 2 <= data.length ? data[at] | (data[at + 1] << 8) : 0);
 const u32le = (data: Uint8Array, at: number) => (data[at] | (data[at + 1] << 8) | (data[at + 2] << 16) | (data[at + 3] << 24)) >>> 0;
 
 /** Text-based signatures may follow a byte order mark and blank space. */
@@ -77,6 +110,10 @@ export function signature(data: Uint8Array): Signature | null {
             const bits = machine === 0x8664 || machine === 0xaa64 ? '64-bit' : machine === 0x14c ? '32-bit' : `machine ${machine.toString(16).toUpperCase()}`;
             return { name: `Windows ${dll ? 'library (DLL' : 'program (PE'}, ${bits})`, ext: dll ? 'dll' : 'exe', exts: PROGRAMS, length: 2, runs: true };
         }
+        const ne = newExecutable(data, pe);
+        if (ne) return ne;
+        if (pe + 4 <= data.length && (ascii(data, pe, 'LE') || ascii(data, pe, 'LX')))
+            return { name: `${ascii(data, pe, 'LE') ? 'Windows driver or OS/2' : 'OS/2'} program (${ascii(data, pe, 'LE') ? 'LE' : 'LX'})`, ext: 'exe', exts: PROGRAMS, length: 2, runs: true };
         return { name: 'DOS or Windows program (MZ)', ext: 'exe', exts: PROGRAMS, length: 2, runs: true };
     }
     if (bytes(data, 0, [0x7f, 0x45, 0x4c, 0x46])) return { name: 'Linux or Unix program (ELF)', ext: 'elf', length: 4, runs: true };

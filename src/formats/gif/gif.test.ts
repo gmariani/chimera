@@ -11,7 +11,10 @@ function concat(...parts: (Uint8Array | number[])[]): Uint8Array {
     const arrays = parts.map((p) => (p instanceof Uint8Array ? p : Uint8Array.from(p)));
     const out = new Uint8Array(arrays.reduce((n, p) => n + p.length, 0));
     let at = 0;
-    for (const p of arrays) (out.set(p, at), (at += p.length));
+    for (const p of arrays) {
+        out.set(p, at);
+        at += p.length;
+    }
     return out;
 }
 
@@ -27,9 +30,16 @@ function encode(pixels: number[], minCodeSize: number): Uint8Array {
     const put = (code: number) => {
         buffer |= code << bits;
         bits += size;
-        while (bits >= 8) (out.push(buffer & 0xff), (buffer >>>= 8), (bits -= 8));
+        while (bits >= 8) {
+            out.push(buffer & 0xff);
+            buffer >>>= 8;
+            bits -= 8;
+        }
     };
-    for (const p of pixels) (put(clear), put(p));
+    for (const p of pixels) {
+        put(clear);
+        put(p);
+    }
     put(clear + 1);
     if (bits) out.push(buffer & 0xff);
     return Uint8Array.from(out);
@@ -108,7 +118,11 @@ describe('GIF', () => {
         for (const c of codes) {
             buffer |= c << bits;
             bits += 3;
-            while (bits >= 8) (bytes.push(buffer & 0xff), (buffer >>>= 8), (bits -= 8));
+            while (bits >= 8) {
+                bytes.push(buffer & 0xff);
+                buffer >>>= 8;
+                bits -= 8;
+            }
         }
         if (bits) bytes.push(buffer);
         const out = new Uint8Array(5);

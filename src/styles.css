@@ -700,6 +700,10 @@ html {
 
 /* The drop target: a dashed frame with corner marks, like a region marked out on a drawing. */
 .drop-target {
+    /* A button: as wide as its column, in the page's own type. */
+    display: block;
+    width: 100%;
+    font: inherit;
     position: relative;
     padding: 3rem 1rem;
     border: 1px dashed var(--bp-rule-strong);
@@ -741,6 +745,7 @@ html {
 }
 
 .format-chip {
+    display: block;
     padding: 0.2rem 0.6rem;
     border: 1px solid var(--bp-rule);
     background: rgba(var(--bp-ink-rgb), 0.7);
@@ -751,6 +756,15 @@ html {
 
 /* The formats glide slowly past, fading out at the edges; hovering or focusing holds them still. */
 .format-carousel {
+    /* A button, drawn as nothing but the strip. */
+    display: block;
+    width: calc(100% - 5rem);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: inherit;
     margin: 1.25rem 2.5rem;
     overflow: hidden;
     cursor: pointer;
@@ -1002,6 +1016,11 @@ html {
     border-radius: var(--bs-border-radius);
     background: var(--bd-pre-bg);
     font-size: 0.875rem;
+}
+
+.structure-tree:focus-visible {
+    outline: 1px solid var(--bp-accent);
+    outline-offset: -1px;
 }
 
 .tree-row {

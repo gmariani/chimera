@@ -13,5 +13,7 @@ export function download(content: Uint8Array | Blob, name: string, type = 'appli
 
 /** Strips characters that aren't allowed in file names on Windows or macOS. */
 export function safeName(name: string): string {
+    // Control characters are exactly what's meant here: Windows refuses them in file names.
+    // oxlint-disable-next-line no-control-regex
     return name.replace(/[\\/:*?"<>|\x00-\x1f]/g, '_') || 'file';
 }

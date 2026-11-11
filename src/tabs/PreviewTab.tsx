@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { Button, ButtonGroup, Form, Spinner } from 'react-bootstrap';
 import type { AudioClip, IndexedImage, VideoFrame } from '../core/types';
 import { engine, type UiPreview } from '../engine';
@@ -469,17 +469,18 @@ function PalettePreview({ colors, fileName }: { colors: Uint8Array; fileName: st
 
 /** A blob URL for a WAV, made and revoked by the same effect, so it lives exactly as long as it's shown (seeking re-reads it). */
 function useWavUrl(wav: Uint8Array | undefined, mime = 'audio/wav'): string | undefined {
-    const [url, setUrl] = useState<string>();
+    // The URL is something outside React (the browser's blob store), so an effect makes and revokes it. Made during render
+    // instead, StrictMode's second mount would be left holding a URL already revoked.
+    const [made, setMade] = useState<{ wav: Uint8Array; url: string }>();
     useEffect(() => {
-        if (!wav) {
-            setUrl(undefined);
-            return;
-        }
-        const made = URL.createObjectURL(new Blob([wav as Uint8Array<ArrayBuffer>], { type: mime }));
-        setUrl(made);
-        return () => URL.revokeObjectURL(made);
+        if (!wav) return;
+        const url = URL.createObjectURL(new Blob([wav as Uint8Array<ArrayBuffer>], { type: mime }));
+        // oxlint-disable-next-line react/set-state-in-effect -- handing over what the effect made, as above
+        setMade({ wav, url });
+        return () => URL.revokeObjectURL(url);
     }, [wav, mime]);
-    return url;
+    // Only the URL for this sound: never one left from the sound before, or from none.
+    return made && made.wav === wav ? made.url : undefined;
 }
 
 const channelsLabel = (channels: number) => (channels === 1 ? 'mono' : channels === 2 ? 'stereo' : `${channels} channels`);
@@ -493,6 +494,8 @@ function AudioPreview({ clip, fileName }: { clip: AudioClip; fileName: string })
     const extension = (clip.mime && CLIP_EXTENSIONS[clip.mime]) || 'wav';
     return (
         <div className='d-flex flex-wrap gap-3 align-items-center'>
+            {/* A game's sound has no captions to offer: there's no track to give it. */}
+            {/* oxlint-disable-next-line jsx-a11y/media-has-caption */}
             <audio controls src={url} className='audio-player' />
             <Button variant='outline-light' onClick={() => download(clip.wav, `${safeName(stem(fileName))}.${extension}`, clip.mime ?? 'audio/wav')}>
                 <i className='bi bi-file-earmark-music me-1' /> Save as {extension.toUpperCase()}
@@ -548,6 +551,8 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
         draw();
     });
 
+    // Where play starts: the frame on screen when it's pressed, read without making every frame restart the clock.
+    const startFrame = useEffectEvent(() => frame);
     useEffect(() => {
         if (!playing) return;
         const el = sound.current;
@@ -555,7 +560,7 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
             if (el.currentTime >= el.duration - 0.05) el.currentTime = 0;
             void el.play();
         }
-        const start = performance.now() - (frame / fps) * 1000;
+        const start = performance.now() - (startFrame() / fps) * 1000;
         let request = 0;
         const tick = () => {
             const seconds = el ? el.currentTime : (performance.now() - start) / 1000;
@@ -573,8 +578,7 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
             cancelAnimationFrame(request);
             el?.pause();
         };
-        // Restart the clock only when play is pressed, not on every frame.
-    }, [playing]);
+    }, [playing, fps, frameCount]);
 
     const seek = (index: number) => {
         setFrame(index);
@@ -623,6 +627,8 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
                         {frame + 1} / {frameCount}
                     </span>
                 </div>
+                {/* The movie's own sound, played along with it; there are no captions to give it. */}
+                {/* oxlint-disable-next-line jsx-a11y/media-has-caption */}
                 {url && <audio ref={sound} src={url} preload='auto' />}
                 {error && <p className='small text-danger'>{error}</p>}
 

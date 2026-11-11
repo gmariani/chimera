@@ -1,5 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Parsed } from '../../core/types';
 import { detect } from '../index';
@@ -8,6 +7,7 @@ import cmp from './cmp';
 import cps from './cps';
 import { lzw, rle } from './encoders.test-util';
 import pak from './pak';
+import { gameFile } from '../../testing/game-data';
 
 const u16 = (v: number) => [v & 0xff, v >> 8];
 const u32 = (v: number) => [...u16(v & 0xffff), ...u16(v >>> 16)];
@@ -112,8 +112,8 @@ describe("Lands of Lore's .cmp: CPS-style packed files", () => {
     });
 
     // A real Dune II sprite, packed as Lands of Lore packs its own.
-    const DUNE = join(__dirname, '../../../samples/westwood/Dune II/DUNE.PAK');
-    it.skipIf(!existsSync(DUNE))('finds a Dune II sprite inside', () => {
+    const DUNE = gameFile('dune2', 'DUNE.PAK') ?? '';
+    it.skipIf(!DUNE)('finds a Dune II sprite inside', () => {
         const shp = pak.parse(new Uint8Array(readFileSync(DUNE)), { name: 'DUNE.PAK', names: [] }).entries!.find((e) => /\.shp$/i.test(e.label))!;
         const data = packedCps(1, shp.data, lzw(shp.data, 12));
         const r = cps.parse(data, { name: 'GOBLIN.CMP', names: [] });

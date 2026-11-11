@@ -104,7 +104,11 @@ describe('a palette picture', () => {
             view.setUint16(at + 2, type, true);
             view.setUint32(at + 4, v.length, true);
             let to = at + 8;
-            if (v.length * size > 4) (view.setUint32(at + 8, arrayAt, true), (to = arrayAt), (arrayAt += v.length * size));
+            if (v.length * size > 4) {
+                view.setUint32(at + 8, arrayAt, true);
+                to = arrayAt;
+                arrayAt += v.length * size;
+            }
             v.forEach((n, k) => (size === 2 ? view.setUint16(to + k * 2, n, true) : view.setUint32(to + k * 4, n, true)));
         });
         out.set(data, dataAt);

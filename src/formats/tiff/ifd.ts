@@ -515,7 +515,7 @@ export function readTiff(data: Uint8Array, base: number, end: number, mode: 'exi
                     numbers.push(number(type, at));
                     shown.push(type === 5 || type === 10 ? rational(type, at) : String(+number(type, at).toPrecision(7)));
                 }
-                if (type === 5 || type === 10) rationals.has(tag) || rationals.set(tag, numbers);
+                if ((type === 5 || type === 10) && !rationals.has(tag)) rationals.set(tag, numbers);
                 remember(tag, numbers[0]);
                 const meaning = n === 1 ? (tag === 'Flash' ? flash(numbers[0]) : MEANINGS[tag]?.[numbers[0]]) : undefined;
                 value = meaning ? `${shown[0]} (${meaning})` : shown.join(', ') + (n > MAX_VALUES ? `, … (${n} in all)` : '');

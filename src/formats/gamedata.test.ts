@@ -6,15 +6,19 @@ import { detect } from './index';
 import { parseMix } from './mix';
 import { namesFromText } from './mix/names';
 import { sniffText } from './westwood/sniff';
+import { gameDir } from '../testing/game-data';
 
 /**
  * Every MIX under a game install, every archive inside those, and every file
  * inside them run through its parser. Opt-in, since the files aren't ours to commit:
+ *   npm run test:game-data   (the installed games, as npm run test:setup found or was told them)
  *   CHIMERA_GAME_DATA=/path/to/CNCDATA npx vitest run src/formats/gamedata.test.ts
  * Several installs can be given, separated by ":" (";" on Windows). As in the
  * app, names are also learned from the INIs in each install's archives.
  */
-const roots = process.env.CHIMERA_GAME_DATA?.split(delimiter).filter(Boolean) ?? [];
+// "installed" means the games the other tests find (npm run test:setup); anything else is the folders to read.
+const told = process.env.CHIMERA_GAME_DATA;
+const roots = told === 'installed' ? (['cncRemastered', 'tiberianSun', 'redAlert2'] as const).map(gameDir).filter((d): d is string => d !== null) : (told?.split(delimiter).filter(Boolean) ?? []);
 
 function mixFiles(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {

@@ -168,6 +168,10 @@ export async function inspect(data: Uint8Array, context: ParseContext, { as, sho
         if (format === RAW && sig?.runs && ext && !namedAs(sig, ext) && nameHolds) {
             checks.push({ level: BACKUPS.includes(ext) ? 'warning' : 'danger', text: `It's ${a(sig.name)}, named .${ext}.` });
         }
+        // A program's container with no code, under another name: it can't run, but it isn't what the name says (Dune II's DUNE2.ICO).
+        if (format === RAW && sig?.codeless && ext && !namedAs(sig, ext) && !BACKUPS.includes(ext)) {
+            checks.push({ level: 'warning', text: `It's named .${ext}, but it's ${a(sig.name)}: laid out like a program, but with nothing in it to run.` });
+        }
         for (const f of readsAlso)
             checks.push({ level: 'info', text: `It also reads as ${f.name}, as its ${f === signed ? 'first bytes suggest' : 'name suggests'}; use Open as to see it that way.` });
         // A document or page that's text underneath, shown as text.
@@ -192,7 +196,7 @@ export async function inspect(data: Uint8Array, context: ParseContext, { as, sho
             title = sig.name;
             extraSummary.push(['Signature', `${sig.name}, ${quoted(data, sig.length)}`]);
             // Unless it's already been said, as a program under another name.
-            if (!sig.format && !(sig.runs && ext && !namedAs(sig, ext)))
+            if (!sig.format && !((sig.runs || sig.codeless) && ext && !namedAs(sig, ext)))
                 checks.push({ level: sig.runs && !ext ? 'warning' : 'info', text: `This is ${a(sig.name)}; there's no parser for it here, so it's shown as bytes.` });
         }
         const bits = entropy(data);

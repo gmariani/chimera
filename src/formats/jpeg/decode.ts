@@ -106,7 +106,10 @@ class BitReader {
                 if (b === 0xff) {
                     const next = this.data[this.pos + 1];
                     if (next === 0) this.pos += 2;
-                    else ((this.atMarker = true), (b = 0));
+                    else {
+                        this.atMarker = true;
+                        b = 0;
+                    }
                 } else this.pos++;
             }
             this.acc = ((this.acc << 8) | b) >>> 0;

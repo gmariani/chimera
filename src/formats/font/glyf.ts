@@ -27,9 +27,20 @@ export function trueTypeGlyph(data: Uint8Array, glyf: number, loca: number[], in
             at += words ? 4 : 2;
             let [a, b, c, d] = [1, 0, 0, 1];
             const f2dot14 = (o: number) => view.getInt16(o) / 16384;
-            if (flags & 0x08) ((a = d = f2dot14(at)), (at += 2));
-            else if (flags & 0x40) ((a = f2dot14(at)), (d = f2dot14(at + 2)), (at += 4));
-            else if (flags & 0x80) ((a = f2dot14(at)), (b = f2dot14(at + 2)), (c = f2dot14(at + 4)), (d = f2dot14(at + 6)), (at += 8));
+            if (flags & 0x08) {
+                a = d = f2dot14(at);
+                at += 2;
+            } else if (flags & 0x40) {
+                a = f2dot14(at);
+                d = f2dot14(at + 2);
+                at += 4;
+            } else if (flags & 0x80) {
+                a = f2dot14(at);
+                b = f2dot14(at + 2);
+                c = f2dot14(at + 4);
+                d = f2dot14(at + 6);
+                at += 8;
+            }
             // Offsets as point numbers (bit 1 clear) are rare; they're taken as no offset.
             const [ox, oy] = flags & 0x02 ? [dx, dy] : [0, 0];
             const map = (x: number, y: number): [number, number] => [x * a + y * c + ox, x * b + y * d + oy];
@@ -60,7 +71,10 @@ export function trueTypeGlyph(data: Uint8Array, glyf: number, loca: number[], in
         for (let i = 0; i < count; i++) {
             const f = flags[i];
             if (f & short) v += f & same ? data[at++] : -data[at++];
-            else if (!(f & same)) ((v += view.getInt16(at)), (at += 2));
+            else if (!(f & same)) {
+                v += view.getInt16(at);
+                at += 2;
+            }
             out[i] = v;
         }
         return out;

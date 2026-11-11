@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { IndexedImage, Parsed, Preview } from '../../core/types';
@@ -8,6 +8,7 @@ import { type DecodeInfo, westwoodLzw, westwoodRle } from './compression';
 import cps from './cps';
 import { lzw, rle } from './encoders.test-util';
 import pak from './pak';
+import { gameDir } from '../../testing/game-data';
 
 const u16 = (v: number) => [v & 0xff, v >> 8];
 const u32 = (v: number) => [...u16(v & 0xffff), ...u16(v >>> 16)];
@@ -123,9 +124,9 @@ describe('CPS', () => {
     });
 });
 
-// Dune II's pictures, inside its PAKs, if present (they aren't committed).
-const DUNE = join(__dirname, '../../../samples/westwood/Dune II');
-describe.skipIf(!existsSync(DUNE))("Dune II's CPS pictures", () => {
+// Dune II's own files, from wherever it's installed (npm run test:setup); they aren't ours to commit.
+const DUNE = gameDir('dune2') ?? '';
+describe.skipIf(!DUNE)("Dune II's CPS pictures", () => {
     it('reads all 20 with nothing to warn about', () => {
         let count = 0;
         for (const name of readdirSync(DUNE).filter((n) => /\.pak$/i.test(n))) {

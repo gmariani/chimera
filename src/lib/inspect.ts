@@ -72,6 +72,8 @@ export function useParsed(file: OpenFile, names: readonly string[], { version, n
             },
             (e: unknown) => {
                 if (canceled) return;
+                // The page shows the message; the stack, the one clue to where a reader broke, goes to the developer console.
+                // oxlint-disable-next-line no-console
                 if (!(e instanceof Stopped)) console.error(e);
                 setState({ status: 'ready', ...stoppedInspection(file.data, e instanceof Error ? e.message : String(e)) });
             }

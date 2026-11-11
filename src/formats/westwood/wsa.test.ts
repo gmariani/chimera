@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Parsed } from '../../core/types';
@@ -6,6 +6,7 @@ import { detect } from '../index';
 import pak from './pak';
 import { WSA_HEADERS, wsaLayout, type WsaVersion } from './sniff';
 import wsa from './wsa';
+import { gameDir } from '../../testing/game-data';
 
 // A 2 × 1 animation: frame 1 is 3, 4; frame 2 XORs that with 1, 1 (so 2, 5); the loop frame XORs it back with 1, 1.
 const lcwOf = (delta: number[]) => [0x80 | delta.length, ...delta, 0x80];
@@ -87,9 +88,9 @@ describe('WSA', () => {
     });
 });
 
-// Dune II's animations, inside its PAKs, if present (they aren't committed).
-const DUNE = join(__dirname, '../../../samples/westwood/Dune II');
-describe.skipIf(!existsSync(DUNE))("Dune II's WSAs", () => {
+// Dune II's own files, from wherever it's installed (npm run test:setup); they aren't ours to commit.
+const DUNE = gameDir('dune2') ?? '';
+describe.skipIf(!DUNE)("Dune II's WSAs", () => {
     it('reads all 75, as version 1.00, with nothing to warn about but one bad loop', () => {
         let count = 0;
         // As shipped: FREMEN.WSA's loop frame is its first frame again.

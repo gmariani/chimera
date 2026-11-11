@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { AudioClip, Parsed } from '../core/types';
@@ -6,6 +6,7 @@ import { detect } from './index';
 import { inspect } from './inspect';
 import voc from './voc';
 import pak from './westwood/pak';
+import { gameDir } from '../testing/game-data';
 
 const enc = new TextEncoder();
 
@@ -95,9 +96,9 @@ describe('Creative Voice (VOC)', () => {
     });
 });
 
-// Dune II's sounds, inside its PAKs, if present (they aren't committed).
-const DUNE = join(__dirname, '../../samples/westwood/Dune II');
-describe.skipIf(!existsSync(DUNE))("Dune II's VOCs", () => {
+// Dune II's own files, from wherever it's installed (npm run test:setup); they aren't ours to commit.
+const DUNE = gameDir('dune2') ?? '';
+describe.skipIf(!DUNE)("Dune II's VOCs", () => {
     it('reads all 226, each with a sound and nothing to warn about', () => {
         let count = 0;
         for (const name of readdirSync(DUNE).filter((n) => /\.pak$/i.test(n))) {

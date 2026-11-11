@@ -144,6 +144,8 @@ class Player {
 
     private open() {
         if (current && current !== this) current.close();
+        // Not an alias: the module keeps track of which video has the one decoder.
+        // oxlint-disable-next-line typescript/no-this-alias
         current = this;
         if (this.decoder) return;
         this.decoder = this.w._video_open(this.l.tag, this.l.flags, this.l.width, this.l.height);

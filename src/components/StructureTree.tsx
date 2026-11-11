@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { hex } from '../core/bytes';
 import type { Field } from '../core/types';
 import { pathKey, type FieldPath } from '../lib/fields';
@@ -31,9 +31,75 @@ export function StructureTree({
         root.current?.querySelector(`[data-path="${selectedKey}"]`)?.scrollIntoView({ block: 'nearest' });
     }, [selectedKey]);
 
+    /** The rows on screen, top to bottom: what the arrow keys move through. */
+    const rows = () => [...(root.current?.querySelectorAll<HTMLElement>('[data-path]') ?? [])];
+    const pathOf = (row: HTMLElement): FieldPath => row.dataset.path!.split('.').map(Number);
+    const pick = (row: HTMLElement) => {
+        const path = pathOf(row);
+        onSelect(path);
+        onHover(null);
+        return path;
+    };
+
+    // The tree takes focus as one control, and the keys move through it as in any tree: up and down a row, right to open or
+    // step in, left to close or step out, Home and End. A click picks the row it lands on (each row says which it is).
+    const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+        const all = rows();
+        if (!all.length) return;
+        const at = all.findIndex((r) => r.dataset.path === selectedKey);
+        const row = all[at];
+        const go = (i: number) => pick(all[Math.max(0, Math.min(all.length - 1, i))]);
+        switch (e.key) {
+            case 'ArrowDown':
+                go(at + 1);
+                break;
+            case 'ArrowUp':
+                go(at < 0 ? 0 : at - 1);
+                break;
+            case 'Home':
+                go(0);
+                break;
+            case 'End':
+                go(all.length - 1);
+                break;
+            case 'ArrowRight':
+                if (!row) go(0);
+                else if (row.dataset.branch && row.dataset.open !== 'true') onToggle(pathOf(row));
+                else if (row.dataset.branch) go(at + 1);
+                break;
+            case 'ArrowLeft':
+                if (!row) break;
+                if (row.dataset.open === 'true') onToggle(pathOf(row));
+                else if (pathOf(row).length > 1) onSelect(pathOf(row).slice(0, -1));
+                break;
+            case 'Enter':
+            case ' ':
+                if (row?.dataset.branch) onToggle(pathOf(row));
+                break;
+            default:
+                return;
+        }
+        e.preventDefault();
+    };
+    const onClick = (e: MouseEvent<HTMLDivElement>) => {
+        const row = (e.target as HTMLElement).closest<HTMLElement>('[data-path]');
+        if (!row) return;
+        const path = pick(row);
+        if (row.dataset.branch && row.dataset.open !== 'true') onToggle(path);
+    };
+
     return (
-        <div ref={root} className='structure-tree' role='tree' onMouseLeave={() => onHover(null)}>
-            <Nodes fields={fields} path={[]} depth={0} selectedKey={selectedKey} expanded={expanded} onSelect={onSelect} onToggle={onToggle} onHover={onHover} />
+        <div
+            ref={root}
+            className='structure-tree'
+            role='tree'
+            aria-label='The file’s structure'
+            tabIndex={0}
+            aria-activedescendant={selectedKey !== null ? `field-${selectedKey}` : undefined}
+            onKeyDown={onKeyDown}
+            onClick={onClick}
+            onMouseLeave={() => onHover(null)}>
+            <Nodes fields={fields} path={[]} depth={0} selectedKey={selectedKey} expanded={expanded} onToggle={onToggle} onHover={onHover} />
         </div>
     );
 }
@@ -44,7 +110,6 @@ function Nodes({
     depth,
     selectedKey,
     expanded,
-    onSelect,
     onToggle,
     onHover,
 }: {
@@ -53,7 +118,6 @@ function Nodes({
     depth: number;
     selectedKey: string | null;
     expanded: Set<string>;
-    onSelect: (path: FieldPath) => void;
     onToggle: (path: FieldPath) => void;
     onHover: (field: Field | null) => void;
 }) {
@@ -71,15 +135,13 @@ function Nodes({
                 const open = expanded.has(key);
                 const hasChildren = !!field.children?.length;
                 return (
-                    <div key={i} role='treeitem' aria-expanded={hasChildren ? open : undefined} aria-selected={key === selectedKey}>
+                    <div key={i} id={`field-${key}`} role='treeitem' aria-expanded={hasChildren ? open : undefined} aria-selected={key === selectedKey}>
                         <div
                             data-path={key}
+                            data-branch={hasChildren || undefined}
+                            data-open={hasChildren ? open : undefined}
                             className={`tree-row ${key === selectedKey ? 'tree-row--selected' : ''}`}
                             style={{ paddingLeft: `${depth * 1.1 + 0.25}rem` }}
-                            onClick={() => {
-                                onSelect(here);
-                                if (hasChildren && !open) onToggle(here);
-                            }}
                             onMouseEnter={() => onHover(field)}>
                             <button
                                 type='button'
@@ -97,9 +159,7 @@ function Nodes({
                             {field.value !== undefined && <span className='tree-value'>{field.value}</span>}
                             <span className='tree-offset'>{hex(field.offset, 6)}</span>
                         </div>
-                        {hasChildren && open && (
-                            <Nodes fields={field.children!} path={here} depth={depth + 1} selectedKey={selectedKey} expanded={expanded} onSelect={onSelect} onToggle={onToggle} onHover={onHover} />
-                        )}
+                        {hasChildren && open && <Nodes fields={field.children!} path={here} depth={depth + 1} selectedKey={selectedKey} expanded={expanded} onToggle={onToggle} onHover={onHover} />}
                     </div>
                 );
             })}

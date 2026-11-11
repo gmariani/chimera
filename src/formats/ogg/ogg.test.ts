@@ -7,7 +7,10 @@ const enc = new TextEncoder();
 function concat(...parts: Uint8Array[]): Uint8Array {
     const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
     let at = 0;
-    for (const p of parts) (out.set(p, at), (at += p.length));
+    for (const p of parts) {
+        out.set(p, at);
+        at += p.length;
+    }
     return out;
 }
 
@@ -31,7 +34,10 @@ function page({ flags = 0, granule = 0, serial = 1, sequence, packets, open }: P
     const lacing: number[] = [];
     packets.forEach((packet, i) => {
         let left = packet.length;
-        while (left >= 255) (lacing.push(255), (left -= 255));
+        while (left >= 255) {
+            lacing.push(255);
+            left -= 255;
+        }
         if (!(open && i === packets.length - 1)) lacing.push(left);
     });
     const header = new Uint8Array(27 + lacing.length);

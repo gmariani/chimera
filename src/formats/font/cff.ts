@@ -264,11 +264,22 @@ function charstring(data: Uint8Array, item: [number, number], globals: Index, lo
         for (let at = start; at < stop;) {
             const b = data[at];
             if (b >= 32 || b === 28) {
-                if (b === 28) (stack.push(((data[at + 1] << 24) | (data[at + 2] << 16)) >> 16), (at += 3));
-                else if (b <= 246) (stack.push(b - 139), at++);
-                else if (b <= 250) (stack.push((b - 247) * 256 + data[at + 1] + 108), (at += 2));
-                else if (b <= 254) (stack.push(-(b - 251) * 256 - data[at + 1] - 108), (at += 2));
-                else (stack.push(((data[at + 1] << 24) | (data[at + 2] << 16) | (data[at + 3] << 8) | data[at + 4]) / 65536), (at += 5));
+                if (b === 28) {
+                    stack.push(((data[at + 1] << 24) | (data[at + 2] << 16)) >> 16);
+                    at += 3;
+                } else if (b <= 246) {
+                    stack.push(b - 139);
+                    at++;
+                } else if (b <= 250) {
+                    stack.push((b - 247) * 256 + data[at + 1] + 108);
+                    at += 2;
+                } else if (b <= 254) {
+                    stack.push(-(b - 251) * 256 - data[at + 1] - 108);
+                    at += 2;
+                } else {
+                    stack.push(((data[at + 1] << 24) | (data[at + 2] << 16) | (data[at + 3] << 8) | data[at + 4]) / 65536);
+                    at += 5;
+                }
                 continue;
             }
             at++;
@@ -309,7 +320,10 @@ function charstring(data: Uint8Array, item: [number, number], globals: Index, lo
                     break;
                 case 6: // hlineto
                 case 7: // vlineto
-                    for (let i = 0; i < stack.length; i++) (i % 2 === 0) === (b === 6) ? lineTo(stack[i], 0) : lineTo(0, stack[i]);
+                    for (let i = 0; i < stack.length; i++) {
+                        if ((i % 2 === 0) === (b === 6)) lineTo(stack[i], 0);
+                        else lineTo(0, stack[i]);
+                    }
                     stack.length = 0;
                     break;
                 case 8: // rrcurveto

@@ -9,7 +9,10 @@ const concat = (...parts: (Uint8Array | number[])[]) => {
     const arrays = parts.map((p) => (p instanceof Uint8Array ? p : Uint8Array.from(p)));
     const out = new Uint8Array(arrays.reduce((n, p) => n + p.length, 0));
     let at = 0;
-    for (const p of arrays) (out.set(p, at), (at += p.length));
+    for (const p of arrays) {
+        out.set(p, at);
+        at += p.length;
+    }
     return out;
 };
 const base64 = (data: Uint8Array) => enc.encode(Buffer.from(data).toString('base64'));
@@ -31,7 +34,42 @@ function program(): Uint8Array {
     return data;
 }
 
+/**
+ * A 16-bit Windows module: an MZ header pointing at an NE header, and a resource table of one type. With no segments and no
+ * entry points it holds nothing to run (an icon library, as Dune II's DUNE2.ICO is).
+ */
+function module16({ segments = 0, resource = 0x8003 } = {}): Uint8Array {
+    const data = new Uint8Array(256);
+    const v = new DataView(data.buffer);
+    data.set(enc.encode('MZ'), 0);
+    data[0x3c] = 0x40;
+    data.set(enc.encode('NE'), 0x40);
+    v.setUint16(0x40 + 0x1c, segments, true);
+    v.setUint16(0x40 + 0x24, 0x40, true); // the resource table, from the NE header
+    data[0x40 + 0x36] = 2; // Windows
+    // The table: an alignment shift, one type with one resource (12 bytes), then a type of 0.
+    v.setUint16(0x80, 4, true);
+    v.setUint16(0x82, resource, true);
+    v.setUint16(0x84, 1, true);
+    return data;
+}
+
 describe('checks every file gets', () => {
+    it('knows a 16-bit Windows module with no code from a program', async () => {
+        const icons = await open(module16(), 'game.ico');
+        expect(icons.parsed.title).toBe('16-bit Windows module with no code (NE), holding icons');
+        expect(icons.checks).toEqual([
+            { level: 'warning', text: "It's named .ico, but it's a 16-bit Windows module with no code (NE), holding icons: laid out like a program, but with nothing in it to run." },
+        ]);
+        // Named as what it is: nothing to warn about.
+        expect(levels((await open(module16(), 'icons.icl')).checks)).toEqual(['info']);
+        expect((await open(module16({ resource: 0x8008 }), 'serif.fon')).parsed.title).toBe('16-bit Windows module with no code (NE), holding fonts');
+        // With code, it's a program, and under another name, dangerous.
+        const code = await open(module16({ segments: 3 }), 'game.ico');
+        expect(code.parsed.title).toBe('16-bit Windows program or library (NE)');
+        expect(code.checks[0]).toMatchObject({ level: 'danger' });
+    });
+
     it('reads a real GIF with nothing to say', async () => {
         const r = await open(GIF, 'ok.gif');
         expect(r.format.id).toBe('gif');
@@ -103,10 +141,10 @@ describe('checks every file gets', () => {
  * at face value, with nothing to say, is too trusting.
  */
 const SAMPLES = join(__dirname, '../../samples');
-/** Files from a real piece of malware (a PHP kit), named and started like pictures, that aren't. */
-const DISGUISED = /^loginlock\/images\/.*\.(gif|png)$/;
-/** Samples that really aren't what their names say. */
-const MISNAMED = ['images/jpeg-not-a-jpeg.jpg', 'westwood/Dune II/DUNE2.ICO'];
+/** Samples that must be called out as dangerous: files from a real piece of malware (a PHP kit) named and started like pictures that aren't, and a file that isn't what its name says. */
+const FLAGGED = [/(^|\/)loginlock\/images\/.*\.(gif|png)$/, /-malicious\.(gif|png)$/, /(^|\/)jpeg-not-a-jpeg\.jpg$/];
+/** Samples that must be warned about, but aren't dangerous: Dune II's DUNE2.ICO is a Windows icon library with no code, not an icon. */
+const WARNED = [/(^|\/)dune ii\/dune2\.ico$/i];
 function sampleFiles(dir: string): string[] {
     return readdirSync(dir).flatMap((name) => {
         const path = join(dir, name);
@@ -123,9 +161,14 @@ describe.skipIf(!existsSync(SAMPLES))('samples, real and disguised', () => {
             const name = path.split('/').at(-1)!;
             const real = await open(data, name);
             const dangers = real.checks.filter((c) => c.level === 'danger');
-            // The malware's "pictures" must be called out; everything else must not be.
-            if (DISGUISED.test(label)) expect(dangers.length, label).toBeGreaterThan(0);
-            else if (!MISNAMED.includes(label)) expect(dangers).toEqual([]);
+            // What's known to be wrong must be called out; everything else must not be.
+            if (FLAGGED.some((f) => f.test(label))) expect(dangers.length, label).toBeGreaterThan(0);
+            else expect(dangers).toEqual([]);
+            if (WARNED.some((f) => f.test(label)))
+                expect(
+                    real.checks.some((c) => c.level === 'warning'),
+                    label
+                ).toBe(true);
             if (real.format.id === 'raw' || real.format.id === 'text' || data.length < 64) return;
 
             const fake = await open(concat(data.subarray(0, 16), base64(data.subarray(16))), name);

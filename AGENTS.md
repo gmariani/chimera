@@ -56,7 +56,8 @@ Tests should prove a reader is right and stays right, not restate its code.
 - **Ground truth from outside.** Compare against a reference: FFmpeg's decoded samples, a worked example from the spec, a real file's known contents. A reader checked only against itself proves nothing.
 - **Round trips.** For a decoder, encode with a small, plain encoder in the test (see `src/formats/westwood/encoders.test-util.ts`) and check the decoder gives it back.
 - **One test for each warning and each refusal**, with the smallest file that triggers it, and the message checked well enough to show it's the right one.
-- **Real files when they're there.** Tests over `samples/` and game data use `describe.skipIf(!existsSync(...))`. They pass with no warnings, except for known quirks of the shipped files, which the test names.
+- **Generated samples.** `src/testing/samples.ts` makes a small, valid file of each format that can be made from scratch, written to `samples/generated/` (`npm run samples`) and committed. When a format can be made this way, add it there: it's then tested on every machine.
+- **Real files when they're there.** Tests over game files get the game's folder from `gameDir()` or `gameFile()` (`src/testing/game-data.ts`) and skip with `describe.skipIf(!folder)`. Never hardcode a path into `samples/`. They pass with no warnings, except for known quirks of the shipped files, which the test names.
 - **Not worth writing:** snapshots of whole results, tests of the UI's pixels, and tests that only repeat what the implementation does.
 
 ## Before calling something done
@@ -73,8 +74,7 @@ Report what didn't pass, with the output. Don't round "mostly works" up to "work
 
 ## Data and safety
 
-- **Game files are never committed or copied into the repo.** They're in `samples/` (gitignored) and in the user's game installs. The opt-in game-data test reads them in place:
-  `CHIMERA_GAME_DATA=/path/to/CnCRemastered/Data/CNCDATA npx vitest run src/formats/gamedata.test.ts`
+- **Game files are never committed or copied into the repo.** They belong to EA, and freeware isn't permission to republish. They're read where they're installed: `npm run test:setup` says where each game is (saved to the gitignored `game-data.local.json`), and `npm run test:game-data` runs every file of the installed games through the readers. Only `samples/generated/` is committed from `samples/`.
 - **Never run memory-heavy work uncapped.** The fuzzer caps each worker's memory (1.5 GB, no swap, via systemd) and time (10 s). An uncapped run once took down the editor.
 - **Temporary scripts and output go in a scratch directory,** not the repo. A throwaway test inside `src/` gets deleted as soon as it's run.
 - **Don't commit.** The owner reviews and commits changes.
@@ -87,6 +87,8 @@ Report what didn't pass, with the output. Don't round "mostly works" up to "work
 - `src/core/`: bytes, limits, shared decoders and types.
 - `src/engine/`: the parsing worker and the page's side of it.
 - `src/components/`, `src/tabs/`, `src/lib/`: the UI.
+- `src/testing/`: where the installed games are (`game-data.ts`), and the sample generator (`samples.ts`).
+- `scripts/`: `npm run test:setup` and `npm run samples`.
 - `fuzz/`: the fuzzer.
 
 ## References

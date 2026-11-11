@@ -23,7 +23,11 @@ function build(version: 1 | 2 | 3, files: [path: string, data: string][]): Uint8
     v.setUint32(at + 4, files.length, true);
     if (version === 3) v.setUint32(20, namesSize, true);
     at = header;
-    for (const n of names) (v.setUint16(at, n.length, true), out.set(n, at + 2), (at += 2 + n.length));
+    for (const n of names) {
+        v.setUint16(at, n.length, true);
+        out.set(n, at + 2);
+        at += 2 + n.length;
+    }
     let start = dataStart;
     bodies.forEach((b, i) => {
         const r = at + i * 20;

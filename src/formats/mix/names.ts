@@ -1116,14 +1116,14 @@ export function namesFromText(texts: Iterable<string>): string[] {
         for (const line of text.split(/\r?\n/)) {
             const content = line.replace(/;.*$/, '');
             const value = content.match(/^\s*\[([^\]]+)\]/)?.[1] ?? content.slice(content.indexOf('=') + 1);
-            for (const word of value.match(/[A-Za-z0-9_\-]{2,32}/g) ?? []) if (!/^\d+$/.test(word)) words.add(word.toLowerCase());
+            for (const word of value.match(/[A-Za-z0-9_-]{2,32}/g) ?? []) if (!/^\d+$/.test(word)) words.add(word.toLowerCase());
         }
         // art.ini's Palette=lib: a palette of the art's own for each theater (libtem.pal for the Statue of Liberty).
-        for (const palette of text.matchAll(/^\s*Palette\s*=\s*([A-Za-z0-9_\-]+)/gim)) {
+        for (const palette of text.matchAll(/^\s*Palette\s*=\s*([A-Za-z0-9_-]+)/gim)) {
             for (const ext of TILE_EXTENSIONS) out.add(`${palette[1].toLowerCase()}${ext}.pal`);
         }
         // Theater INIs: [TileSetNNNN] with FileName=cliff and TilesInSet=12 gives cliff01 … cliff12, some with variants a, b, …
-        for (const set of text.matchAll(/FileName\s*=\s*([A-Za-z0-9_\-]+)[^[]*?TilesInSet\s*=\s*(\d+)/gi)) {
+        for (const set of text.matchAll(/FileName\s*=\s*([A-Za-z0-9_-]+)[^[]*?TilesInSet\s*=\s*(\d+)/gi)) {
             for (let i = 1; i <= Math.min(Number(set[2]), 99); i++) {
                 for (const variant of ['', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) {
                     for (const ext of TILE_EXTENSIONS) out.add(`${set[1].toLowerCase()}${String(i).padStart(2, '0')}${variant}.${ext}`);
@@ -1176,7 +1176,7 @@ export function namesFromBinary(data: Uint8Array): string[] {
     const out = new Set<string>();
     let run = '';
     const flush = () => {
-        for (const m of run.matchAll(/[A-Za-z0-9_%\-]{1,40}\.[A-Za-z]{2,4}/g)) for (const name of m[0].includes('%') ? expandPattern(m[0]) : [m[0]]) out.add(name.toLowerCase());
+        for (const m of run.matchAll(/[A-Za-z0-9_%-]{1,40}\.[A-Za-z]{2,4}/g)) for (const name of m[0].includes('%') ? expandPattern(m[0]) : [m[0]]) out.add(name.toLowerCase());
         run = '';
     };
     for (const c of data) {

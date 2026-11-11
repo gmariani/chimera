@@ -52,3 +52,14 @@ export function rle(p: Uint8Array, littleEndian = false): number[] {
     }
     return out;
 }
+
+/** LCW at its plainest: the bytes as literal copies of up to 63, then the end marker (0x80). */
+export function lcwLiterals(p: Uint8Array): number[] {
+    const out: number[] = [];
+    for (let i = 0; i < p.length; i += 63) {
+        const n = Math.min(63, p.length - i);
+        out.push(0x80 | n, ...p.subarray(i, i + n));
+    }
+    out.push(0x80);
+    return out;
+}

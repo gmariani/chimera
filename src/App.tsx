@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { EngineNotices } from './components/EngineNotices';
 import { SectionBar } from './components/ui';
 import { FilesPanel } from './components/FilesPanel';
@@ -37,10 +37,11 @@ export function App() {
     const [showFiles, setShowFiles] = useState(false);
     const current = trail.at(-1);
     // Each opened file's page settings, so going back to it restores them.
-    const memories = useRef(new WeakMap<OpenFile, ViewMemory>());
+    // Made once and kept for the page's life (a ref couldn't be read while rendering).
+    const [memories] = useState(() => new WeakMap<OpenFile, ViewMemory>());
     const memoryOf = (file: OpenFile) => {
-        if (!memories.current.has(file)) memories.current.set(file, new Map());
-        return memories.current.get(file)!;
+        if (!memories.has(file)) memories.set(file, new Map());
+        return memories.get(file)!;
     };
 
     useEffect(() => {

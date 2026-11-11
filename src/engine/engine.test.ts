@@ -8,7 +8,10 @@ const concat = (...parts: (Uint8Array | number[])[]) => {
     const arrays = parts.map((p) => (p instanceof Uint8Array ? p : Uint8Array.from(p)));
     const out = new Uint8Array(arrays.reduce((n, p) => n + p.length, 0));
     let at = 0;
-    for (const p of arrays) (out.set(p, at), (at += p.length));
+    for (const p of arrays) {
+        out.set(p, at);
+        at += p.length;
+    }
     return out;
 };
 

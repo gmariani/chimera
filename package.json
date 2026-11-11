@@ -15,6 +15,9 @@
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "test": "vitest run",
+        "test:setup": "node scripts/setup-game-data.ts",
+        "test:game-data": "CHIMERA_GAME_DATA=installed vitest run src/formats/gamedata.test.ts",
+        "samples": "node scripts/generate-samples.ts",
         "fuzz": "rolldown fuzz/fuzz.ts fuzz/repro.ts --dir fuzz/build --platform node --format esm --log-level warn && node fuzz/build/fuzz.js",
         "fuzz:repro": "rolldown fuzz/fuzz.ts fuzz/repro.ts --dir fuzz/build --platform node --format esm --log-level warn && node fuzz/build/repro.js"
     },

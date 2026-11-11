@@ -147,12 +147,20 @@ function sampleBits(buf: Float32Array): Int32Array {
         while (bitsum !== DETAIL_BITS && j <= 19) {
             off = (bigOff + smallOff) >> 1;
             bitsum = sumBits(sbuf, saved, off);
-            if (bitsum > DETAIL_BITS) ((bigOff = off), (bigBitsum = bitsum));
-            else ((smallOff = off), (smallBitsum = bitsum));
+            if (bitsum > DETAIL_BITS) {
+                bigOff = off;
+                bigBitsum = bitsum;
+            } else {
+                smallOff = off;
+                smallBitsum = bitsum;
+            }
             j++;
         }
         if (Math.abs(bigBitsum - DETAIL_BITS) >= Math.abs(smallBitsum - DETAIL_BITS)) bitsum = smallBitsum;
-        else ((smallOff = bigOff), (bitsum = bigBitsum));
+        else {
+            smallOff = bigOff;
+            bitsum = bigBitsum;
+        }
     }
 
     for (let i = 0; i < FILL_LEN; i++) bits[i] = clip((((sbuf[i] - smallOff) >> (saved - 1)) + 1) >> 1, 0, BIT_CAP);
@@ -195,7 +203,10 @@ export function decodeNellymoser(data: Uint8Array, random: () => number = lcg())
         for (let band = 0; band < BANDS; band++) {
             if (band > 0) val += DELTA[read(5)];
             const pval = -(2 ** (val / 2048)) * scaleBias;
-            for (let k = 0; k < BAND_SIZES[band]; k++, p++) ((buf[p] = val), (pows[p] = pval));
+            for (let k = 0; k < BAND_SIZES[band]; k++, p++) {
+                buf[p] = val;
+                pows[p] = pval;
+            }
         }
         const bits = sampleBits(buf);
 

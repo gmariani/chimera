@@ -300,7 +300,10 @@ export function lzw(packed: Uint8Array, expected: number): Uint8Array {
     const suffix = new Uint8Array(4096);
     const prefix = new Uint16Array(4096);
     const length = new Uint16Array(4096);
-    for (let i = 0; i < 256; i++) ((suffix[i] = i), (length[i] = 1));
+    for (let i = 0; i < 256; i++) {
+        suffix[i] = i;
+        length[i] = 1;
+    }
     let next = 258;
     let width = 9;
     let bitPos = 0;
@@ -323,7 +326,12 @@ export function lzw(packed: Uint8Array, expected: number): Uint8Array {
         o += n;
     };
     const add = (previous: number, byte: number) => {
-        if (next < 4096) ((suffix[next] = byte), (prefix[next] = previous), (length[next] = length[previous] + 1), next++);
+        if (next < 4096) {
+            suffix[next] = byte;
+            prefix[next] = previous;
+            length[next] = length[previous] + 1;
+            next++;
+        }
         if (next + early >= 1 << width && width < 12) width++;
     };
 

@@ -47,7 +47,10 @@ export function lzw(data: Uint8Array, minCodeSize: number, out: Uint8Array): { w
     const suffix = new Uint8Array(4096);
     const first = new Uint8Array(4096);
     const stack = new Uint8Array(4097);
-    for (let i = 0; i < clear; i++) ((suffix[i] = i), (first[i] = i));
+    for (let i = 0; i < clear; i++) {
+        suffix[i] = i;
+        first[i] = i;
+    }
 
     let size = minCodeSize + 1;
     let next = end + 1;
@@ -514,7 +517,10 @@ function join(parts: Uint8Array[]): Uint8Array {
     if (parts.length === 1) return parts[0];
     const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
     let at = 0;
-    for (const p of parts) (out.set(p, at), (at += p.length));
+    for (const p of parts) {
+        out.set(p, at);
+        at += p.length;
+    }
     return out;
 }
 

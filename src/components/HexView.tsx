@@ -32,7 +32,7 @@ export function HexView({
     const [top, setTop] = useState(0);
     const [useOverlay, setUseOverlay] = useState(overlays.length > 0);
     const [goTo, setGoTo] = useState('');
-    const box = useRef<HTMLDivElement>(null);
+    const box = useRef<HTMLElement>(null);
     const clamp = (row: number) => Math.max(0, Math.min(maxTop, row));
 
     // Bring the selected field into view.
@@ -88,12 +88,12 @@ export function HexView({
                 overlaid ? 'hx-overlaid' : '',
             ].join(' ');
             hexCells.push(
-                <span key={c} className={classes} onClick={() => onPick(offset)}>
+                <span key={c} className={classes} data-offset={offset}>
                     {value.toString(16).padStart(2, '0')}
                 </span>
             );
             textCells.push(
-                <span key={c} className={classes} onClick={() => onPick(offset)}>
+                <span key={c} className={classes} data-offset={offset}>
                     {value >= 32 && value < 127 ? String.fromCharCode(value) : '.'}
                 </span>
             );
@@ -133,10 +133,20 @@ export function HexView({
                 </span>
             </div>
             <div className='hex-body'>
-                <div
+                {/* One focusable region that scrolls by keyboard, and picks the byte clicked (each says where it is). Making each of the
+                    512 bytes focusable would be worse for keyboard users, who can pick one with "Go to offset" instead. */}
+                {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the region's keys scroll it, and a click picks a byte */}
+                <section
                     ref={box}
                     className='hex-rows'
+                    aria-label='Bytes: the arrow keys, Page Up and Page Down scroll'
+                    // A region that scrolls has to be focusable for the keyboard to scroll it.
+                    // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex
                     tabIndex={0}
+                    onClick={(e) => {
+                        const at = (e.target as HTMLElement).closest<HTMLElement>('[data-offset]')?.dataset.offset;
+                        if (at !== undefined) onPick(Number(at));
+                    }}
                     onKeyDown={(e) => {
                         const moves: Record<string, number> = { ArrowDown: 1, ArrowUp: -1, PageDown: ROWS, PageUp: -ROWS, Home: -Infinity, End: Infinity };
                         if (e.key in moves) {
@@ -145,7 +155,7 @@ export function HexView({
                         }
                     }}>
                     {rows}
-                </div>
+                </section>
                 {maxTop > 0 && <input type='range' className='hex-scroll' min={0} max={maxTop} value={top} onChange={(e) => setTop(Number(e.target.value))} aria-label='Scroll through the file' />}
             </div>
         </div>

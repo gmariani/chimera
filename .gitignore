@@ -5,8 +5,11 @@
 npm-debug.log
 /.idea
 
-# Game files used for manual testing
-/samples
+# Game files used for manual testing, and where the tests find installed games (npm run test:setup)
+game-data.local.json
+/samples/*
+# ...except the samples made from scratch (npm run samples), which are ours to commit.
+!/samples/generated/
 /MIX Samples
 *.mix
 *.MIX

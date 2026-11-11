@@ -65,10 +65,10 @@ export function OpenPanel({ onOpen }: { onOpen: (file: OpenFile) => void }) {
 
                     {error && <Alert variant='warning'>{error}</Alert>}
 
-                    <div className='drop-target' onClick={() => input.current?.click()} role='button' tabIndex={0} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && input.current?.click()}>
+                    <button type='button' className='drop-target' onClick={() => input.current?.click()}>
                         <i className='bi bi-file-earmark-arrow-down display-4 d-block mb-2' />
                         {reading ? <>Reading {reading}…</> : <>Drop a file, or click to choose one</>}
-                    </div>
+                    </button>
 
                     <div className='d-flex flex-wrap gap-2 mt-3 align-items-center'>
                         <Button variant='primary' onClick={() => input.current?.click()}>

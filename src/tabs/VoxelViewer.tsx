@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { Button, ButtonGroup, Form } from 'react-bootstrap';
 import type { VoxelPart } from '../core/types';
 import { Muted } from '../components/ui';
@@ -219,7 +219,9 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
     const [frame, setFrame] = useState(0);
     const [playing, setPlaying] = useState(false);
     const [hidden, setHidden] = useState<Set<number>>(new Set());
-    const [error, setError] = useState<string | null>(null);
+    // Why 3D can't be shown, for the parts it was tried with (so other parts get a fresh try).
+    const [failure, setFailure] = useState<{ parts: typeof parts; message: string }>();
+    const error = failure?.parts === parts ? failure.message : null;
     const canvas = useRef<HTMLCanvasElement>(null);
     const gpu = useRef<{ gl: WebGL2RenderingContext; program: WebGLProgram; meshes: { vao: WebGLVertexArrayObject; count: number }[]; palette: WebGLTexture } | null>(null);
     const { center, radius } = useMemo(() => bounds(parts), [parts]);
@@ -229,7 +231,8 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
         const el = canvas.current;
         const gl = el?.getContext('webgl2', { antialias: true, preserveDrawingBuffer: true });
         if (!el || !gl) {
-            setError("This browser can't show 3D (no WebGL2).");
+            // oxlint-disable-next-line react/set-state-in-effect -- what WebGL (outside React) said
+            setFailure({ parts, message: "This browser can't show 3D (no WebGL2)." });
             return;
         }
         try {
@@ -252,9 +255,9 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
             });
             const texture = gl.createTexture()!;
             gpu.current = { gl, program, meshes, palette: texture };
-            setError(null);
         } catch (e) {
-            setError(`3D isn't available here: ${e instanceof Error ? e.message : e}`);
+            // oxlint-disable-next-line react/set-state-in-effect -- as above: what WebGL said
+            setFailure({ parts, message: `3D isn't available here: ${e instanceof Error ? e.message : e}` });
         }
         return () => {
             gpu.current = null;
@@ -262,15 +265,13 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
     }, [parts]);
 
     // Drawing: on any change, and every frame while playing or spinning.
-    const state = useRef({ camera, perspective, frame, hidden, palette });
-    state.current = { camera, perspective, frame, hidden, palette };
-    const draw = useRef(() => {});
-    draw.current = () => {
+    // An effect event: it always sees the latest camera, frame and palette, and runs only from effects and what they set up.
+    const draw = useEffectEvent(() => {
         const g = gpu.current;
         const el = canvas.current;
         if (!g || !el) return;
         const { gl, program, meshes } = g;
-        const { camera: cam, perspective: persp, frame: f, hidden: off, palette: pal } = state.current;
+        const [cam, persp, f, off, pal] = [camera, perspective, frame, hidden, palette];
         const scale = window.devicePixelRatio || 1;
         const [w, h] = [Math.round(el.clientWidth * scale), Math.round(el.clientHeight * scale)];
         if (el.width !== w || el.height !== h) [el.width, el.height] = [w, h];
@@ -320,9 +321,9 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
             gl.bindVertexArray(mesh.vao);
             gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
         });
-    };
+    });
 
-    useEffect(() => draw.current());
+    useEffect(() => draw());
 
     useEffect(() => {
         if (!spin && !playing) return;
@@ -351,7 +352,7 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
     useEffect(() => {
         const el = canvas.current;
         if (!el) return;
-        const observer = new ResizeObserver(() => draw.current());
+        const observer = new ResizeObserver(() => draw());
         observer.observe(el);
         return () => observer.disconnect();
     }, []);
@@ -369,8 +370,8 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
     }, []);
     const dragging = useRef<{ x: number; y: number } | null>(null);
 
+    // The canvas keeps what it last drew (preserveDrawingBuffer), so it's saved as it is.
     const savePng = () => {
-        draw.current();
         canvas.current?.toBlob((blob) => blob && download(blob, `${safeName(fileName.replace(/\.[^.]+$/, ''))}-3d.png`), 'image/png');
     };
 

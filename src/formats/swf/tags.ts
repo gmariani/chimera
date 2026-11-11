@@ -435,7 +435,10 @@ export function readTag(code: number, r: SwfReader, nested: (r: SwfReader) => st
         case 57:
         case 71: {
             const url = code !== 56 ? r.string('URL') : '';
-            if (code === 71) (r.u8('Reserved'), r.u8('Reserved'));
+            if (code === 71) {
+                r.u8('Reserved');
+                r.u8('Reserved');
+            }
             const count = r.u16('Count');
             for (let i = 0; i < count && r.left; i++) {
                 const from = r.fields.length;

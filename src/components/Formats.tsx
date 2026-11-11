@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Button, Form, Modal, Table } from 'react-bootstrap';
 import { FORMATS } from '../formats';
 import { SectionBar } from './ui';
@@ -14,20 +14,23 @@ function formatList() {
     return [...byName].map(([name, exts]) => ({ name, extensions: [...exts] })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** The registry doesn't change while the page is open, so the list is made once. */
+const FORMAT_LIST = formatList();
+
 /**
  * The formats the app reads, gliding slowly past (still, for anyone who asks
  * their system for less motion). Clicking it shows the whole list, which
  * would take too much room to show by default as it grows.
  */
 export function FormatsCarousel() {
-    const formats = useMemo(formatList, []);
+    const formats = FORMAT_LIST;
     const [open, setOpen] = useState(false);
     // Twice over, so the strip loops without a seam; about four seconds a format.
     const chips = (copy: number) =>
         formats.map((f) => (
-            <li key={`${copy}-${f.name}`} className='format-chip' aria-hidden={copy > 0 || undefined}>
+            <span key={`${copy}-${f.name}`} className='format-chip' aria-hidden={copy > 0 || undefined}>
                 {f.name} <span className='opacity-75'>.{f.extensions.slice(0, 2).join(', .')}</span>
-            </li>
+            </span>
         ));
     return (
         <>
@@ -37,25 +40,20 @@ export function FormatsCarousel() {
                     See all
                 </Button>
             </SectionBar>
-            <div
-                className='format-carousel'
-                role='button'
-                tabIndex={0}
-                aria-label={`The ${formats.length} formats it reads; open the full list`}
-                onClick={() => setOpen(true)}
-                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setOpen(true))}>
-                <ul className='format-track small text-body-secondary' style={{ animationDuration: `${formats.length * 4}s` }}>
+            {/* A real button, so Enter and Space work without help; a button holds only spans, hence no list. */}
+            <button type='button' className='format-carousel' aria-label={`The ${formats.length} formats it reads; open the full list`} onClick={() => setOpen(true)}>
+                <span className='format-track small text-body-secondary' style={{ animationDuration: `${formats.length * 4}s` }}>
                     {chips(0)}
                     {chips(1)}
-                </ul>
-            </div>
+                </span>
+            </button>
             <FormatsModal show={open} onHide={() => setOpen(false)} />
         </>
     );
 }
 
 function FormatsModal({ show, onHide }: { show: boolean; onHide: () => void }) {
-    const formats = useMemo(formatList, []);
+    const formats = FORMAT_LIST;
     const [filter, setFilter] = useState('');
     const needle = filter.trim().toLowerCase().replace(/^\./, '');
     const shown = needle ? formats.filter((f) => f.name.toLowerCase().includes(needle) || f.extensions.some((e) => e.includes(needle))) : formats;
@@ -65,7 +63,16 @@ function FormatsModal({ show, onHide }: { show: boolean; onHide: () => void }) {
                 <Modal.Title className='h5'>Formats it reads</Modal.Title>
             </Modal.Header>
             <Modal.Body>
-                <Form.Control type='search' placeholder='Filter by name or extension' value={filter} onChange={(e) => setFilter(e.target.value)} className='mb-3' autoFocus />
+                <Form.Control
+                    type='search'
+                    placeholder='Filter by name or extension'
+                    value={filter}
+                    onChange={(e) => setFilter(e.target.value)}
+                    className='mb-3'
+                    // The dialog takes focus anyway; the filter is where someone typing wants it.
+                    // oxlint-disable-next-line jsx-a11y/no-autofocus
+                    autoFocus
+                />
                 <Table size='sm' hover className='small mb-2'>
                     <thead>
                         <tr>

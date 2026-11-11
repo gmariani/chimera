@@ -1,6 +1,6 @@
 import { Bytes } from '../../core/bytes';
 import { westwoodRle } from './compression';
-import { pakLayout } from './pak';
+import { pakLayout } from './pak-layout';
 
 /**
  * Cheap checks for Westwood's asset formats. These run on every file inside an
@@ -209,6 +209,12 @@ export function tilesLayout(data: Uint8Array): TilesLayout | null {
     const { icons, map, trans } = layout;
     if (map < icons || (map - icons) % (width * height) !== 0 || map + count > data.length || trans < map || trans > data.length) return null;
     return layout;
+}
+
+/** Dune II's map tiles: an IFF "FORM" of type "ICON". */
+export function sniffIcnD2(data: Uint8Array): boolean {
+    const b = new Bytes(data);
+    return data.length > 20 && b.ascii(0, 4) === 'FORM' && b.ascii(8, 4) === 'ICON' && b.ascii(12, 4) === 'SINF';
 }
 
 export function sniffTiles(data: Uint8Array): boolean {

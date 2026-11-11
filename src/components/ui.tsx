@@ -17,6 +17,7 @@ export function CopyButton({ text }: { text: string }) {
             type='button'
             className='btn btn-clipboard'
             title={copied ? 'Copied!' : 'Copy to clipboard'}
+            aria-label={copied ? 'Copied' : 'Copy to clipboard'}
             onClick={() => {
                 navigator.clipboard.writeText(text).then(() => {
                     setCopied(true);
