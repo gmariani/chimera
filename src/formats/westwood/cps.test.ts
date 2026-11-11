@@ -6,6 +6,7 @@ import { detect } from '../index';
 import { inspect } from '../inspect';
 import { type DecodeInfo, westwoodLzw, westwoodRle } from './compression';
 import cps from './cps';
+import { lzw, rle } from './encoders.test-util';
 import pak from './pak';
 
 const u16 = (v: number) => [v & 0xff, v >> 8];
@@ -16,41 +17,6 @@ const hex = (s: string) => Uint8Array.from(s.match(/../g)!.map((h) => parseInt(h
 function build(compression: number, body: ArrayLike<number>, { size = 64000, palette = [] as number[], fileSize }: { size?: number; palette?: number[]; fileSize?: number } = {}): Uint8Array {
     const rest = [...u16(compression), ...u32(size), ...u16(palette.length), ...palette, ...Array.from(body)];
     return Uint8Array.from([...u16(fileSize ?? rest.length), ...rest]);
-}
-
-/** Standard LZW, as Westwood's decoder reads it: 256 + n is what code n made plus the first byte of code n + 1. */
-function lzw(data: Uint8Array, bits: 12 | 14): Uint8Array {
-    const end = (1 << bits) - 1;
-    const dict = new Map<string, number>();
-    const codes: number[] = [];
-    let next = 256;
-    let w = '';
-    for (const byte of data) {
-        const c = String.fromCharCode(byte);
-        if (dict.has(w + c) || (w === '' && true)) {
-            w += c;
-            continue;
-        }
-        codes.push(w.length === 1 ? w.charCodeAt(0) : dict.get(w)!);
-        if (next < end) dict.set(w + c, next++);
-        w = c;
-    }
-    codes.push(w.length === 1 ? w.charCodeAt(0) : dict.get(w)!, end);
-    // High bits first, then zeros to a whole byte.
-    const out: number[] = [];
-    let acc = 0;
-    let n = 0;
-    for (const code of codes) {
-        acc = (acc << bits) | code;
-        n += bits;
-        while (n >= 8) {
-            out.push((acc >> (n - 8)) & 0xff);
-            n -= 8;
-        }
-        acc &= (1 << n) - 1;
-    }
-    if (n) out.push((acc << (8 - n)) & 0xff);
-    return Uint8Array.from(out);
 }
 
 /** A 320 × 200 picture with runs, repeats and noise, in values below 32 (so the Amiga can have it too). */
@@ -100,23 +66,6 @@ describe('RLE', () => {
 
 describe('CPS', () => {
     const pixels = picture();
-    const rle = (p: Uint8Array) => {
-        // Runs as long repeats; the rest as copies of up to 127.
-        const out: number[] = [];
-        for (let i = 0; i < p.length; ) {
-            let run = 1;
-            while (i + run < p.length && p[i + run] === p[i] && run < 0xffff) run++;
-            if (run > 3) {
-                out.push(0, run >> 8, run & 0xff, p[i]);
-                i += run;
-            } else {
-                const n = Math.min(127, p.length - i);
-                out.push(n, ...p.subarray(i, i + n));
-                i += n;
-            }
-        }
-        return out;
-    };
 
     it.each([
         [0, 'None', () => pixels],

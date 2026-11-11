@@ -1,4 +1,5 @@
 import { Bytes } from '../../core/bytes';
+import { westwoodRle } from './compression';
 import { pakLayout } from './pak';
 
 /**
@@ -114,8 +115,10 @@ export function sniffAud(data: Uint8Array): boolean {
  * decoded size, the palette size), the palette, then the picture. The decoded
  * size says which machine: 64,000 bytes on the PC (with a 768-byte palette or
  * none), 40,000 or 40,064 on the Amiga (five bit planes, 64-byte palettes).
+ * Any other size is a file packed in the same way (Lands of Lore's sprites,
+ * named .cmp: a whole Dune II sprite file, compressed).
  */
-export function cpsKind(data: Uint8Array): 'pc' | 'amiga' | null {
+export function cpsKind(data: Uint8Array): 'pc' | 'amiga' | 'packed' | null {
     if (data.length <= 10) return null;
     const b = new Bytes(data);
     const compression = b.u16(2);
@@ -126,7 +129,41 @@ export function cpsKind(data: Uint8Array): 'pc' | 'amiga' | null {
     if (!sized || compression > 4 || 10 + paletteSize > data.length) return null;
     if (decoded === 64000 && (paletteSize === 0 || paletteSize === 768)) return 'pc';
     if ((decoded === 40000 || decoded === 40064) && paletteSize % 64 === 0 && paletteSize <= 256) return 'amiga';
+    // A packed file: no palette (or a PC one), something to unpack, and not unpacking to more than LCW at its best could
+    // (about 64 times the data) or than the app would hold.
+    const stored = data.length - 10 - paletteSize;
+    if ((paletteSize === 0 || paletteSize === 768) && decoded > 0 && decoded <= 1 << 22 && (compression === 0 ? decoded === stored : decoded <= stored * 64)) return 'packed';
     return null;
+}
+
+/**
+ * The older CMP pictures (A Nightmare on Elm Street, DragonStrike): the file
+ * size, a type byte (1 and 2: 4-bit RLE across and down; 3: 8-bit LZW-12;
+ * 4: 8-bit RLE; 6: 8-bit LZW-14), and for the LZW types the decoded size,
+ * always 64,000. Then the picture, 320 × 200.
+ * See https://moddingwiki.shikadi.net/wiki/Westwood_CMP_Format.
+ */
+export const CMP_TYPES: Record<number, { bits: 4 | 8; method: 'rle' | 'lzw12' | 'lzw14'; down?: boolean; littleEndian?: boolean; header: number }> = {
+    1: { bits: 4, method: 'rle', littleEndian: true, header: 3 },
+    2: { bits: 4, method: 'rle', littleEndian: true, down: true, header: 3 },
+    3: { bits: 8, method: 'lzw12', header: 5 },
+    4: { bits: 8, method: 'rle', header: 3 },
+    6: { bits: 8, method: 'lzw14', header: 5 },
+};
+
+export function sniffCmp(data: Uint8Array): boolean {
+    if (data.length < 6) return false;
+    const b = new Bytes(data);
+    const type = CMP_TYPES[data[2]];
+    if (!type) return false;
+    // The size counts what follows it (and for type 4, one byte less again).
+    if (b.u16(0) + 2 !== data.length && !(data[2] === 4 && b.u16(0) + 3 === data.length)) return false;
+    if (type.method !== 'rle') return b.u16(3) === 64000;
+    // RLE has nothing else to check, so decode it: exactly a picture, from (nearly) all of the data.
+    const picture = type.bits === 4 ? 32000 : 64000;
+    const info = { read: 0, ended: false, badRefs: 0 };
+    const out = new Uint8Array(picture + 1);
+    return westwoodRle(data, out, type.littleEndian === true, type.header, info) === picture && info.read >= data.length - 1;
 }
 
 export function sniffCps(data: Uint8Array): boolean {

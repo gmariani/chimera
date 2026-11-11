@@ -22,6 +22,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | SHP sprites (TD/RA, TS/RA2, Dune II, and TD/RA's Dune II-style cursors) | headers, frame table | all frames, animation, any palette | PNG frame, sheet, all frames |
 | AUD audio (plain PCM, IMA and Westwood ADPCM) | header, every chunk; sizes that don't add up and hidden data called out | player | WAV |
 | CPS pictures (PC and Amiga; uncompressed, LZW 12- and 14-bit, RLE, LCW) | header, palettes; damaged compressed data and hidden data called out | image (each palette, on the Amiga) | PNG |
+| CMP pictures (CPS's predecessor: A Nightmare on Elm Street, DragonStrike; 4-bit RLE across or down, 8-bit RLE, LZW 12- and 14-bit) and Lands of Lore's packed .cmp files | header; damaged data and hidden data called out | image (EGA colors for 4-bit); the packed file inside | PNG |
 | PCX pictures (256-color and 24-bit) | headers | image | PNG |
 | WSA animations (C&C and Kyrandia; Dune II 1.00 and 1.07) | header, frame offsets, palette, every frame; buffer overruns and broken loops called out | all frames, animation | PNG frame, sheet, all frames |
 | Terrain tile sets (.tem, .des, .win, .sno, .int, .icn) | header, tiles, cell map | the template assembled, each tile | PNG |

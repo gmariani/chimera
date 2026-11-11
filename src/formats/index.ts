@@ -16,6 +16,7 @@ import {
     sniffCsf,
     sniffGaba,
     sniffUnicodeFont,
+    sniffCmp,
     sniffCps,
     sniffFont,
     sniffIni,
@@ -60,7 +61,10 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'shp-ts', name: 'Sprite (TS/RA2 SHP)', extensions: ['shp'], alsoNamed: THEATERS, sniff: sniffShpTs, load: parserOf(() => import('./westwood/shp-ts')) },
     { id: 'shp-d2', name: 'Sprite (Dune II-style SHP)', extensions: ['shp'], sniff: sniffShpD2, load: parserOf(() => import('./westwood/shp-d2')) },
     { id: 'aud', name: 'Westwood audio', extensions: ['aud', 'juv', 'v00', 'v01', 'v02', 'v03', 'r00', 'r01', 'r02', 'r03'], sniff: sniffAud, load: parserOf(() => import('./westwood/aud')) },
-    { id: 'cps', name: 'Picture (CPS)', extensions: ['cps'], sniff: sniffCps, load: parserOf(() => import('./westwood/cps')) },
+    // Before CPS: an old CMP's RLE could look like a CPS header, but only a CMP decodes to exactly a picture.
+    { id: 'cmp', name: 'Picture (CMP)', extensions: ['cmp'], sniff: sniffCmp, load: parserOf(() => import('./westwood/cmp')) },
+    // Lands of Lore's .cmp sprites are CPS-style packed files.
+    { id: 'cps', name: 'Picture or packed file (CPS)', extensions: ['cps', 'cmp'], sniff: sniffCps, load: parserOf(() => import('./westwood/cps')) },
     { id: 'vqa', name: 'Video (VQA)', extensions: ['vqa'], sniff: sniffVqa, load: parserOf(() => import('./westwood/vqa')) },
     { id: 'tmp', name: 'Isometric tiles (TS/RA2)', extensions: ['tmp', 'tem', 'sno', 'urb', 'des', 'lun', 'ubn'], sniff: sniffTmp, load: parserOf(() => import('./westwood/tmp')) },
     { id: 'vxl', name: 'Voxel model (TS/RA2)', extensions: ['vxl'], sniff: sniffVxl, companions: true, load: parserOf(() => import('./westwood/vxl')) },
