@@ -156,7 +156,9 @@ export async function inspect(data: Uint8Array, context: ParseContext, { as, sho
     const holds = (f: FormatDescriptor) => readsAlso.includes(f);
     if (!forced) {
         // Read as what its name says, it holds up: that's enough.
-        const nameClaims = nameHolds || claimed.some(holds) ? [] : claimed;
+        // (A module with no code under another name, as Dune II's DUNE2.ICO is, gets its own warning below instead: it can't run.)
+        const codelessModule = !!sig?.codeless && format.id === sig.format;
+        const nameClaims = nameHolds || claimed.some(holds) || codelessModule ? [] : claimed;
         const sigClaim = signatureHolds || !signed || holds(signed) ? null : signed;
         if (sigClaim && nameClaims.includes(sigClaim)) {
             checks.push({ level: 'danger', text: `It's named .${ext} and starts like ${a(sig!.name)} (${quoted(data, sig!.length)}), but it isn't one: this is ${what}.${reason(sigClaim)}` });
@@ -165,11 +167,13 @@ export async function inspect(data: Uint8Array, context: ParseContext, { as, sho
             if (sigClaim) checks.push({ level: 'danger', text: `It starts like ${a(sig!.name)} (${quoted(data, sig!.length)}), but it isn't one: this is ${what}.${reason(sigClaim)}` });
         }
         // A program or script under another type's name (a backup's name says nothing either way).
-        if (format === RAW && sig?.runs && ext && !namedAs(sig, ext) && nameHolds) {
+        // (Read by nothing, or by the reader for programs of its kind: a 16-bit Windows module read as one is still a program.)
+        const asProgram = format === RAW || format.id === sig?.format;
+        if (asProgram && sig?.runs && ext && !namedAs(sig, ext) && nameHolds) {
             checks.push({ level: BACKUPS.includes(ext) ? 'warning' : 'danger', text: `It's ${a(sig.name)}, named .${ext}.` });
         }
         // A program's container with no code, under another name: it can't run, but it isn't what the name says (Dune II's DUNE2.ICO).
-        if (format === RAW && sig?.codeless && ext && !namedAs(sig, ext) && !BACKUPS.includes(ext)) {
+        if (asProgram && sig?.codeless && ext && !namedAs(sig, ext) && !BACKUPS.includes(ext)) {
             checks.push({ level: 'warning', text: `It's named .${ext}, but it's ${a(sig.name)}: laid out like a program, but with nothing in it to run.` });
         }
         for (const f of readsAlso)

@@ -57,6 +57,8 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Flash movies (SWF, plain or zlib-compressed) | header and every tag by frame, to the SWF 19 fields | metadata | bitmaps (JPEG, PNG), sounds (MP3; PCM, ADPCM and Nellymoser as WAV), streamed sound, video as FLV, binary data, fonts, ABC bytecode, the uncompressed movie |
 | Pixel Bender kernels (.pbj) | every record and instruction | disassembly | — |
 | TrueType and OpenType fonts (TrueType and CFF outlines, CID-keyed; collections) | table directory, head, hhea, maxp, name, OS/2, post, cmap, CFF | every glyph, the names | PNG |
+| 16-bit Windows modules (NE: Windows 3 programs, libraries and drivers, .fon fonts, icon libraries such as Dune II's DUNE2.ICO) | MZ and NE headers, segments, resources, names, imports; bytes nothing points to called out; one with no code under another name is warned about, one with code is dangerous | bitmaps (icons and cursors open from Contents) | each resource; each icon and cursor group as an .ico or .cur, which opens and draws |
+| Windows icons and cursors (.ico, .cur) | header, every entry and image: bitmap header, colors, pixels, mask; sizes that don't agree, masks saved as text, bytes nothing points to called out | every size (1 to 32 bits a pixel, and PNG), see-through as drawn | — |
 | Other text | — | text | — |
 
 Sprites and voxels have a **Team color** picker: the games recolor 16 palette entries for the owner (176–191 in TD, 80–95 in RA, 16–31 in TS and RA2); the shades here are close to the games', not exact.

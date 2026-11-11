@@ -58,7 +58,7 @@ describe('checks every file gets', () => {
     it('knows a 16-bit Windows module with no code from a program', async () => {
         const icons = await open(module16(), 'game.ico');
         expect(icons.parsed.title).toBe('16-bit Windows module with no code (NE), holding icons');
-        expect(icons.checks).toEqual([
+        expect(icons.checks.filter((c) => c.level !== 'info')).toEqual([
             { level: 'warning', text: "It's named .ico, but it's a 16-bit Windows module with no code (NE), holding icons: laid out like a program, but with nothing in it to run." },
         ]);
         // Named as what it is: nothing to warn about.
@@ -66,7 +66,7 @@ describe('checks every file gets', () => {
         expect((await open(module16({ resource: 0x8008 }), 'serif.fon')).parsed.title).toBe('16-bit Windows module with no code (NE), holding fonts');
         // With code, it's a program, and under another name, dangerous.
         const code = await open(module16({ segments: 3 }), 'game.ico');
-        expect(code.parsed.title).toBe('16-bit Windows program or library (NE)');
+        expect(code.parsed.title).toBe('16-bit Windows program (NE)');
         expect(code.checks[0]).toMatchObject({ level: 'danger' });
     });
 

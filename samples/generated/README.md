@@ -30,6 +30,9 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `wav-pcm8.wav` | WAV sound: 8-bit PCM | 1,144 bytes |
 | `fnt-ra2-map.fnt` | RA2 map editor font (FoNt), the letters of CHIMERA | 256 bytes |
 | `fnt-nox.fnt` | Nox font (tNoF), the letters of CHIMERA | 244 bytes |
+| `icon.ico` | Windows icon at three sizes: 16 × 16 in 16 colors, 32 × 32 with its own transparency, and 48 × 48 as a PNG | 11,642 bytes |
+| `cursor.cur` | Windows cursor: a 32 × 32 arrow in 2 colors, its hot spot at the tip | 326 bytes |
+| `icons.icl` | Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon | 528 bytes |
 | `palette.pal` | VGA palette: the 16 EGA colors, then a gray ramp | 768 bytes |
 | `png-rgb.png` | PNG picture: RGB, a color wheel of sorts | 12,420 bytes |
 | `pak-v1.pak` | Westwood PAK, version 1 (Eye of the Beholder), holding three of these | 66,753 bytes |

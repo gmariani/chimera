@@ -274,6 +274,139 @@ function tNoF(): Uint8Array {
     return bytes(text('tNoF'), u32(1), u32(6), u32(1), u32(7), u32(1), u32(8), u32(0), u16(65), u16(65 + LETTERS.length - 1), [...LETTERS].flatMap(glyph));
 }
 
+// Windows
+
+/**
+ * A 16 × 16 icon in 16 colors as Windows stores one: a BITMAPINFOHEADER (the height doubled, for the mask), the 16 colors,
+ * the pixels bottom row first at 4 bits each, then the mask, 1 bit each (1: see-through), each row padded to 4 bytes.
+ * The picture: a diamond of color 12 on 1, with its corners see-through.
+ */
+export function iconDib(): number[] {
+    const p6 = palette6();
+    const colors = Array.from({ length: 16 }, (_, i) => [p6[i * 3 + 2] << 2, p6[i * 3 + 1] << 2, p6[i * 3] << 2, 0]).flat();
+    const inside = (x: number, y: number) => Math.abs(x - 7.5) + Math.abs(y - 7.5) <= 8;
+    const color = (x: number, y: number) => (Math.abs(x - 7.5) + Math.abs(y - 7.5) <= 4 ? 12 : 1);
+    const rows: number[] = [];
+    const mask: number[] = [];
+    for (let y = 15; y >= 0; y--) {
+        for (let x = 0; x < 16; x += 2) rows.push((inside(x, y) ? color(x, y) << 4 : 0) | (inside(x + 1, y) ? color(x + 1, y) : 0));
+        let bits = 0;
+        for (let x = 0; x < 16; x++) if (!inside(x, y)) bits |= 0x8000 >> x;
+        mask.push(bits >> 8, bits & 0xff, 0, 0);
+    }
+    return [...u32(40), ...u32(16), ...u32(32), ...u16(1), ...u16(4), ...u32(0), ...u32(rows.length + mask.length), ...u32(0), ...u32(0), ...u32(0), ...u32(0), ...colors, ...rows, ...mask];
+}
+
+/**
+ * A Windows 3 icon library: a 16-bit module (MZ, then NE) with no code, holding one icon and the group that lists it,
+ * named CHIMERA. As icon editors made them, and as Dune II's DUNE2.ICO is.
+ */
+export function iconLibrary({ segments = 0 }: { segments?: number } = {}): Uint8Array {
+    const icon = iconDib();
+    const group = [...u16(0), ...u16(1), ...u16(1), 16, 16, 16, 0, ...u16(1), ...u16(4), ...u32(icon.length), ...u16(1)];
+    const shift = 4;
+    const align = (n: number) => Math.ceil(n / 16) * 16;
+    // Laid out: the MZ header, the NE header at 0x40, the resource table at 0x80, the names, then the resources, 16-byte aligned.
+    const resTable = 0x80;
+    const resTableLength = 2 + (8 + 12) * 2 + 2 + 1;
+    const resident = resTable + resTableLength;
+    const name = [7, ...text('CHIMERA'), ...u16(0), 0];
+    const after = resident + name.length;
+    const groupAt = align(after);
+    const iconAt = align(groupAt + group.length);
+    const out = new Uint8Array(align(iconAt + icon.length));
+    const v = new DataView(out.buffer);
+    out.set(text('MZ'), 0);
+    v.setUint32(0x3c, 0x40, true);
+    const ne = 0x40;
+    out.set(text('NE'), ne);
+    out.set([5, 1], ne + 2);
+    for (const [at, value] of [
+        [0x04, after - ne], // the entry table (empty)
+        [0x1c, segments],
+        [0x22, resTable - ne], // the segment table (empty), where the resources start
+        [0x24, resTable - ne],
+        [0x26, resident - ne],
+        [0x28, after - ne], // module references (none)
+        [0x2a, after - ne], // imported names (none)
+        [0x32, shift],
+    ])
+        v.setUint16(ne + at, value, true);
+    out[ne + 0x36] = 2; // Windows
+    out.set([0, 3], ne + 0x3e); // Windows 3.00
+    const entry = (at: number, length: number, id: number) => [...u16(at >> shift), ...u16(Math.ceil(length / 16)), ...u16(0x1c30), ...u16(0x8000 | id), ...u32(0)];
+    out.set([...u16(shift), ...u16(0x800e), ...u16(1), ...u32(0), ...entry(groupAt, group.length, 1), ...u16(0x8003), ...u16(1), ...u32(0), ...entry(iconAt, icon.length, 1), ...u16(0), 0], resTable);
+    out.set(name, resident);
+    out.set(group, groupAt);
+    out.set(icon, iconAt);
+    return out;
+}
+
+/** A 32 × 32 icon at 32 bits a pixel: a disc fading from opaque in the middle to see-through at its edge, with its own alpha. */
+export function iconDib32(): number[] {
+    const pixels: number[] = [];
+    for (let y = 31; y >= 0; y--)
+        for (let x = 0; x < 32; x++) {
+            const r = Math.hypot(x - 15.5, y - 15.5);
+            pixels.push(255 - x * 6, 40 + y * 6, 200, r > 15 ? 0 : Math.round(255 * Math.min(1, (15 - r) / 4)));
+        }
+    // The mask is all 0s: the alpha says what's see-through.
+    const mask = new Array(32 * 4).fill(0);
+    return [...u32(40), ...u32(32), ...u32(64), ...u16(1), ...u16(32), ...u32(0), ...u32(pixels.length + mask.length), ...u32(0), ...u32(0), ...u32(0), ...u32(0), ...pixels, ...mask];
+}
+
+/** A 32 × 32 arrow at 1 bit a pixel: white with a black edge, its hot spot at the tip (0, 0). */
+export function cursorDib(): number[] {
+    const inside = (x: number, y: number) => x <= y && x + y < 40 && y < 26;
+    const edge = (x: number, y: number) => inside(x, y) && !(inside(x - 1, y) && inside(x + 1, y) && inside(x, y - 1) && inside(x, y + 1));
+    const rows: number[] = [];
+    const mask: number[] = [];
+    for (let y = 31; y >= 0; y--) {
+        let color = 0;
+        let clear = 0;
+        for (let x = 0; x < 32; x++) {
+            if (inside(x, y) && !edge(x, y)) color |= 2 ** (31 - x);
+            if (!inside(x, y)) clear |= 2 ** (31 - x);
+        }
+        rows.push(...be32(color));
+        mask.push(...be32(clear));
+    }
+    return [
+        ...u32(40),
+        ...u32(32),
+        ...u32(64),
+        ...u16(1),
+        ...u16(1),
+        ...u32(0),
+        ...u32(rows.length + mask.length),
+        ...u32(0),
+        ...u32(0),
+        ...u32(2),
+        ...u32(0),
+        0,
+        0,
+        0,
+        0,
+        255,
+        255,
+        255,
+        0,
+        ...rows,
+        ...mask,
+    ];
+}
+
+/** An .ico or .cur: a 6-byte header, a 16-byte entry for each image (width, height, colors, 0, then planes and bits or the hot spot), then the images. */
+export function iconFile(images: { image: ArrayLike<number>; width: number; height: number; colors?: number; planes?: number; bits?: number }[], type: 1 | 2 = 1): Uint8Array {
+    let at = 6 + images.length * 16;
+    const entries = images.flatMap((x) => {
+        const e = [x.width & 0xff, x.height & 0xff, x.colors ?? 0, 0, ...u16(x.planes ?? 1), ...u16(x.bits ?? 32), ...u32(x.image.length), ...u32(at)];
+        at += x.image.length;
+        return e;
+    });
+    return bytes([0, 0, ...u16(type), ...u16(images.length)], entries, ...images.map((x) => x.image));
+}
+
 // The list
 
 /** Every sample, in the order they're listed. */
@@ -323,13 +456,31 @@ export function samples(): Sample[] {
         { name: 'wav-pcm8.wav', format: 'wav', about: 'WAV sound: 8-bit PCM', data: wav(11025, tone) },
         { name: 'fnt-ra2-map.fnt', format: 'fnt-ts', about: 'RA2 map editor font (FoNt), the letters of CHIMERA', data: foNt() },
         { name: 'fnt-nox.fnt', format: 'fnt-ts', about: 'Nox font (tNoF), the letters of CHIMERA', data: tNoF() },
+        {
+            name: 'icon.ico',
+            format: 'ico',
+            about: 'Windows icon at three sizes: 16 × 16 in 16 colors, 32 × 32 with its own transparency, and 48 × 48 as a PNG',
+            data: iconFile([
+                { image: iconDib(), width: 16, height: 16, colors: 16, bits: 4 },
+                { image: iconDib32(), width: 32, height: 32, bits: 32 },
+                { image: png(48, 48, (x, y) => [x * 5, 255 - y * 5, 128]), width: 48, height: 48, bits: 32 },
+            ]),
+        },
+        {
+            name: 'cursor.cur',
+            format: 'ico',
+            about: 'Windows cursor: a 32 × 32 arrow in 2 colors, its hot spot at the tip',
+            data: iconFile([{ image: cursorDib(), width: 32, height: 32, colors: 2, planes: 0, bits: 0 }], 2),
+        },
+        { name: 'icons.icl', format: 'ne', about: 'Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon', data: iconLibrary() },
         { name: 'palette.pal', format: 'pal', about: 'VGA palette: the 16 EGA colors, then a gray ramp', data: palette6() },
         { name: 'png-rgb.png', format: 'png', about: 'PNG picture: RGB, a color wheel of sorts', data: png(64, 64, (x, y) => [x * 4, y * 4, 255 - (x + y) * 2]) },
     ];
+    const byName = (name: string) => out.find((s) => s.name === name)!.data;
     const archived: [string, Uint8Array][] = [
-        ['CARD.CPS', out[0].data],
-        ['TONE.VOC', out[15].data],
-        ['PALETTE.PAL', out[22].data],
+        ['CARD.CPS', byName('cps-none.cps')],
+        ['TONE.VOC', byName('voc-pcm8.voc')],
+        ['PALETTE.PAL', byName('palette.pal')],
     ];
     out.push(
         { name: 'pak-v1.pak', format: 'pak', about: 'Westwood PAK, version 1 (Eye of the Beholder), holding three of these', data: pak(1, archived) },

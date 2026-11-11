@@ -23,7 +23,7 @@ export interface Signature {
 }
 
 /** What DOS and Windows programs and libraries are named. */
-const PROGRAMS = ['exe', 'dll', 'com', 'scr', 'sys', 'ocx', 'cpl', 'drv', 'efi', 'mui', 'ax', 'vxd', '386', 'ovl', 'acm', 'tsp', 'ime'];
+const PROGRAMS = ['exe', 'dll', 'com', 'scr', 'sys', 'ocx', 'cpl', 'drv', 'mod', 'efi', 'mui', 'ax', 'vxd', '386', 'ovl', 'acm', 'tsp', 'ime'];
 
 /** Whether a file with this signature is named as such files are. */
 export function namedAs(sig: Signature, ext: string | null): boolean {
@@ -43,7 +43,7 @@ function newExecutable(data: Uint8Array, ne: number): Signature | null {
     const os = data[ne + 0x36] === 1 ? 'OS/2' : 'Windows';
     const segments = u16le(data, ne + 0x1c);
     const entries = u16le(data, ne + 0x06);
-    if (segments || entries) return { name: `16-bit ${os} program or library (NE)`, ext: 'exe', exts: PROGRAMS, length: 2, runs: true };
+    if (segments || entries) return { name: `16-bit ${os} program or library (NE)`, ext: 'exe', exts: PROGRAMS, format: 'ne', length: 2, runs: true };
     // What it holds, from its resource table: a shift, then for each type an ID, a count and a word, then that many 12-byte entries.
     const held = new Set<string>();
     let at = ne + u16le(data, ne + 0x24) + 2;
@@ -57,7 +57,7 @@ function newExecutable(data: Uint8Array, ne: number): Signature | null {
     const kinds = [...held].filter((k) => k !== 'shortcut keys');
     const what = kinds.length ? kinds.join(' and ') : 'resources';
     const ext = held.has('fonts') ? 'fon' : held.has('icons') ? 'icl' : 'dll';
-    return { name: `16-bit ${os} module with no code (NE), holding ${what}`, ext, exts: ['icl', 'fon', 'dll', 'exe'], length: 2, codeless: true };
+    return { name: `16-bit ${os} module with no code (NE), holding ${what}`, ext, exts: ['icl', 'fon', 'dll', 'exe'], format: 'ne', length: 2, codeless: true };
 }
 
 const ascii = (data: Uint8Array, at: number, text: string) => {
