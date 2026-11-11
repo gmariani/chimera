@@ -475,6 +475,31 @@ export function pif({
     return bytes(basic, headers);
 }
 
+/**
+ * A Westwood string table: a 2-byte offset for each string (the first is also the table's size), then the strings, each
+ * ending in a NUL. With `compressed`, Dune II's: each common pair of letters a byte. Otherwise plain DOS text, its
+ * accented letters in the PC's own character set (code page 437: 0x84 is ä, 0x82 é).
+ */
+export function stringTable(compressed: boolean): Uint8Array {
+    const lines = compressed
+        ? [
+              'The Harkonnen come from the dark planet of Giedi Prime.',
+              'Our ancestral home is the lush planet of Caladan, where we respect the lives and rights of all people.',
+              'House Ordos was formed by a group of wealthy families, driven by a lust for credits and control.',
+              'Spice is the most valuable substance in the universe: whoever controls the spice controls the universe.',
+              'Build a windtrap to power your base, then a refinery to process the spice your harvesters collect.',
+          ]
+        : ['Build', 'Geb\x84ude ausbauen', 'Am\x82lioration'];
+    const encoded = lines.map((l) => [...(compressed ? dune2Compress(l) : Array.from(l, (c) => c.charCodeAt(0))), 0]);
+    let at = lines.length * 2;
+    const offsets = encoded.flatMap((e) => {
+        const o = u16(at);
+        at += e.length;
+        return o;
+    });
+    return bytes(offsets, encoded.flat());
+}
+
 // The list
 
 /** Every sample, in the order they're listed. */
@@ -543,6 +568,8 @@ export function samples(): Sample[] {
         { name: 'icons.icl', format: 'ne', about: 'Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon', data: iconLibrary() },
         { name: 'mentat.eng', format: 'mentat', about: 'Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does', data: mentat() },
         { name: 'program.pif', format: 'pif', about: 'Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections', data: pif() },
+        { name: 'strings-dune2.eng', format: 'strings', about: 'Dune II string table, compressed as the game does', data: stringTable(true) },
+        { name: 'strings-dos.ger', format: 'strings', about: 'C&C-style string table, plain, with accented letters in DOS characters', data: stringTable(false) },
         { name: 'palette.pal', format: 'pal', about: 'VGA palette: the 16 EGA colors, then a gray ramp', data: palette6() },
         { name: 'png-rgb.png', format: 'png', about: 'PNG picture: RGB, a color wheel of sorts', data: png(64, 64, (x, y) => [x * 4, y * 4, 255 - (x + y) * 2]) },
     ];

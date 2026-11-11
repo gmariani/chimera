@@ -31,6 +31,33 @@ const SECOND = [
 /** The upper half of the PC's own character set (code page 437), which DOS games' fonts follow: their accented letters. */
 const CP437 = 'ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■\u00a0';
 
+/** DOS text: bytes from 0x80 up as the PC's own character set (C&C's and Dune II's fonts follow it: "Gebäude", "Amélioration", and box lines). */
+export function dosText(bytes: Uint8Array): string {
+    let out = '';
+    for (const c of bytes) out += c >= 0x80 ? CP437[c - 0x80] : String.fromCharCode(c);
+    return out;
+}
+
+/**
+ * Whether these bytes are Dune II's compressed text: letter pairs make a lot of the bytes high (half and more in the game's
+ * files), and spread them over many values. Plain text's high bytes are a few accented letters or box lines: C&C's
+ * German and French string tables use 7 and 10 different ones, Dune II's compressed ones 99 to 124.
+ */
+export function looksCompressed(bytes: Uint8Array): boolean {
+    let text = 0;
+    let high = 0;
+    const values = new Set<number>();
+    for (const c of bytes) {
+        if (!c) continue;
+        text++;
+        if (c >= 0x80) {
+            high++;
+            values.add(c);
+        }
+    }
+    return text > 0 && high / text >= 0.2 && values.size >= 48;
+}
+
 /** The text these bytes make, decompressed; and how many of them were letter pairs. */
 export function dune2Text(bytes: Uint8Array): { text: string; pairs: number } {
     let out = '';

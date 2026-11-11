@@ -35,6 +35,8 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `icons.icl` | Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon | 528 bytes |
 | `mentat.eng` | Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does | 224 bytes |
 | `program.pif` | Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections | 545 bytes |
+| `strings-dune2.eng` | Dune II string table, compressed as the game does | 291 bytes |
+| `strings-dos.ger` | C&C-style string table, plain, with accented letters in DOS characters | 42 bytes |
 | `palette.pal` | VGA palette: the 16 EGA colors, then a gray ramp | 768 bytes |
 | `png-rgb.png` | PNG picture: RGB, a color wheel of sorts | 12,420 bytes |
 | `pak-v1.pak` | Westwood PAK, version 1 (Eye of the Beholder), holding three of these | 66,753 bytes |

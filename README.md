@@ -43,7 +43,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | TS and RA2 maps (.map, .mpr, .yrm; inside .mmx/.yro) | sections, cells, overlays, objects | drawn with the game's tiles, ore, walls, bridges, trees, buildings (with their animated parts, defense turrets and damage), infantry and lit voxel vehicles (in each side's color) once the main archive is open (otherwise by height); the map's own preview | PNG |
 | Fonts (.fnt: TD/RA 4-bit, TS 8-bit; 1-bit BitFonts: TS/RA2 Unicode, RA2's map editor, Nox) | header, each character; pixels hidden past a glyph's width, unused glyphs and data after the end called out | every character | PNG |
 | PAL palettes | each color | swatches, use for sprites | — |
-| String tables (.eng, .ger, .fre) | offsets, each string | numbered list | — |
+| String tables (.eng, .ger, .fre; Dune II's compressed ones decompressed) | offsets, each string | numbered list, in DOS's characters (C&C's accents, box lines) | — |
 | Color remap tables (TD .mrf) | each table | the palette through each table | PNG |
 | Chronal vortex frames (RA .lut) | every pixel | warp and shading | PNG |
 | VQP palette blending tables | tables | first table | — |
