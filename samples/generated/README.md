@@ -20,6 +20,7 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `cmp-type4.cmp` | CMP picture: 256 colors, RLE | 38,363 bytes |
 | `cmp-type6.cmp` | CMP picture: 256 colors, LZW with 14-bit codes | 5,408 bytes |
 | `icn-dune2.icn` | Dune II map tiles: 8 tiles, two palettes (one with see-through edges) | 1,120 bytes |
+| `icon-dune2.map` | Dune II ICON.MAP: the 26 groups the game reads, of icn-dune2.icn’s tiles | 236 bytes |
 | `wsa-cnc.wsa` | WSA animation, the C&C header: a square moving across | 2,158 bytes |
 | `wsa-dune2-100.wsa` | WSA animation, Dune II 1.00’s header | 2,152 bytes |
 | `wsa-dune2-107.wsa` | WSA animation, Dune II 1.07’s header | 2,154 bytes |

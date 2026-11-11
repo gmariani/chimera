@@ -228,7 +228,7 @@ function pak(version: 1 | 2 | 3, files: [string, Uint8Array][]): Uint8Array {
 // Tiles and fonts
 
 /** Dune II map tiles: 16 × 16 tiles from the test card, two palettes (one with see-through 0), and which each uses. */
-function icn(): Uint8Array {
+export function icn(): Uint8Array {
     const card = testCard();
     const tiles: number[] = [];
     const count = 8;
@@ -247,6 +247,23 @@ function icn(): Uint8Array {
         ),
     ];
     return bytes(text('FORM'), be32(4 + body.length), text('ICON'), body);
+}
+
+/**
+ * Dune II's ICON.MAP for those 8 tiles: the 26 groups the game reads, each a tile or two (a building, one state of its
+ * footprint), then the 0 that ends the index.
+ */
+export function iconMap(): Uint8Array {
+    // How many tiles each group has: 10 that aren't buildings, then the buildings' footprints (OpenDUNE's layouts).
+    const sizes = [1, 1, 1, 1, 2, 2, 2, 1, 2, 1, 9, 4, 6, 6, 4, 4, 4, 4, 4, 9, 6, 6, 1, 1, 4, 4];
+    const index = [sizes.length + 1];
+    const tiles: number[] = [];
+    for (const n of sizes) {
+        index.push(sizes.length + 2 + tiles.length);
+        for (let i = 0; i < n; i++) tiles.push((tiles.length * 3) % 8);
+    }
+    index.push(0);
+    return bytes(...index.map(u16), ...tiles.map(u16));
 }
 
 /** The glyphs of "CHIMERA" in a 5 × 7 font, one byte a row (the leftmost pixel in the high bit). */
@@ -522,6 +539,7 @@ export function samples(): Sample[] {
         { name: 'cmp-type4.cmp', format: 'cmp', about: 'CMP picture: 256 colors, RLE', data: cmp(4, rle(card)) },
         { name: 'cmp-type6.cmp', format: 'cmp', about: 'CMP picture: 256 colors, LZW with 14-bit codes', data: cmp(6, lzw(card, 14)) },
         { name: 'icn-dune2.icn', format: 'icn-d2', about: 'Dune II map tiles: 8 tiles, two palettes (one with see-through edges)', data: icn() },
+        { name: 'icon-dune2.map', format: 'icon-map', about: 'Dune II ICON.MAP: the 26 groups the game reads, of icn-dune2.icn’s tiles', data: iconMap() },
         { name: 'wsa-cnc.wsa', format: 'wsa', about: 'WSA animation, the C&C header: a square moving across', data: wsa('cnc') },
         { name: 'wsa-dune2-100.wsa', format: 'wsa', about: 'WSA animation, Dune II 1.00’s header', data: wsa('dune2-100') },
         { name: 'wsa-dune2-107.wsa', format: 'wsa', about: 'WSA animation, Dune II 1.07’s header', data: wsa('dune2-107') },

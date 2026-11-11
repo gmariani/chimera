@@ -23,6 +23,7 @@ import {
     sniffCps,
     sniffFont,
     sniffIcnD2,
+    sniffIconMap,
     sniffMentat,
     sniffIni,
     sniffMapTd,
@@ -123,6 +124,8 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'lut', name: 'Chronal vortex frame (RA)', extensions: ['lut'], sniff: sniffVortex, load: parserOf(() => import('./westwood/lut')) },
     { id: 'mrf', name: 'Color remap tables', extensions: ['mrf'], sniff: () => false, load: parserOf(() => import('./westwood/mrf')) },
     { id: 'pal', name: 'Palette', extensions: ['pal'], sniff: sniffPal, load: parserOf(() => import('./westwood/pal')) },
+    // Dune 2000's missions are .map too, so the name alone says nothing.
+    { id: 'icon-map', name: 'Map tile groups (Dune II ICON.MAP)', extensions: ['map'], sniff: sniffIconMap, byNameAlone: false, companions: true, load: parserOf(() => import('./westwood/icon-map')) },
     { id: 'map-td', name: 'Map terrain (TD)', extensions: ['bin'], sniff: sniffMapTd, byNameAlone: false, companions: true, load: parserOf(() => import('./westwood/map-td')) },
     { id: 'ini', name: 'Settings (INI)', extensions: ['ini'], sniff: sniffIni, companions: true, load: parserOf(() => import('./ini')) },
     { id: 'text', name: 'Text', extensions: ['txt', 'ini', 'eng', 'ger', 'fre', 'csv'], sniff: sniffText, load: parserOf(() => import('./text')) },

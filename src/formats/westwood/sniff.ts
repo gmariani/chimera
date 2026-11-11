@@ -223,6 +223,40 @@ export function sniffIcnD2(data: Uint8Array): boolean {
     return data.length > 20 && b.ascii(0, 4) === 'FORM' && b.ascii(8, 4) === 'ICON' && b.ascii(12, 4) === 'SINF';
 }
 
+/** No more groups than this are looked at to recognize an ICON.MAP (the game's has 26). */
+const ICON_MAP_MAX_GROUPS = 4096;
+
+/**
+ * Dune II's ICON.MAP, which has no signature: 16-bit words, the first the
+ * number of index entries (the groups and an end marker), then where each
+ * group starts, in words. The first group starts right after the index, and
+ * each starts no earlier than the one before, inside the file. Returns where
+ * each group starts, or what doesn't fit.
+ */
+export function iconMapIndex(data: Uint8Array): { count: number; starts: number[] } | string {
+    const words = data.length >> 1;
+    const word = (i: number) => data[i * 2] | (data[i * 2 + 1] << 8);
+    const count = word(0);
+    if (words < 4) return `It's ${data.length} bytes, too short for an index and a group.`;
+    if (count < 2 || count > ICON_MAP_MAX_GROUPS) return `Its first word, the number of index entries, is ${count.toLocaleString('en-US')}.`;
+    if (count >= words) return `Its index of ${count.toLocaleString('en-US')} entries runs past the end of the file.`;
+    if (word(1) !== count + 1) return `The first group should start right after the index, at word ${count + 1}, but it starts at ${word(1)}.`;
+    const starts: number[] = [];
+    for (let g = 1; g < count; g++) {
+        const at = word(g);
+        if (at > words) return `Group ${g} starts at word ${at.toLocaleString('en-US')}, past the end of the file.`;
+        if (starts.length && at < starts[starts.length - 1]) return `Group ${g} starts at word ${at}, before group ${g - 1}.`;
+        starts.push(at);
+    }
+    return { count, starts };
+}
+
+/** By content alone, it takes more: at least two groups, and the 0 that ends the index (which the game doesn't read, but its file has). */
+export function sniffIconMap(data: Uint8Array): boolean {
+    const index = iconMapIndex(data);
+    return typeof index !== 'string' && index.count >= 3 && data[index.count * 2] === 0 && data[index.count * 2 + 1] === 0;
+}
+
 export function sniffTiles(data: Uint8Array): boolean {
     return tilesLayout(data) !== null;
 }
