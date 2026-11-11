@@ -64,6 +64,40 @@ export function palette6(): Uint8Array {
 }
 
 /**
+ * A Miles AIL 2 digital sound driver as Miles laid them out (DMASOUND.ASM): where the function table is, the copyright
+ * ending in 0x1A, the table (ending 0xFFFF), the description table and its device names, then the code: here each
+ * function is a bare far return (0xCB), so nothing would happen if one were called.
+ */
+export function ailDriver(): Uint8Array {
+    const copyright = text('Copyright (C) 2026 Chimera sample, not a real driver.\x1a');
+    const functions = [100, 101, 102, 104, 123, 124, 125, 126];
+    const table = 2 + copyright.length;
+    const description = table + functions.length * 4 + 2;
+    const names = text('Sample Sound Card\0Its Twin\0\0');
+    const code = description + 24 + names.length;
+    return bytes(
+        u16(table),
+        copyright,
+        ...functions.map((f, i) => [...u16(f), ...u16(code + i)]),
+        u16(0xffff),
+        // Needs AIL 2.00; type 2 (digital); plays VOC files; the names; port 0x220, IRQ 7, DMA 1, no DRQ; no timer; no display.
+        u16(200),
+        u16(2),
+        text('VOC\0'),
+        u16(description + 24),
+        u16(0),
+        u16(0x220),
+        u16(7),
+        u16(1),
+        u16(0xffff),
+        u16(0xffff),
+        u16(0),
+        names,
+        functions.map(() => 0xcb)
+    );
+}
+
+/**
  * A remap like Dune II's GRAYRMAP.TBL, for that palette: color 0 (see-through) and the grays stay as they are, and each
  * EGA color becomes the gray of its brightness.
  */
@@ -598,6 +632,7 @@ export function samples(): Sample[] {
         },
         { name: 'icons.icl', format: 'ne', about: 'Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon', data: iconLibrary() },
         { name: 'mentat.eng', format: 'mentat', about: 'Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does', data: mentat() },
+        { name: 'driver.adv', format: 'ail', about: 'Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF', data: ailDriver() },
         { name: 'program.pif', format: 'pif', about: 'Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections', data: pif() },
         { name: 'strings-dune2.eng', format: 'strings', about: 'Dune II string table, compressed as the game does', data: stringTable(true) },
         { name: 'strings-dos.ger', format: 'strings', about: 'C&C-style string table, plain, with accented letters in DOS characters', data: stringTable(false) },
