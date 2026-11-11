@@ -144,6 +144,7 @@ npm run samples  # writes samples/generated/; the tests check the committed file
 # and time (10 s), to find inputs that crash, hang or allocate wildly. Those are saved to fuzz/findings/.
 npm run fuzz
 npm run fuzz -- /path/to/CnCRemastered/Data   # also small files of each format from the archives there
+npm run fuzz -- --format pif,ico               # only these formats' seeds: seconds, while working on one
 npm run fuzz:repro -- fuzz/findings/<file>     # one finding, run through everything the app does with it
 ```
 

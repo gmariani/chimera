@@ -67,7 +67,7 @@ Nothing is finished until it's checked. Run what applies, and say what you ran a
 1. `npm run typecheck`, `npm run lint` (Oxlint) and `npm run format:check` (Prettier).
 2. `npm test`.
 3. When a sniffer or the registry changed, run the game data and compare the count of each format in every archive with the code from before the change (`git stash`). A sniffer that suddenly claims other files fails silently: they just open as the wrong thing. Run vitest with `--silent=false --reporter=verbose` to see the counts.
-4. When a reader or decoder changed, run `npm run fuzz`. Point it at game data when the format comes from there. It should report no findings.
+4. When a reader changed, fuzz it: `npm run fuzz -- --format <id>` (the IDs in `src/formats/index.ts`; several, comma-separated) takes seconds, and its broken versions still go through everything the app does. Add a game folder when the format comes from there and has no generated sample. It should report no findings. The full `npm run fuzz` (about a minute and a half) is for before a commit, and for changes to what every format shares: a sniffer, the decoders in `compression.ts` or `dib.ts`, or the checks in `inspect.ts` and `identify.ts`.
 5. Check new behavior on real files where they exist, not only on files a test builds. Say plainly when no real files were available.
 
 Report what didn't pass, with the output. Don't round "mostly works" up to "works".

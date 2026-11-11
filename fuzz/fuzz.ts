@@ -6,6 +6,11 @@
  *
  *   npm run fuzz                       the files in samples/
  *   npm run fuzz -- /path/to/game ...  also small files of each format from the archives there
+ *   npm run fuzz -- --format pif,ico   only seeds of these formats (by the IDs in src/formats/index.ts):
+ *                                      seconds, for working on a format; its broken versions still go
+ *                                      through everything the app does, so another format taking one is
+ *                                      tested too. Run it all before committing, or when sniffers or
+ *                                      shared code (compression, bitmaps, the checks) change.
  *
  * Inputs that crash, hang or allocate too much are saved to fuzz/findings/ to
  * reproduce (not committed).
@@ -20,7 +25,7 @@ import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'n
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { detect } from '../src/formats';
+import { FORMATS, RAW, detect } from '../src/formats';
 import { inspect } from '../src/formats/inspect';
 import { exercise } from './exercise';
 
@@ -103,18 +108,23 @@ function files(path: string): string[] {
     return readdirSync(path).flatMap((n) => files(join(path, n)));
 }
 
-/** The samples, and up to three small files of each format found in the archives under the given folders. */
-async function gatherSeeds(roots: string[]): Promise<Seed[]> {
+/**
+ * The samples, and up to three small files of each format found in the archives under the given folders; only those of
+ * the wanted formats, when some are named.
+ */
+async function gatherSeeds(roots: string[], wanted: Set<string> | null): Promise<Seed[]> {
     const seeds: Seed[] = [];
+    const perFormat = new Map<string, number>();
     for (const path of files('samples')) {
         if (statSync(path).size > SEED_LIMIT) continue;
-        seeds.push({ name: basename(path), from: path, data: new Uint8Array(readFileSync(path)) });
-    }
-    const perFormat = new Map<string, number>();
-    for (const s of seeds) {
-        const id = detect(s.data, s.name).id;
+        const data = new Uint8Array(readFileSync(path));
+        const id = detect(data, basename(path)).id;
+        if (wanted && !wanted.has(id)) continue;
+        seeds.push({ name: basename(path), from: path, data });
         perFormat.set(id, (perFormat.get(id) ?? 0) + 1);
     }
+    // With formats named, looking through the archives stops once each has its three.
+    const enough = () => wanted !== null && [...wanted].every((id) => (perFormat.get(id) ?? 0) >= 3);
     const visit = async (name: string, from: string, data: Uint8Array, depth: number) => {
         let entries;
         try {
@@ -128,13 +138,14 @@ async function gatherSeeds(roots: string[]): Promise<Seed[]> {
                 if (depth < 2) await visit(e.name ?? e.label, `${from} › ${e.label}`, e.data, depth + 1);
                 continue;
             }
-            if (e.data.length > 256 << 10 || (perFormat.get(id) ?? 0) >= 3) continue;
+            if (e.data.length > 256 << 10 || (perFormat.get(id) ?? 0) >= 3 || (wanted && !wanted.has(id))) continue;
             perFormat.set(id, (perFormat.get(id) ?? 0) + 1);
             seeds.push({ name: e.name ?? e.label, from: `${from} › ${e.label}`, data: e.data.slice() });
         }
     };
     for (const root of roots) {
         for (const path of files(root)) {
+            if (enough()) return seeds;
             if (!/\.(mix|meg|pak)$/i.test(path) || statSync(path).size > 600 << 20) continue;
             await visit(basename(path), path, new Uint8Array(readFileSync(path)), 0);
         }
@@ -175,9 +186,32 @@ if (process.env.FUZZ_WORKER) {
     });
 } else {
     if (!confine) console.warn('No systemd-run here, so workers have only a heap limit, not a cap on all their memory; keep FUZZ_WORKERS low.');
-    const roots = process.argv.slice(2);
-    console.log('Gathering seeds…');
-    const seeds = await gatherSeeds(roots);
+    // --format a,b (or --format=a,b): only seeds of those formats. Everything else given is a folder to find archives in.
+    const args = process.argv.slice(2);
+    const roots: string[] = [];
+    let wanted: Set<string> | null = null;
+    for (let i = 0; i < args.length; i++) {
+        const [flag, inline] = args[i].split('=', 2);
+        if (flag === '--format') {
+            const list = (inline ?? args[++i] ?? '')
+                .split(',')
+                .map((x) => x.trim())
+                .filter(Boolean);
+            const known = new Set([...FORMATS, RAW].map((f) => f.id));
+            const unknown = list.filter((id) => !known.has(id));
+            if (!list.length || unknown.length) {
+                console.error(`${unknown.length ? `Not a format here: ${unknown.join(', ')}. ` : ''}Formats: ${[...known].sort().join(', ')}.`);
+                process.exit(2);
+            }
+            wanted = new Set([...(wanted ?? []), ...list]);
+        } else roots.push(args[i]);
+    }
+    console.log(`Gathering seeds${wanted ? ` of ${[...wanted].join(', ')}` : ''}…`);
+    const seeds = await gatherSeeds(roots, wanted);
+    if (!seeds.length) {
+        console.error(`No seeds${wanted ? ` of ${[...wanted].join(', ')}` : ''}: add a sample (npm run samples makes them), or name a game folder to find some in.`);
+        process.exit(2);
+    }
     const cases: { seed: number; index: number }[] = [];
     for (const [i, s] of seeds.entries()) for (let k = 0; k < mutations(s.data).length; k++) cases.push({ seed: i, index: k });
     console.log(`${seeds.length} seeds, ${cases.length} cases, ${WORKERS} workers, each capped at ${WORKER_MEMORY}`);
