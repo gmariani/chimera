@@ -98,6 +98,45 @@ export function ailDriver(): Uint8Array {
 }
 
 /**
+ * Westwood AdLib music (.adl) as Dune II's are laid out (version 3): the track table, where each program and instrument is
+ * (counting from the end of the track table), then the data. Track 0 starts the conductor (voice 9), which sets the tempo
+ * and starts programs 1 and 2. Program 1, on voice 0, loops two notes with a count of 0xBB, as Westwood's tools do (the
+ * repeat lands on the count, which as a command does nothing). Program 2, on voice 1, plays a note, jumps to the next
+ * command, rests and stops. Then two instruments. `version` picks the tables' sizes; `change` alters the data before the
+ * offsets are worked out.
+ */
+export function adlMusic({ version = 3, count = 0xbb, change }: { version?: 1 | 3 | 4; count?: number; change?: (programs: number[][]) => void } = {}): Uint8Array {
+    const slots = version === 1 ? 150 : version === 4 ? 500 : 250;
+    const programs = [
+        // Voice 9, priority 0x10: tempo 0x40, start programs 1 and 2, stop.
+        [9, 0x10, 0xa6, 0x40, 0x82, 1, 0x82, 2, 0x88],
+        // Voice 0, priority 0x20: instrument 0, repeat count, two notes, repeat back to the count (8 back from after itself), stop.
+        [0, 0x20, 0x90, 0, 0x80, count, 0x45, 0x10, 0x47, 0x10, 0x81, ...u16(-8 & 0xffff), 0x88],
+        // Voice 1, priority 0x20: instrument 1, a note, a jump to the next command, a rest, stop.
+        [1, 0x20, 0x90, 1, 0x30, 0x20, 0x84, 0, 0, 0x89, 0x10, 0x88],
+    ];
+    change?.(programs);
+    // A soft organ and a bright bell, register by register (0x20, 0x23, 0xC0, 0xE0, 0xE3, 0x40, 0x43, 0x60, 0x63, 0x80, 0x83).
+    const instruments = [
+        [0x21, 0x21, 0x0e, 0, 0, 0x1a, 0x00, 0xf1, 0xf1, 0x55, 0x55],
+        [0x07, 0x12, 0x01, 0, 0, 0x4f, 0x00, 0xf2, 0xf2, 0x60, 0x72],
+    ];
+    const tracks = version === 4 ? [...u16(0), ...new Array(498).fill(0xff)] : [0, ...new Array(119).fill(0xff)];
+    const table = new Array(slots * 4).fill(0xff);
+    let at = slots * 4;
+    const body: number[] = [];
+    const place = (list: number[][], from: number) =>
+        list.forEach((item, i) => {
+            table.splice((from + i) * 2, 2, ...u16(at));
+            body.push(...item);
+            at += item.length;
+        });
+    place(programs, 0);
+    place(instruments, slots);
+    return bytes(tracks, table, body);
+}
+
+/**
  * A remap like Dune II's GRAYRMAP.TBL, for that palette: color 0 (see-through) and the grays stay as they are, and each
  * EGA color becomes the gray of its brightness.
  */
@@ -632,6 +671,7 @@ export function samples(): Sample[] {
         },
         { name: 'icons.icl', format: 'ne', about: 'Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon', data: iconLibrary() },
         { name: 'mentat.eng', format: 'mentat', about: 'Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does', data: mentat() },
+        { name: 'music.adl', format: 'adl', about: 'Westwood AdLib music, as Dune II’s: a conductor starting two voices, one looping as Westwood’s tools do', data: adlMusic() },
         { name: 'driver.adv', format: 'ail', about: 'Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF', data: ailDriver() },
         { name: 'program.pif', format: 'pif', about: 'Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections', data: pif() },
         { name: 'strings-dune2.eng', format: 'strings', about: 'Dune II string table, compressed as the game does', data: stringTable(true) },

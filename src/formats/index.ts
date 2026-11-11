@@ -9,6 +9,7 @@ import { sniffIco } from './ico-sniff';
 import { sniffNe } from './ne-sniff';
 import { sniffPif } from './pif-sniff';
 import { sniffAil } from './ail-sniff';
+import { sniffAdl } from './westwood/adl-layout';
 import { sniffVoc } from './voc-sniff';
 import { sniffTiff } from './tiff/sniff';
 import { sniffPng } from './png/sniff';
@@ -93,6 +94,8 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'fnt-ts', name: 'Font (1-bit: TS, RA2, Nox)', extensions: ['fnt'], sniff: sniffUnicodeFont, byNameAlone: false, load: parserOf(() => import('./westwood/font-ts')) },
     { id: 'icn-d2', name: 'Map tiles (Dune II ICN)', extensions: ['icn'], sniff: sniffIcnD2, load: parserOf(() => import('./westwood/icn-d2')) },
     { id: 'tiles', name: 'Tile set', extensions: ['tem', 'des', 'win', 'sno', 'int', 'jun', 'icn'], sniff: sniffTiles, load: parserOf(() => import('./westwood/tiles')) },
+    // Coktel Vision's AdLib music is .adl too, so the name alone says nothing.
+    { id: 'adl', name: 'AdLib music (Westwood ADL)', extensions: ['adl'], sniff: sniffAdl, byNameAlone: false, load: parserOf(() => import('./westwood/adl')) },
     { id: 'wsa', name: 'Animation (WSA)', extensions: ['wsa'], sniff: sniffWsa, load: parserOf(() => import('./westwood/wsa')) },
     { id: 'fnt', name: 'Font', extensions: ['fnt'], sniff: sniffFont, load: parserOf(() => import('./westwood/font')) },
     { id: 'jpeg', name: 'Picture (JPEG)', extensions: ['jpg', 'jpeg', 'jpe', 'jfif'], sniff: sniffJpeg, load: parserOf(() => import('./jpeg')) },
