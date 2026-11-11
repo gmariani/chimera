@@ -137,6 +137,21 @@ export function adlMusic({ version = 3, count = 0xbb, change }: { version?: 1 | 
 }
 
 /**
+ * Dune II's DUNE.CFG as SETUP.EXE writes it: graphics 12; music on the MT-32 (6), effects through Westwood's AdLib player
+ * (1), voices on a Sound Blaster Pro (2); the mouse and extended memory on; German. Each of the first 8 stored as
+ * (value + n) XOR 0xA5, n from 7 down; the language as it is; then the checksum.
+ */
+export function duneCfg(values = [12, 6, 1, 2, 1, 1, 0, 0], language = 2): Uint8Array {
+    const sum = values.reduce((s, v) => s + v, 0) & 0xff;
+    return Uint8Array.from([...values.map((v, i) => ((v + 7 - i) & 0xff) ^ 0xa5), language, sum ^ 0xa5]);
+}
+
+/** Dune II's OPTIONS.CFG with the game's defaults: music and sounds on, normal speed, hints on, auto-scroll off. */
+export function duneOptions(values = [1, 1, 2, 1, 0]): Uint8Array {
+    return bytes(...values.map(u16));
+}
+
+/**
  * A remap like Dune II's GRAYRMAP.TBL, for that palette: color 0 (see-through) and the grays stay as they are, and each
  * EGA color becomes the gray of its brightness.
  */
@@ -677,6 +692,8 @@ export function samples(): Sample[] {
         { name: 'strings-dune2.eng', format: 'strings', about: 'Dune II string table, compressed as the game does', data: stringTable(true) },
         { name: 'strings-dos.ger', format: 'strings', about: 'C&C-style string table, plain, with accented letters in DOS characters', data: stringTable(false) },
         { name: 'palette.pal', format: 'pal', about: 'VGA palette: the 16 EGA colors, then a gray ramp', data: palette6() },
+        { name: 'dune.cfg', format: 'dune2-cfg', about: 'Dune II settings: MT-32 music, AdLib effects, Sound Blaster Pro voices, in German', data: duneCfg() },
+        { name: 'options.cfg', format: 'dune2-options', about: 'Dune II game options, the game’s defaults', data: duneOptions() },
         { name: 'grayrmap.tbl', format: 'gray-remap', about: 'Dune II-style gray remap for palette.pal: each EGA color to the gray of its brightness', data: grayRemap() },
         { name: 'png-rgb.png', format: 'png', about: 'PNG picture: RGB, a color wheel of sorts', data: png(64, 64, (x, y) => [x * 4, y * 4, 255 - (x + y) * 2]) },
     ];

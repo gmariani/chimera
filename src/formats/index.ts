@@ -26,6 +26,8 @@ import {
     sniffFont,
     sniffIcnD2,
     sniffIconMap,
+    sniffDuneCfg,
+    sniffDuneOptions,
     sniffMentat,
     sniffIni,
     sniffMapTd,
@@ -133,6 +135,9 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'pal', name: 'Palette', extensions: ['pal'], sniff: sniffPal, load: parserOf(() => import('./westwood/pal')) },
     // Dune 2000's missions are .map too, so the name alone says nothing.
     { id: 'icon-map', name: 'Map tile groups (Dune II ICON.MAP)', extensions: ['map'], sniff: sniffIconMap, byNameAlone: false, companions: true, load: parserOf(() => import('./westwood/icon-map')) },
+    // Settings files are .cfg in many games, so the name alone says nothing; both of Dune II's are read by one parser.
+    { id: 'dune2-cfg', name: 'Settings (Dune II DUNE.CFG)', extensions: ['cfg'], sniff: sniffDuneCfg, byNameAlone: false, load: parserOf(() => import('./westwood/dune2-cfg')) },
+    { id: 'dune2-options', name: 'Game options (Dune II OPTIONS.CFG)', extensions: ['cfg'], sniff: sniffDuneOptions, byNameAlone: false, load: parserOf(() => import('./westwood/dune2-cfg')) },
     { id: 'map-td', name: 'Map terrain (TD)', extensions: ['bin'], sniff: sniffMapTd, byNameAlone: false, companions: true, load: parserOf(() => import('./westwood/map-td')) },
     { id: 'ini', name: 'Settings (INI)', extensions: ['ini'], sniff: sniffIni, companions: true, load: parserOf(() => import('./ini')) },
     { id: 'text', name: 'Text', extensions: ['txt', 'ini', 'eng', 'ger', 'fre', 'csv'], sniff: sniffText, load: parserOf(() => import('./text')) },

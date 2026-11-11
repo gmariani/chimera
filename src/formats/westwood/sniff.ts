@@ -594,3 +594,33 @@ export function sniffVpl(data: Uint8Array): boolean {
     const [start, end, sections] = [b.u32(0), b.u32(4), b.u32(8)];
     return start <= end && end < 256 && sections > 0 && sections <= 256 && data.length === 16 + 768 + sections * 256;
 }
+
+/**
+ * Dune II's DUNE.CFG, which SETUP.EXE writes: 10 bytes, the first 8 each stored as (value + n) XOR 0xA5, n from 7 down
+ * to 0; the language as it is; and a checksum, the sum of the 8 values XOR 0xA5 (OpenDUNE's Config_Read, src/config.c).
+ */
+export function duneCfgValues(data: Uint8Array): { values: number[]; checksum: number } | null {
+    if (data.length !== 10) return null;
+    const values = Array.from(data.subarray(0, 8), (v, i) => ((v ^ 0xa5) - (7 - i)) & 0xff);
+    return { values, checksum: (values.reduce((s, v) => s + v, 0) & 0xff) ^ 0xa5 };
+}
+
+/**
+ * DUNE.CFG by content: the mouse and memory settings 0 or 1, the language one of the five, and either the drivers in
+ * Dune II's lists (14 for music and effects, 7 for voices) or the checksum good. So a file with a bad checksum, or one
+ * naming a driver past the lists, is still read, and warned about.
+ */
+export function sniffDuneCfg(data: Uint8Array): boolean {
+    const cfg = duneCfgValues(data);
+    if (!cfg) return false;
+    const [, music, sound, voice, mouse, xms] = cfg.values;
+    if (mouse > 1 || xms > 1 || data[8] > 4) return false;
+    return (music < 14 && sound < 14 && voice < 7) || cfg.checksum === data[9];
+}
+
+/** Dune II's OPTIONS.CFG: five 16-bit options, music, sounds, game speed (0 to 4), hints and auto-scroll, each on or off but the speed. */
+export function sniffDuneOptions(data: Uint8Array): boolean {
+    if (data.length !== 10) return false;
+    const limits = [1, 1, 4, 1, 1];
+    return limits.every((max, i) => data[i * 2 + 1] === 0 && data[i * 2] <= max);
+}
