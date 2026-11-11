@@ -39,7 +39,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Bink video (RA2's movies) and Bink 2 (the Remastered Collection's) | header, frame index | player with sound, decoded by FFmpeg's Bink decoders compiled to WebAssembly; Bink 2's sound only, each track (FFmpeg has no Bink 2 video decoder) | PNG frame, all frames, WAV |
 | Maps (TD .bin with its mission INI, RA [MapPack] in mission INIs) | every cell, every object | drawn with the game's tiles, ore, walls, trees, craters, buildings, units and infantry (in each side's color) once the theater archive is open; terrain kinds with a key | PNG |
 | TS and RA2 maps (.map, .mpr, .yrm; inside .mmx/.yro) | sections, cells, overlays, objects | drawn with the game's tiles, ore, walls, bridges, trees, buildings (with their animated parts, defense turrets and damage), infantry and lit voxel vehicles (in each side's color) once the main archive is open (otherwise by height); the map's own preview | PNG |
-| Fonts (.fnt: TD/RA 4-bit, TS 8-bit, TS/RA2 1-bit and Unicode) | header, each character | every character | PNG |
+| Fonts (.fnt: TD/RA 4-bit, TS 8-bit; 1-bit BitFonts: TS/RA2 Unicode, RA2's map editor, Nox) | header, each character; pixels hidden past a glyph's width, unused glyphs and data after the end called out | every character | PNG |
 | PAL palettes | each color | swatches, use for sprites | — |
 | String tables (.eng, .ger, .fre) | offsets, each string | numbered list | — |
 | Color remap tables (TD .mrf) | each table | the palette through each table | PNG |

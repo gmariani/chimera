@@ -481,10 +481,40 @@ export function sniffBink(data: Uint8Array): boolean {
  * number for each of 65,536 code points, or "FoNt" (map.fnt), with a glyph for
  * each character from a first to a last.
  */
-export function sniffUnicodeFont(data: Uint8Array): boolean {
+/**
+ * Westwood's 1-bit fonts: where each header keeps its fields (-1: it has no
+ * such field), how long the header is (the glyphs start there), and the
+ * fields every known font has the same value in ([offset, value, name]).
+ */
+export const BITFONT = {
+    // TS and RA2's Unicode fonts: the header, then the 65,536-entry character map.
+    fonT: { width: 4, stride: 8, lines: 12, height: 16, glyphSize: 24, header: 28 + 65536 * 2, fixed: [] as [number, number, string][] },
+    // RA2's map editor fonts.
+    FoNt: { width: 4, stride: 8, lines: 12, height: 16, glyphSize: 24, header: 48, fixed: [[20, 1, 'value'], [28, 0x24, 'value'], [32, 0x30, 'value'], [36, 0, 'value']] as [number, number, string][] },
+    // Nox's: no height of its own, and 16-bit first and last characters.
+    tNoF: { width: 8, stride: 12, lines: 16, height: -1, glyphSize: 24, header: 36, fixed: [[4, 1, 'value'], [20, 1, 'value'], [28, 0, 'value']] as [number, number, string][] },
+} as const;
+export type BitFontKind = keyof typeof BITFONT;
+
+/** Which 1-bit font this is, if its sizes fit: a glyph holds its width byte and rows, and the glyphs fit the file (anything after them is checked, not refused). */
+export function bitFontKind(data: Uint8Array): BitFontKind | null {
     const b = new Bytes(data);
-    if (b.ascii(0, 4) === 'fonT') return data.length === 28 + 65536 * 2 + b.u32(20) * b.u32(24);
-    return b.ascii(0, 4) === 'FoNt' && b.u32(44) >= b.u32(40) && data.length === 48 + (b.u32(44) - b.u32(40) + 1) * b.u32(24);
+    const id = b.ascii(0, 4);
+    if (id !== 'fonT' && id !== 'FoNt' && id !== 'tNoF') return null;
+    const layout = BITFONT[id];
+    if (data.length < layout.header) return null;
+    const stride = b.u32(layout.stride);
+    const lines = b.u32(layout.lines);
+    const glyphSize = b.u32(layout.glyphSize);
+    if (stride === 0 || lines === 0 || stride > 256 || lines > 1024 || glyphSize < 1 + stride * lines || glyphSize > 1 << 20) return null;
+    const [first, last] = id === 'FoNt' ? [b.u32(40), b.u32(44)] : id === 'tNoF' ? [b.u16(32), b.u16(34)] : [0, 0];
+    if (last < first || last > 0x10ffff) return null;
+    const count = id === 'fonT' ? b.u32(20) : last - first + 1;
+    return count > 0 && layout.header + count * glyphSize <= data.length ? id : null;
+}
+
+export function sniffUnicodeFont(data: Uint8Array): boolean {
+    return bitFontKind(data) !== null;
 }
 
 /** TS and RA2's voxel lighting tables (voxels.vpl): a header, a palette, then a 256-color remap per lighting level. */

@@ -83,7 +83,7 @@ export const FORMATS: FormatDescriptor[] = [
         // The decoders (WebAssembly) load with the parser.
         load: parserOf(() => import('./westwood/bink').then(async (m) => (await m.ready(), m))),
     },
-    { id: 'fnt-ts', name: 'Font (TS/RA2, 1-bit)', extensions: ['fnt'], sniff: sniffUnicodeFont, byNameAlone: false, load: parserOf(() => import('./westwood/font-ts')) },
+    { id: 'fnt-ts', name: 'Font (1-bit: TS, RA2, Nox)', extensions: ['fnt'], sniff: sniffUnicodeFont, byNameAlone: false, load: parserOf(() => import('./westwood/font-ts')) },
     { id: 'tiles', name: 'Tile set', extensions: ['tem', 'des', 'win', 'sno', 'int', 'jun', 'icn'], sniff: sniffTiles, load: parserOf(() => import('./westwood/tiles')) },
     { id: 'wsa', name: 'Animation (WSA)', extensions: ['wsa'], sniff: sniffWsa, load: parserOf(() => import('./westwood/wsa')) },
     { id: 'fnt', name: 'Font', extensions: ['fnt'], sniff: sniffFont, load: parserOf(() => import('./westwood/font')) },
