@@ -25,6 +25,10 @@ export class Bytes {
     }
 
     /** Big-endian, for the formats that use it (IFF chunk sizes). */
+    u16be(offset: number): number {
+        return offset + 2 <= this.data.length ? this.view.getUint16(offset, false) : 0;
+    }
+
     u32be(offset: number): number {
         return offset + 4 <= this.data.length ? this.view.getUint32(offset, false) : 0;
     }

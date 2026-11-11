@@ -152,6 +152,28 @@ export function duneOptions(values = [1, 1, 2, 1, 0]): Uint8Array {
 }
 
 /**
+ * A Dune II script (EMC) in the game's own style, for the computer's teams: a subroutine at word 0 (wait 30 ticks,
+ * return), then Normal's loop at 4, which calls it ("push where to come back to", then a jump), compares the team's
+ * members with 5, and switches back to the team's first script; Flee's, at 14, returns at once. The FORM's size counts the
+ * whole file, as Westwood's compiler wrote it. `change` alters the instructions before they're written.
+ */
+export function emcScript({ entries = [4, 4, 14, 4, 4], change }: { entries?: number[]; change?: (words: number[]) => void } = {}): Uint8Array {
+    // prettier-ignore
+    const code = [
+        0x4300 | 30, 0x4e00, 0x4c01, 0x4801, // push 30, call routine 0 (wait), drop 1, return from a call
+        0x4201, 0x8000, // push where to come back to, jump to 0
+        0x4e02, 0x4200, 0x4405, 0x5104, 0x2f00, 0x8004, // call routine 2 (members), push the result, push 5, <, jump to 4 if zero
+        0x4e09, 0x8004, // call routine 9 (back to the first script), jump to 4
+        0x4801, // Flee: return from a call
+    ];
+    change?.(code);
+    const be16 = (v: number) => [(v >> 8) & 0xff, v & 0xff];
+    const chunk = (id: string, words: number[]) => [...text(id), ...be32(words.length * 2), ...words.flatMap(be16)];
+    const body = [...text('EMC2'), ...chunk('ORDR', entries), ...chunk('DATA', code)];
+    return bytes(text('FORM'), be32(8 + body.length), body);
+}
+
+/**
  * A remap like Dune II's GRAYRMAP.TBL, for that palette: color 0 (see-through) and the grays stay as they are, and each
  * EGA color becomes the gray of its brightness.
  */
@@ -685,6 +707,7 @@ export function samples(): Sample[] {
             data: iconFile([{ image: cursorDib(), width: 32, height: 32, colors: 2, planes: 0, bits: 0 }], 2),
         },
         { name: 'icons.icl', format: 'ne', about: 'Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon', data: iconLibrary() },
+        { name: 'team.emc', format: 'emc', about: 'Dune II script for the computer’s teams, in the game’s own style: a subroutine, a loop, a call to it', data: emcScript() },
         { name: 'mentat.eng', format: 'mentat', about: 'Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does', data: mentat() },
         { name: 'music.adl', format: 'adl', about: 'Westwood AdLib music, as Dune II’s: a conductor starting two voices, one looping as Westwood’s tools do', data: adlMusic() },
         { name: 'driver.adv', format: 'ail', about: 'Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF', data: ailDriver() },

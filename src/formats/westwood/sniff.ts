@@ -624,3 +624,9 @@ export function sniffDuneOptions(data: Uint8Array): boolean {
     const limits = [1, 1, 4, 1, 1];
     return limits.every((max, i) => data[i * 2 + 1] === 0 && data[i * 2] <= max);
 }
+
+/** Dune II's scripts: an IFF "FORM" of type "EMC2". */
+export function sniffEmc(data: Uint8Array): boolean {
+    const b = new Bytes(data);
+    return data.length > 20 && b.ascii(0, 4) === 'FORM' && b.ascii(8, 4) === 'EMC2';
+}

@@ -34,6 +34,7 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `icon.ico` | Windows icon at three sizes: 16 × 16 in 16 colors, 32 × 32 with its own transparency, and 48 × 48 as a PNG | 11,642 bytes |
 | `cursor.cur` | Windows cursor: a 32 × 32 arrow in 2 colors, its hot spot at the tip | 326 bytes |
 | `icons.icl` | Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon | 528 bytes |
+| `team.emc` | Dune II script for the computer’s teams, in the game’s own style: a subroutine, a loop, a call to it | 68 bytes |
 | `mentat.eng` | Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does | 224 bytes |
 | `music.adl` | Westwood AdLib music, as Dune II’s: a conductor starting two voices, one looping as Westwood’s tools do | 1,177 bytes |
 | `driver.adv` | Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF | 150 bytes |
