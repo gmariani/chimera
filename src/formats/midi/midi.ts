@@ -1,7 +1,7 @@
 import { bytesLabel, field } from '../../core/bytes';
 import type { Field, FormatParser } from '../../core/types';
 import { readSmf } from './smf';
-import { songPreviews } from './song-preview';
+import { songPreview } from './song-preview';
 
 /**
  * Standard MIDI files (.mid): see smf.ts. Shown as its chunks, a summary of
@@ -61,7 +61,7 @@ const parser: FormatParser = {
                 ['Time', `${division}${smf.tempos ? `, ${smf.tempos} tempo change${smf.tempos === 1 ? '' : 's'}` : ''}`],
             ],
             fields,
-            preview: { kind: 'stack', items: songPreviews(smf.song, 'The song') },
+            preview: songPreview(smf.song),
             end: smf.end,
             warnings: smf.problems,
         };

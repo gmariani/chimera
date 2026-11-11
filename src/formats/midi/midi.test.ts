@@ -4,7 +4,7 @@ import { standardMidi } from '../../testing/samples';
 import { detect } from '../index';
 import parser from './midi';
 import { readSmf, type Song } from './smf';
-import { pianoRoll } from './song-preview';
+import { notesOf, SYNTHESIZED } from './song-preview';
 import { renderSong, SAMPLE_RATE } from './synth';
 
 const parse = (data: Uint8Array) => parser.parse(data, { name: 'MUSIC.MID', names: [] }) as Parsed;
@@ -44,7 +44,16 @@ describe('Standard MIDI files', () => {
             [0.75, 0x90, 64, 90],
             [1, 0x90, 64, 0],
         ]);
-        expect(r.preview).toMatchObject({ kind: 'stack', items: [{ preview: { kind: 'audio' } }, { preview: { kind: 'picture' } }] });
+        expect(r.preview).toMatchObject({
+            kind: 'music',
+            length: 1,
+            note: SYNTHESIZED,
+            notes: [
+                { start: 0, end: 0.5, channel: 0, note: 60 },
+                { start: 0.75, end: 1, channel: 0, note: 64 },
+            ],
+        });
+        expect(r.preview?.kind === 'music' && r.preview.audio?.seconds).toBe(2);
     });
 
     it('counts time in frames when the header says so', () => {
@@ -124,24 +133,24 @@ describe('The synthesizer and the piano roll', () => {
         expect(renderSong(tone([], 100), 5)).toHaveLength(5 * SAMPLE_RATE);
     });
 
-    it('draws each note as a bar, in its channel’s color', () => {
-        const roll = pianoRoll(
+    it('pairs each note with what ends it', () => {
+        // Two of the same note overlapping: the first note-off ends the first; one never ended lasts to the song's end.
+        const notes = notesOf(
             tone(
                 [
                     { time: 0, status: 0x90, a: 60, b: 100 },
+                    { time: 0.5, status: 0x90, a: 60, b: 100 },
                     { time: 1, status: 0x80, a: 60, b: 0 },
-                    { time: 1, status: 0x91, a: 64, b: 100 },
-                    { time: 2, status: 0x81, a: 64, b: 0 },
+                    { time: 1.5, status: 0x90, a: 60, b: 0 },
+                    { time: 1, status: 0x99, a: 36, b: 100 },
                 ],
-                2
+                3
             )
-        )!;
-        // 2 seconds at 24 pixels a second; notes 58 to 66 (2 rows spare each side), 5 pixels a row.
-        expect([roll.width, roll.height]).toEqual([48, 9 * 5]);
-        const at = (x: number, y: number) => Array.from(roll.rgba.subarray((y * roll.width + x) * 4, (y * roll.width + x) * 4 + 3));
-        expect(at(12, (66 - 60) * 5 + 1)).toEqual([0x7f, 0xd4, 0xff]);
-        expect(at(36, (66 - 64) * 5 + 1)).toEqual([0xff, 0xb3, 0x47]);
-        expect(at(36, (66 - 60) * 5 + 1)).toEqual([0x0b, 0x1f, 0x3d]);
-        expect(pianoRoll(tone([]))).toBeNull();
+        );
+        expect(notes).toEqual([
+            { start: 0, end: 1, channel: 0, note: 60 },
+            { start: 0.5, end: 1.5, channel: 0, note: 60 },
+            { start: 1, end: 3, channel: 9, note: 36 },
+        ]);
     });
 });

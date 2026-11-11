@@ -1325,6 +1325,76 @@ html {
     width: min(100%, 28rem);
 }
 
+/* A long outline above other previews: a few lines, the rest scrolling inside. */
+.code-short {
+    overflow-y: auto;
+}
+
+/* Music: its notes on a timeline, scrolled across as it plays; click or drag to go to a moment. */
+.music-timeline {
+    overflow-x: auto;
+    overflow-y: hidden;
+    border: 1px solid var(--bp-rule);
+    border-radius: var(--bs-border-radius);
+    background: var(--bp-deep);
+}
+
+.music-track {
+    position: relative;
+    user-select: none;
+}
+
+/* The scrubber: a range over the whole timeline, unseen but for a focus ring; its thumb 2px, so a click lands where it's made. */
+.music-scrub {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+    appearance: none;
+    background: transparent;
+}
+
+.music-scrub::-webkit-slider-thumb {
+    appearance: none;
+    width: 2px;
+    height: 100%;
+}
+
+.music-scrub::-moz-range-thumb {
+    width: 2px;
+    height: 100%;
+    border: 0;
+}
+
+.music-track:has(.music-scrub:focus-visible) {
+    outline: 2px solid var(--bp-accent);
+    outline-offset: -2px;
+}
+
+.music-canvas {
+    display: block;
+}
+
+/* Where it's playing: the one accent, as for what's active. */
+.music-playhead {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--bp-accent);
+    pointer-events: none;
+}
+
+.music-clock {
+    font-family: var(--bs-font-monospace);
+    font-size: 0.85rem;
+    color: var(--bs-secondary-color);
+}
+
 /* Linked files: groups that fold open. */
 .links summary {
     cursor: pointer;

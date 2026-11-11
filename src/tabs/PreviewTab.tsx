@@ -74,6 +74,8 @@ export function PreviewTab({
             return <PicturePreview width={preview.width} height={preview.height} rgba={preview.rgba} toggle={preview.toggle} fileName={fileName} />;
         case 'audio':
             return <AudioPreview clip={preview} fileName={fileName} />;
+        case 'music':
+            return <MusicPreview preview={preview} fileName={fileName} />;
         case 'video':
             return <VideoPreview preview={preview} fileName={fileName} />;
         case 'table':
@@ -81,7 +83,11 @@ export function PreviewTab({
         case 'voxels':
             return <VoxelViewer parts={preview.parts} frameCount={preview.frameCount} ownPalette={preview.palette} remap={preview.remap} fileName={fileName} />;
         case 'text':
-            return <CodeBlock copy>{preview.text.length > 500_000 ? `${preview.text.slice(0, 500_000)}\n… (${preview.text.length - 500_000} more characters)` : preview.text}</CodeBlock>;
+            return (
+                <CodeBlock copy maxLines={preview.maxLines}>
+                    {preview.text.length > 500_000 ? `${preview.text.slice(0, 500_000)}\n… (${preview.text.length - 500_000} more characters)` : preview.text}
+                </CodeBlock>
+            );
         case 'stack':
             return (
                 <>
@@ -663,6 +669,181 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
                     )}
                 </div>
             </div>
+        </div>
+    );
+}
+
+/** A color for each MIDI channel's notes; channel 10, the drums, in gray. */
+const CHANNEL_COLORS = ['#7fd4ff', '#ffb347', '#9be56b', '#ff7a8a', '#c99bff', '#5fe0c8', '#ffe066', '#ff9ad5', '#8fb4ff', '#b8c4d6', '#e89b6c', '#6cc68f', '#d67f7f', '#9fd0e8', '#e0c08f', '#b0e070'];
+/** Pixels a second on the timeline, when that keeps it narrower than a canvas can be. */
+const MUSIC_PER_SECOND = 32;
+const MUSIC_MAX_WIDTH = 30_000;
+/** The ruler of seconds along the top. */
+const RULER = 18;
+
+const clock = (s: number) => {
+    const whole = Math.floor(s);
+    return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
+};
+
+/**
+ * Music as a timeline: its notes, a row for each pitch and a color for each
+ * channel, under a ruler of seconds. A line marks where it's playing; click or
+ * drag on the timeline to go there. Wider than the page, it scrolls to keep
+ * the line in view while it plays.
+ */
+function MusicPreview({ preview, fileName }: { preview: Extract<UiPreview, { kind: 'music' }>; fileName: string }) {
+    const { notes, length, audio, note } = preview;
+    const url = useWavUrl(audio?.wav);
+    const sound = useRef<HTMLAudioElement>(null);
+    const scroller = useRef<HTMLDivElement>(null);
+    const canvas = useRef<HTMLCanvasElement>(null);
+    const [time, setTime] = useState(0);
+    const [playing, setPlaying] = useState(false);
+    const playable = audio ? Math.min(audio.seconds, length || audio.seconds) : 0;
+
+    // The layout: the pitches the music uses (two rows spare either side), and the seconds across.
+    const layout = useMemo(() => {
+        let low = 127;
+        let high = 0;
+        for (const n of notes) {
+            low = Math.min(low, n.note);
+            high = Math.max(high, n.note);
+        }
+        if (low > high) [low, high] = [60, 72];
+        low = Math.max(0, low - 2);
+        high = Math.min(127, high + 2);
+        const rows = high - low + 1;
+        const row = Math.max(3, Math.min(8, Math.floor(320 / rows)));
+        const seconds = Math.max(length, 1);
+        const perSecond = Math.min(MUSIC_PER_SECOND, MUSIC_MAX_WIDTH / seconds);
+        return { low, high, row, perSecond, width: Math.ceil(seconds * perSecond) + 1, height: RULER + rows * row };
+    }, [notes, length]);
+
+    // The notes, drawn once: the ruler, a line at each C and each second, then the notes over them.
+    useEffect(() => {
+        const c = canvas.current;
+        if (!c) return;
+        const { low, high, row, perSecond, width, height } = layout;
+        const scale = window.devicePixelRatio || 1;
+        c.width = Math.round(width * scale);
+        c.height = Math.round(height * scale);
+        const g = c.getContext('2d');
+        if (!g) return;
+        g.scale(scale, scale);
+        const css = getComputedStyle(c);
+        const color = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
+        g.fillStyle = color('--bp-deep', '#081f3a');
+        g.fillRect(0, 0, width, height);
+        g.fillStyle = color('--bp-rule', 'rgba(207, 227, 247, 0.26)');
+        for (let n = low; n <= high; n++) if (n % 12 === 0) g.fillRect(0, RULER + (high - n) * row + row - 1, width, 1);
+        // A line each second, stronger and labeled every 10 (every 30 when the seconds are squeezed).
+        const labelEvery = perSecond < 8 ? 30 : 10;
+        g.font = `10px ${color('--bs-font-monospace', 'monospace')}`;
+        g.textBaseline = 'middle';
+        for (let s = 0; s * perSecond < width; s++) {
+            const x = Math.round(s * perSecond);
+            const strong = s % labelEvery === 0;
+            if (!strong && perSecond < 4) continue;
+            g.fillStyle = color(strong ? '--bp-rule-strong' : '--bp-rule', 'rgba(207, 227, 247, 0.4)');
+            g.fillRect(x, strong ? 0 : RULER - 4, 1, strong ? height : 4);
+            if (strong) {
+                g.fillStyle = color('--bs-secondary-color', 'rgba(207, 227, 247, 0.68)');
+                g.fillText(clock(s), x + 4, RULER / 2);
+            }
+        }
+        g.fillStyle = color('--bp-rule', 'rgba(207, 227, 247, 0.26)');
+        g.fillRect(0, RULER - 1, width, 1);
+        for (const n of notes) {
+            g.fillStyle = CHANNEL_COLORS[n.channel] ?? CHANNEL_COLORS[0];
+            const x = n.start * perSecond;
+            g.fillRect(x, RULER + (high - n.note) * row, Math.max(1, (n.end - n.start) * perSecond - 0.5), Math.max(1, row - 1));
+        }
+    }, [layout, notes]);
+
+    // Playing: the sound is the clock, and the line (and the scroll) follow it.
+    useEffect(() => {
+        const el = sound.current;
+        if (!playing || !el) return;
+        if (el.currentTime >= playable - 0.05) el.currentTime = 0;
+        void el.play();
+        let request = 0;
+        const tick = () => {
+            const now = el.currentTime;
+            setTime(now);
+            const box = scroller.current;
+            if (box) {
+                const x = now * layout.perSecond;
+                if (x > box.scrollLeft + box.clientWidth * 0.8 || x < box.scrollLeft) box.scrollLeft = x - box.clientWidth * 0.2;
+            }
+            if (el.ended || now >= playable) {
+                el.pause();
+                setPlaying(false);
+                return;
+            }
+            request = requestAnimationFrame(tick);
+        };
+        request = requestAnimationFrame(tick);
+        return () => {
+            cancelAnimationFrame(request);
+            el.pause();
+        };
+    }, [playing, playable, layout.perSecond]);
+
+    const seek = (seconds: number) => {
+        const t = Math.max(0, Math.min(length, seconds));
+        setTime(t);
+        if (sound.current) sound.current.currentTime = Math.min(t, playable);
+    };
+
+    return (
+        <div className='music'>
+            <div className='music-timeline' ref={scroller}>
+                <div className='music-track' style={{ width: layout.width, height: layout.height }}>
+                    <canvas ref={canvas} className='music-canvas' style={{ width: layout.width, height: layout.height }} />
+                    <div className='music-playhead' style={{ left: time * layout.perSecond }} />
+                    {/* Over the whole timeline, unseen: click or drag anywhere to go there, or the arrow keys, 5 seconds at a time. */}
+                    <input
+                        type='range'
+                        className='music-scrub'
+                        min={0}
+                        max={length}
+                        step='any'
+                        value={time}
+                        aria-label='Where it plays from'
+                        aria-valuetext={`${clock(time)} of ${clock(Math.round(length))}`}
+                        onChange={(e) => seek(Number(e.target.value))}
+                        onKeyDown={(e) => {
+                            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                                e.preventDefault();
+                                seek(time + (e.key === 'ArrowLeft' ? -5 : 5));
+                            } else if (e.key === ' ' && audio) {
+                                e.preventDefault();
+                                setPlaying((p) => !p);
+                            }
+                        }}
+                    />
+                </div>
+            </div>
+            {/* Its own sound, played along with the timeline; there are no captions to give it. */}
+            {/* oxlint-disable-next-line jsx-a11y/media-has-caption */}
+            {url && <audio ref={sound} src={url} preload='auto' />}
+            <div className='d-flex flex-wrap align-items-center gap-3 mt-3'>
+                <Button variant='outline-light' disabled={!audio} onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
+                    <i className={`bi ${playing ? 'bi-pause-fill' : 'bi-play-fill'}`} />
+                </Button>
+                <span className='music-clock'>
+                    {clock(time)} / {clock(Math.round(length))}
+                </span>
+                {audio && (
+                    <Button size='sm' variant='outline-light' className='ms-auto' onClick={() => download(audio.wav, `${safeName(stem(fileName))}.wav`, 'audio/wav')}>
+                        <i className='bi bi-file-earmark-music me-1' /> Save as WAV
+                    </Button>
+                )}
+            </div>
+            <p className='small mt-2 mb-0'>
+                <Muted>{note}</Muted>
+            </p>
         </div>
     );
 }

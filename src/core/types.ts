@@ -126,7 +126,12 @@ export type Preview =
           frame(index: number): VideoFrame;
           audio?: AudioClip;
       }
-    | { kind: 'text'; text: string }
+    | {
+          kind: 'text';
+          text: string;
+          /** Show this many lines, the rest scrolling inside: for a long outline with more previews below it. */
+          maxLines?: number;
+      }
     /** Rows of values in groups, to filter and sort; a cell can name files to open. */
     | { kind: 'table'; columns: TableColumn[]; groups: string[]; rows: TableRow[] }
     /** A voxel model, to turn around in 3D. */
@@ -137,8 +142,27 @@ export type Preview =
           /** 8-bit RGB, when the file brings a usable one. */ palette?: Uint8Array;
           /** The owner's color range, first and last. */ remap?: [number, number];
       }
+    /** Music as its notes on a timeline, played along with its sound. */
+    | {
+          kind: 'music';
+          /** Each note: when it starts and ends (seconds), its channel (0 to 15) and pitch (a MIDI note number). */
+          notes: MusicNote[];
+          /** In seconds. */
+          length: number;
+          /** The music rendered, when it plays here; it may be shorter than the notes. */
+          audio?: AudioClip;
+          /** Said beneath it: how it's played, and what doesn't play. */
+          note: string;
+      }
     /** Several previews of the same file, e.g. a mission's map and its text. */
     | { kind: 'stack'; items: { title: string; preview: Preview }[] };
+
+export interface MusicNote {
+    start: number;
+    end: number;
+    channel: number;
+    note: number;
+}
 
 /** Bytes to show in place of the file's own, e.g. a header after decryption. */
 export interface Overlay {

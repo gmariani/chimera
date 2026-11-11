@@ -55,7 +55,8 @@ export function SectionTitle({ children, className = '' }: { children: ReactNode
     return <h2 className={`display-6 bd-group-title ${className}`}>{children}</h2>;
 }
 
-export function CodeBlock({ children, copy }: { children: string; copy?: boolean }) {
+/** Preformatted text; with `maxLines`, that many lines show and the rest scroll inside. */
+export function CodeBlock({ children, copy, maxLines }: { children: string; copy?: boolean; maxLines?: number }) {
     return (
         <div className='bd-code-snippet'>
             <div className='highlight'>
@@ -64,7 +65,9 @@ export function CodeBlock({ children, copy }: { children: string; copy?: boolean
                         <CopyButton text={children} />
                     </div>
                 )}
-                <pre>{children}</pre>
+                <pre className={maxLines ? 'code-short' : undefined} style={maxLines ? { maxHeight: `${maxLines}lh` } : undefined}>
+                    {children}
+                </pre>
             </div>
         </div>
     );

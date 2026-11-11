@@ -26,7 +26,7 @@
             }
         },
         {
-            "files": ["fuzz/**/*.ts", "**/*.test.ts", "scripts/**/*.ts"],
+            "files": ["fuzz/**/*.ts", "**/*.test.ts", "scripts/**/*.ts", ".claude/skills/**/*.mjs"],
             "rules": {
                 "no-console": "off"
             }

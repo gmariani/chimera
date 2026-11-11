@@ -2,7 +2,7 @@ import { Bytes, bytesLabel, field } from '../../core/bytes';
 import type { Entry, Field, FormatParser, Preview } from '../../core/types';
 import { append, maxOf } from '../../core/math';
 import { readSmf } from '../midi/smf';
-import { songPreviews } from '../midi/song-preview';
+import { songPreview } from '../midi/song-preview';
 import { DUNE2_MUSIC } from './dune2-music';
 
 /**
@@ -247,8 +247,10 @@ function decodeEvents(data: Uint8Array, evnt: Chunk, seq: Sequence): void {
     seq.midi = midi;
 }
 
-/** How much music, in seconds, is rendered for the page; the rest plays when its .mid is opened. */
+/** How much of the sequences that aren't the game's music, in seconds, is rendered for the page; the rest plays when its .mid is opened. */
 const LISTEN_BUDGET = 4 * 60;
+/** Lines of the outline shown before it scrolls, so the first sequence's player shows below it. */
+const OUTLINE_LINES = 10;
 
 const seconds = (ticks: number) => {
     const s = Math.round(ticks / 120);
@@ -438,33 +440,32 @@ const parser: FormatParser = {
                 `Sequence ${i}${music.includes(i) ? ' (music in Dune II)' : ''}: ${s.evnt ? `${seconds(s.length)}, ${s.notes.toLocaleString('en-US')} notes on ${s.channels.size} channel${s.channels.size === 1 ? '' : 's'}` : 'no events'}${s.timbres.length ? `, ${s.timbres.length} instrument${s.timbres.length === 1 ? '' : 's'} from the bank` : ''}${s.branches.length ? `, ${s.branches.length} branch point${s.branches.length === 1 ? '' : 's'}` : ''}${loopsOf(s)}`
         );
 
-        // Each sequence with notes: its piano roll, and the sound of as many as fit in LISTEN_BUDGET, the game's music first,
-        // then the longest (each .mid in the contents plays in full when it's opened).
+        // Each sequence with notes, on a timeline; the game's own music plays here (it's what these files are opened for), and
+        // the others as far as LISTEN_BUDGET goes, in order (each .mid in the contents plays in full when it's opened).
         const songs = sequences.map((s) => {
             const smf = s.midi && s.notes ? readSmf(s.midi) : null;
             return smf && typeof smf !== 'string' ? smf.song : null;
         });
-        const order = sequences
-            .map((_, i) => i)
-            .filter((i) => songs[i])
-            .sort((x, y) => Number(music.includes(y)) - Number(music.includes(x)) || sequences[y].length - sequences[x].length);
         const listen = new Set<number>();
         let budget = LISTEN_BUDGET;
-        for (const i of order) {
-            const length = songs[i]!.length;
-            if (length > budget) continue;
-            listen.add(i);
-            budget -= length;
-        }
-        const items: { title: string; preview: Preview }[] = [{ title: 'Sequences', preview: { kind: 'text', text: outline.join('\n') } }];
+        sequences.forEach((_, i) => {
+            const song = songs[i];
+            if (!song) return;
+            if (music.includes(i)) listen.add(i);
+            else if (song.length <= budget) {
+                listen.add(i);
+                budget -= song.length;
+            }
+        });
+        const items: { title: string; preview: Preview }[] = [{ title: 'Sequences', preview: { kind: 'text', text: outline.join('\n'), maxLines: OUTLINE_LINES } }];
         sequences.forEach((s, i) => {
             if (!songs[i]) return;
-            const title = `Sequence ${i}${music.includes(i) ? ' (music in Dune II)' : ''}, ${seconds(s.length)}`;
-            const previews = songPreviews(songs[i]!, title, { listen: listen.has(i) });
             // Only some are played here, to keep the page light: the rest say where to hear them.
             const label = entries.find((e) => e.offset === s.form.at)?.label;
-            if (!listen.has(i) && label) for (const p of previews) p.title += ` (to hear it, open ${label} in the contents)`;
-            items.push(...previews);
+            items.push({
+                title: `Sequence ${i}${music.includes(i) ? ' (music in Dune II)' : ''}`,
+                preview: songPreview(songs[i]!, { listen: listen.has(i), elsewhere: label ? `To hear it, open ${label} in the contents.` : undefined }),
+            });
         });
         const playing = sequences.filter((s) => s.notes > 0).length;
         const lastEnd = top.length ? maxOf(top.map((c) => c.at + 8 + c.size + (c.size & 1))) : 0;
