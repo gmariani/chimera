@@ -26,6 +26,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | PCX pictures (256-color and 24-bit) | headers | image | PNG |
 | WSA animations (C&C and Kyrandia; Dune II 1.00 and 1.07) | header, frame offsets, palette, every frame; buffer overruns and broken loops called out | all frames, animation | PNG frame, sheet, all frames |
 | Terrain tile sets (.tem, .des, .win, .sno, .int, .icn) | header, tiles, cell map | the template assembled, each tile | PNG |
+| Dune II mentat encyclopedia (MENTATA/H/O.ENG: an IFF of topics and their texts, compressed as the game does) | every topic and text; texts nothing points to called out | the encyclopedia as text, under its headings, with each topic's animation | — |
 | Dune II map tiles (ICON.ICN: an IFF of 16-color tiles, their palettes, and which each uses) | every chunk; tiles, palettes and tables that don't agree called out | each tile, see-through edges as the game draws them | PNG |
 | VQA video (TD/RA version 2; TS's high-color version 3) | chunk map, VQHD | player with sound | PNG frame, all frames, WAV |
 | Isometric tiles (TS/RA2 .tem, .sno, .urb, .des, .lun, .ubn) | header, every cell | assembled, each cell | PNG |
@@ -58,6 +59,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Pixel Bender kernels (.pbj) | every record and instruction | disassembly | — |
 | TrueType and OpenType fonts (TrueType and CFF outlines, CID-keyed; collections) | table directory, head, hhea, maxp, name, OS/2, post, cmap, CFF | every glyph, the names | PNG |
 | 16-bit Windows modules (NE: Windows 3 programs, libraries and drivers, .fon fonts, icon libraries such as Dune II's DUNE2.ICO) | MZ and NE headers, segments, resources, names, imports; bytes nothing points to called out; one with no code under another name is warned about, one with code is dangerous | bitmaps (icons and cursors open from Contents) | each resource; each icon and cursor group as an .ico or .cur, which opens and draws |
+| Windows program information files (.pif) | the basic section (title, memory, program, folder, parameters, screen) and every section header; the sections' own settings shown whole, with what they name | — | — |
 | Windows icons and cursors (.ico, .cur) | header, every entry and image: bitmap header, colors, pixels, mask; sizes that don't agree, masks saved as text, bytes nothing points to called out | every size (1 to 32 bits a pixel, and PNG), see-through as drawn | — |
 | Other text | — | text | — |
 

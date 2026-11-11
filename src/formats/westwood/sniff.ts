@@ -211,6 +211,12 @@ export function tilesLayout(data: Uint8Array): TilesLayout | null {
     return layout;
 }
 
+/** Dune II's mentat encyclopedia: an IFF "FORM" of type "MENT", its topics first. */
+export function sniffMentat(data: Uint8Array): boolean {
+    const b = new Bytes(data);
+    return data.length > 20 && b.ascii(0, 4) === 'FORM' && b.ascii(8, 4) === 'MENT' && b.ascii(12, 4) === 'NAME';
+}
+
 /** Dune II's map tiles: an IFF "FORM" of type "ICON". */
 export function sniffIcnD2(data: Uint8Array): boolean {
     const b = new Bytes(data);

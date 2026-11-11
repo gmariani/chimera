@@ -63,3 +63,36 @@ export function lcwLiterals(p: Uint8Array): number[] {
     out.push(0x80);
     return out;
 }
+
+/** Dune II's text compression (dune2-text.ts): each pair of letters that has a code becomes that one byte (0x80 and up). */
+export function dune2Compress(text: string): number[] {
+    const FIRST = ' etainosrlhcdupm';
+    const SECOND = [
+        'tasio wb',
+        ' rnsdalm',
+        'h ieoras',
+        'nrtlc sy',
+        'nstcloer',
+        ' dtgesio',
+        'nr ufmsw',
+        ' tep.ica',
+        'e oiadur',
+        ' laeiyod',
+        'eia otru',
+        'etoakhlr',
+        ' eiu,.oa',
+        'nsrctlai',
+        'leoiratp',
+        'eaoip bm',
+    ];
+    const out: number[] = [];
+    for (let i = 0; i < text.length; i++) {
+        const a = FIRST.indexOf(text[i]);
+        const b = a >= 0 && i + 1 < text.length ? SECOND[a].indexOf(text[i + 1]) : -1;
+        if (b >= 0) {
+            out.push(0x80 | (a << 3) | b);
+            i++;
+        } else out.push(text.charCodeAt(i));
+    }
+    return out;
+}

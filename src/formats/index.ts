@@ -7,6 +7,7 @@ import { sniffMix, sniffXccDatabase } from './mix/sniff';
 import { sniffOgg } from './ogg/sniff';
 import { sniffIco } from './ico-sniff';
 import { sniffNe } from './ne-sniff';
+import { sniffPif } from './pif-sniff';
 import { sniffVoc } from './voc-sniff';
 import { sniffTiff } from './tiff/sniff';
 import { sniffPng } from './png/sniff';
@@ -22,6 +23,7 @@ import {
     sniffCps,
     sniffFont,
     sniffIcnD2,
+    sniffMentat,
     sniffIni,
     sniffMapTd,
     sniffPak,
@@ -99,6 +101,7 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'sfnt', name: 'Font (TrueType, OpenType)', extensions: ['ttf', 'otf', 'ttc', 'otc'], sniff: sniffSfnt, load: parserOf(() => import('./font')) },
     { id: 'pbj', name: 'Pixel Bender kernel (PBJ)', extensions: ['pbj'], sniff: sniffPbj, load: parserOf(() => import('./pbj')) },
     { id: 'mp3', name: 'Sound (MP3)', extensions: ['mp3', 'mp2'], sniff: sniffMp3, load: parserOf(() => import('./mp3')) },
+    { id: 'pif', name: 'Program information file (PIF)', extensions: ['pif'], sniff: sniffPif, load: parserOf(() => import('./pif')) },
     { id: 'ico', name: 'Icon or cursor (ICO, CUR)', extensions: ['ico', 'cur'], sniff: sniffIco, load: parserOf(() => import('./ico')) },
     // Other programs (PE, DOS) are named .exe and .dll too, so the name alone says nothing.
     {
@@ -115,6 +118,7 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'vqp', name: 'Palette blending tables (VQP)', extensions: ['vqp'], sniff: sniffVqp, load: parserOf(() => import('./westwood/vqp')) },
     { id: 'chunks', name: 'Petroglyph chunk file', extensions: ['bui', 'cfx', 'bfd', 'gtl', 'gpd', 'cpd', 'sob', 'chunks'], sniff: sniffChunkFile, load: parserOf(() => import('./chunks')) },
     { id: 'xcc-names', name: 'File names (XCC)', extensions: ['dat'], sniff: sniffXccDatabase, byNameAlone: false, load: parserOf(() => import('./mix/database')) },
+    { id: 'mentat', name: 'Mentat encyclopedia (Dune II)', extensions: ['eng', 'fre', 'ger', 'ita', 'spa'], sniff: sniffMentat, load: parserOf(() => import('./westwood/mentat')) },
     { id: 'strings', name: 'String table', extensions: ['eng', 'ger', 'fre', 'ita', 'spa'], sniff: sniffStrings, load: parserOf(() => import('./westwood/strings')) },
     { id: 'lut', name: 'Chronal vortex frame (RA)', extensions: ['lut'], sniff: sniffVortex, load: parserOf(() => import('./westwood/lut')) },
     { id: 'mrf', name: 'Color remap tables', extensions: ['mrf'], sniff: () => false, load: parserOf(() => import('./westwood/mrf')) },

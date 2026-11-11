@@ -9,7 +9,7 @@
  * out every time. This runs in Node (the script, without a bundler, and the
  * tests), so it imports only the plain test encoders.
  */
-import { lcwLiterals, lzw, rle } from '../formats/westwood/encoders.test-util.ts';
+import { dune2Compress, lcwLiterals, lzw, rle } from '../formats/westwood/encoders.test-util.ts';
 
 export interface Sample {
     name: string;
@@ -407,6 +407,74 @@ export function iconFile(images: { image: ArrayLike<number>; width: number; heig
     return bytes([0, 0, ...u16(type), ...u16(images.length)], entries, ...images.map((x) => x.image));
 }
 
+/**
+ * Dune II's mentat encyclopedia, made small: a heading, a briefing topic (its text is the mission's), and a topic with its
+ * animation, description and text. Each topic in NAME: its length, where its text is (big-endian), its heading's number, "0"
+ * for a heading or "1" for a topic, its name and a NUL, the mission it's listed from. The texts in DESC are compressed.
+ */
+export function mentat(): Uint8Array {
+    const topics: { section: string; heading: boolean; name: string; mission: number; text: string }[] = [
+        { section: '0', heading: true, name: 'Briefing', mission: 0, text: 'No file?NO Desc' },
+        { section: '0', heading: false, name: 'Advice', mission: 1, text: '3*No desc' },
+        { section: '1', heading: true, name: 'Structures', mission: 0, text: 'No file?NO Desc' },
+        { section: '1', heading: false, name: 'Wind Trap', mission: 1, text: 'windtrap.wsa*Wind Trap\rPower Output: 100 \fThe wind trap draws water from the air, and power from the wind.' },
+    ];
+    // The size byte, 4 bytes of where, the heading and kind, the name, its NUL, the mission.
+    const entries = topics.map((t) => 1 + 4 + 2 + t.name.length + 1 + 1);
+    const nameSize = entries.reduce((n, e) => n + e, 0);
+    const texts = topics.map((t) => [...dune2Compress(t.text), 0]);
+    const descStart = 12 + 8 + nameSize + (nameSize & 1) + 8;
+    let at = descStart;
+    const name: number[] = [];
+    topics.forEach((t, i) => {
+        name.push(entries[i], ...be32(at), t.section.charCodeAt(0), t.heading ? 0x30 : 0x31, ...text(t.name), 0, t.mission);
+        at += texts[i].length;
+    });
+    const desc = texts.flat();
+    const chunk = (id: string, body: number[]) => [...text(id), ...be32(body.length), ...body, ...(body.length & 1 ? [0] : [])];
+    const longest = Math.max(...texts.map((t) => t.length));
+    const body = [...chunk('NAME', name), ...chunk('DESC', desc), ...chunk('INFO', [0, 0, 0, 0, 0, 0, 0, 0, ...be32(longest)])];
+    return bytes(text('FORM'), be32(4 + body.length), text('MENT'), body);
+}
+
+/**
+ * A program information file, as Windows 3's PIF Editor wrote one: the 0x171-byte basic section (title, memory, program,
+ * folder, parameters, screen), then the section headers, each a 16-character name, the next header's offset, and its
+ * data's offset and length: "MICROSOFT PIFEX" (pointing back at the basic section), then the enhanced-mode and
+ * standard-mode settings (left empty here).
+ */
+export function pif({
+    sections = [
+        ['WINDOWS 386 3.0', 0x68],
+        ['WINDOWS 286 3.0', 6],
+    ] as [string, number][],
+} = {}): Uint8Array {
+    const basic = new Uint8Array(0x171);
+    const put = (at: number, value: string, length: number, pad = 0x20) => {
+        basic.fill(pad, at, at + length);
+        basic.set(text(value), at);
+    };
+    put(0x02, 'Chimera', 30);
+    basic.set([...u16(640), ...u16(256)], 0x20);
+    put(0x24, 'CHIMERA.EXE', 63);
+    basic[0x24 + 'CHIMERA.EXE'.length] = 0;
+    basic.set(u16(0x10), 0x63); // close the window when it ends
+    put(0x65, 'C:\\CHIMERA', 64, 0);
+    put(0xa5, '/SAMPLE', 64, 0);
+    basic.set([0, 1, 0, 0xff, 25, 80], 0xe5);
+    const all: [string, number][] = [['MICROSOFT PIFEX', 0x171], ...sections];
+    const headers: number[] = [];
+    let at = 0x171;
+    all.forEach(([name, length], i) => {
+        const headerAt = at;
+        const ownData = i === 0 ? 0 : headerAt + 22;
+        const next = i === all.length - 1 ? 0xffff : headerAt + 22 + (i === 0 ? 0 : length);
+        headers.push(...text(name.padEnd(15, '\0')), 0, ...u16(next), ...u16(ownData), ...u16(length), ...(i === 0 ? [] : new Array(length).fill(0)));
+        at = next;
+    });
+    return bytes(basic, headers);
+}
+
 // The list
 
 /** Every sample, in the order they're listed. */
@@ -473,6 +541,8 @@ export function samples(): Sample[] {
             data: iconFile([{ image: cursorDib(), width: 32, height: 32, colors: 2, planes: 0, bits: 0 }], 2),
         },
         { name: 'icons.icl', format: 'ne', about: 'Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon', data: iconLibrary() },
+        { name: 'mentat.eng', format: 'mentat', about: 'Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does', data: mentat() },
+        { name: 'program.pif', format: 'pif', about: 'Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections', data: pif() },
         { name: 'palette.pal', format: 'pal', about: 'VGA palette: the 16 EGA colors, then a gray ramp', data: palette6() },
         { name: 'png-rgb.png', format: 'png', about: 'PNG picture: RGB, a color wheel of sorts', data: png(64, 64, (x, y) => [x * 4, y * 4, 255 - (x + y) * 2]) },
     ];
