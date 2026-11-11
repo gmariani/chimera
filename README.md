@@ -29,6 +29,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Dune II mentat encyclopedia (MENTATA/H/O.ENG: an IFF of topics and their texts, compressed as the game does) | every topic and text; texts nothing points to called out | the encyclopedia as text, under its headings, with each topic's animation | — |
 | Dune II map tiles (ICON.ICN: an IFF of 16-color tiles, their palettes, and which each uses) | every chunk; tiles, palettes and tables that don't agree called out | each tile, see-through edges as the game draws them | PNG |
 | Dune II map tile groups (ICON.MAP: which of ICON.ICN's tiles make each crater, wall, landscape and building) | the index and each group by name, a building's states footprint by footprint; groups the game would misread called out | with ICON.ICN open, each group drawn, a building's states side by side | PNG |
+| Dune II gray remap (GRAYRMAP.TBL: 256 bytes, the color drawn in place of each, to gray out what the factory can't offer yet) | each color and what it becomes; with IBM.PAL open, their colors, and any that aren't gray | the palette before and after | PNG |
 | VQA video (TD/RA version 2; TS's high-color version 3) | chunk map, VQHD | player with sound | PNG frame, all frames, WAV |
 | Isometric tiles (TS/RA2 .tem, .sno, .urb, .des, .lun, .ubn) | header, every cell | assembled, each cell | PNG |
 | Voxel models (.vxl) and animations (.hva) | headers, limbs, matrices | 3D viewer (turn, zoom, animate; turret and barrel placed by art.ini; lit by each voxel's normal), each limb from four sides | PNG |

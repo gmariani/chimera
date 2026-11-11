@@ -63,6 +63,19 @@ export function palette6(): Uint8Array {
     return p;
 }
 
+/**
+ * A remap like Dune II's GRAYRMAP.TBL, for that palette: color 0 (see-through) and the grays stay as they are, and each
+ * EGA color becomes the gray of its brightness.
+ */
+export function grayRemap(): Uint8Array {
+    const p = palette6();
+    return Uint8Array.from({ length: 256 }, (_, i) => {
+        if (i === 0 || i >= 16) return i;
+        const light = 0.3 * p[i * 3] + 0.59 * p[i * 3 + 1] + 0.11 * p[i * 3 + 2];
+        return 16 + Math.round((light / 63) * 239);
+    });
+}
+
 /** CPS: the file size, the compression, the decoded size, the palette size, the palette, the picture. */
 function cps(compression: number, body: ArrayLike<number>, { size = 64000, pal = palette6() as ArrayLike<number> } = {}): Uint8Array {
     const rest = [...u16(compression), ...u32(size), ...u16(pal.length), ...Array.from(pal), ...Array.from(body)];
@@ -589,6 +602,7 @@ export function samples(): Sample[] {
         { name: 'strings-dune2.eng', format: 'strings', about: 'Dune II string table, compressed as the game does', data: stringTable(true) },
         { name: 'strings-dos.ger', format: 'strings', about: 'C&C-style string table, plain, with accented letters in DOS characters', data: stringTable(false) },
         { name: 'palette.pal', format: 'pal', about: 'VGA palette: the 16 EGA colors, then a gray ramp', data: palette6() },
+        { name: 'grayrmap.tbl', format: 'gray-remap', about: 'Dune II-style gray remap for palette.pal: each EGA color to the gray of its brightness', data: grayRemap() },
         { name: 'png-rgb.png', format: 'png', about: 'PNG picture: RGB, a color wheel of sorts', data: png(64, 64, (x, y) => [x * 4, y * 4, 255 - (x + y) * 2]) },
     ];
     const byName = (name: string) => out.find((s) => s.name === name)!.data;

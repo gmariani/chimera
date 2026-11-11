@@ -39,6 +39,7 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `strings-dune2.eng` | Dune II string table, compressed as the game does | 291 bytes |
 | `strings-dos.ger` | C&C-style string table, plain, with accented letters in DOS characters | 42 bytes |
 | `palette.pal` | VGA palette: the 16 EGA colors, then a gray ramp | 768 bytes |
+| `grayrmap.tbl` | Dune II-style gray remap for palette.pal: each EGA color to the gray of its brightness | 256 bytes |
 | `png-rgb.png` | PNG picture: RGB, a color wheel of sorts | 12,420 bytes |
 | `pak-v1.pak` | Westwood PAK, version 1 (Eye of the Beholder), holding three of these | 66,753 bytes |
 | `pak-v2.pak` | Westwood PAK, version 2 (Dune II), holding three of these | 66,752 bytes |

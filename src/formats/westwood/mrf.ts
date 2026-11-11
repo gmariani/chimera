@@ -30,7 +30,7 @@ const THEATERS: Record<string, string> = { T: 'Temperate', D: 'Desert', W: 'Wint
 const SWATCH = 8;
 
 /** A table as a 16 × 16 grid of swatches: for each color, the one it becomes. */
-function swatches(table: ArrayLike<number>): IndexedImage {
+export function swatches(table: ArrayLike<number>): IndexedImage {
     const size = 16 * SWATCH;
     const pixels = new Uint8Array(size * size);
     for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) pixels[y * size + x] = table[Math.floor(y / SWATCH) * 16 + Math.floor(x / SWATCH)];

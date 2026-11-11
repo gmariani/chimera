@@ -122,6 +122,8 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'mentat', name: 'Mentat encyclopedia (Dune II)', extensions: ['eng', 'fre', 'ger', 'ita', 'spa'], sniff: sniffMentat, load: parserOf(() => import('./westwood/mentat')) },
     { id: 'strings', name: 'String table', extensions: ['eng', 'ger', 'fre', 'ita', 'spa'], sniff: sniffStrings, load: parserOf(() => import('./westwood/strings')) },
     { id: 'lut', name: 'Chronal vortex frame (RA)', extensions: ['lut'], sniff: sniffVortex, load: parserOf(() => import('./westwood/lut')) },
+    // 256 bytes of anything: there's nothing to recognize it by but its name.
+    { id: 'gray-remap', name: 'Color remap table (Dune II TBL)', extensions: ['tbl'], sniff: () => false, companions: true, load: parserOf(() => import('./westwood/gray-remap')) },
     { id: 'mrf', name: 'Color remap tables', extensions: ['mrf'], sniff: () => false, load: parserOf(() => import('./westwood/mrf')) },
     { id: 'pal', name: 'Palette', extensions: ['pal'], sniff: sniffPal, load: parserOf(() => import('./westwood/pal')) },
     // Dune 2000's missions are .map too, so the name alone says nothing.
