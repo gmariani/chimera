@@ -177,35 +177,97 @@ export function sniffMapTd(data: Uint8Array): boolean {
 }
 
 /**
- * WSA animations: a 14-byte header (frame count, position, size, the largest
- * delta, flags), then frame count + 2 offsets, ending at the end of the file.
+ * The three WSA headers, by where their fields sit. C&C (and Kyrandia) put the
+ * animation's place on screen after the count; Dune II has no place, and
+ * version 1.00 no flags either (so never a palette).
  */
-export function wsaLayout(data: Uint8Array): { frames: number; offsets: number[]; palette: boolean } | null {
+export const WSA_HEADERS = {
+    cnc: { size: 14, x: 2, y: 4, width: 6, height: 8, delta: 10, flags: 12, name: 'C&C, Kyrandia' },
+    'dune2-107': { size: 10, x: -1, y: -1, width: 2, height: 4, delta: 6, flags: 8, name: 'Dune II 1.07' },
+    'dune2-100': { size: 8, x: -1, y: -1, width: 2, height: 4, delta: 6, flags: -1, name: 'Dune II 1.00' },
+} as const;
+export type WsaVersion = keyof typeof WSA_HEADERS;
+
+export interface WsaLayout {
+    version: WsaVersion;
+    frames: number;
+    width: number;
+    height: number;
+    x: number;
+    y: number;
+    /** The delta buffer the header asks for (37 bytes short of what the game allocates). */
+    largest: number;
+    flags: number;
+    palette: boolean;
+    /** Where the offset table starts and ends. */
+    table: number;
+    tableEnd: number;
+    /** Frame count + 2 offsets, the palette's 768 bytes added (an offset of 0 stays 0). */
+    offsets: number[];
+    loops: boolean;
+}
+
+/**
+ * A WSA's layout, or null if the bytes don't make one: a header (frame count,
+ * size, the largest delta, maybe a place and flags), then frame count + 2
+ * offsets. The first frame starts right after the offsets (and palette), each
+ * frame starts where the last ends, and the last ends at the end of the file.
+ */
+export function wsaLayout(data: Uint8Array): WsaLayout | null {
+    for (const version of Object.keys(WSA_HEADERS) as WsaVersion[]) {
+        const layout = wsaAs(data, version);
+        if (layout) return layout;
+    }
+    return null;
+}
+
+function wsaAs(data: Uint8Array, version: WsaVersion): WsaLayout | null {
+    const h = WSA_HEADERS[version];
     const b = new Bytes(data);
+    if (data.length < h.size) return null;
     const frames = b.u16(0);
-    const width = b.u16(6);
-    const height = b.u16(8);
-    const flags = b.u16(12);
+    const width = b.u16(h.width);
+    const height = b.u16(h.height);
+    const flags = h.flags < 0 ? 0 : b.u16(h.flags);
     if (frames === 0 || frames > 4096 || width === 0 || height === 0 || width > 640 || height > 480 || flags > 1) return null;
-    const table = 14 + (frames + 2) * 4;
+    const tableEnd = h.size + (frames + 2) * 4;
     const palette = flags === 1;
     const shift = palette ? 768 : 0;
-    if (table + shift > data.length) return null;
+    if (tableEnd + shift > data.length) return null;
     const offsets: number[] = [];
     for (let i = 0; i < frames + 2; i++) {
-        const raw = b.u32(14 + i * 4);
+        const raw = b.u32(h.size + i * 4);
         offsets.push(raw === 0 ? 0 : raw + shift);
     }
-    // The first frame may be missing (a delta onto whatever was on screen); the last real offset is the end of the file
-    // when the animation doesn't loop, the one after it when it does.
-    const end = offsets[frames + 1] || offsets[frames];
+    // The last real offset is the end of the file: the one after the frames when the animation doesn't loop (then 0),
+    // the one after that when it does (with the loop frame between).
+    const loops = offsets[frames + 1] !== 0;
+    const end = loops ? offsets[frames + 1] : offsets[frames];
     if (end !== data.length) return null;
-    let previous = table + shift;
-    for (let i = offsets[0] === 0 ? 1 : 0; i <= frames; i++) {
+    // The first frame may be missing (a delta onto the last frame of the animation before); otherwise it starts right
+    // after the table, and each frame where the one before ends.
+    let previous = tableEnd + shift;
+    const first = offsets[0] === 0 ? 1 : 0;
+    if (offsets[first] !== previous) return null;
+    for (let i = first; i <= frames + (loops ? 1 : 0); i++) {
         if (offsets[i] < previous || offsets[i] > data.length) return null;
         previous = offsets[i];
     }
-    return { frames, offsets, palette };
+    return {
+        version,
+        frames,
+        width,
+        height,
+        x: h.x < 0 ? 0 : b.u16(h.x),
+        y: h.y < 0 ? 0 : b.u16(h.y),
+        largest: b.u16(h.delta),
+        flags,
+        palette,
+        table: h.size,
+        tableEnd,
+        offsets,
+        loops,
+    };
 }
 
 export function sniffWsa(data: Uint8Array): boolean {

@@ -51,15 +51,20 @@ export function lcw(src: Uint8Array, dest: Uint8Array, srcStart = 0): number {
     return d;
 }
 
-/** Applies a format 40 delta to dest in place. */
-export function format40(src: Uint8Array, dest: Uint8Array, srcStart = 0): void {
+/**
+ * Applies a format 40 delta to dest in place. Returns how far into dest it
+ * reached: past dest's end means the delta was for something bigger (nothing
+ * is written there).
+ */
+export function format40(src: Uint8Array, dest: Uint8Array, srcStart = 0): number {
     let s = srcStart;
     let d = 0;
+    // Counts are at most 0x3fff, so running past dest costs nothing; d keeps counting so the caller can tell.
     const xorFill = (count: number, value: number) => {
-        for (let i = 0; i < count && d < dest.length; i++) dest[d++] ^= value;
+        for (let i = 0; i < count; i++, d++) if (d < dest.length) dest[d] ^= value;
     };
     const xorCopy = (count: number) => {
-        for (let i = 0; i < count && d < dest.length; i++) dest[d++] ^= src[s++];
+        for (let i = 0; i < count; i++, d++, s++) if (d < dest.length) dest[d] ^= src[s];
     };
 
     while (s < src.length) {
@@ -85,6 +90,7 @@ export function format40(src: Uint8Array, dest: Uint8Array, srcStart = 0): void 
             else xorFill(word & 0x3fff, src[s++]);
         }
     }
+    return d;
 }
 
 /**
