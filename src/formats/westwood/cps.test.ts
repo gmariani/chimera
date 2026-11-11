@@ -36,7 +36,7 @@ const parse = (data: Uint8Array) => cps.parse(data, { name: 'x.cps', names: [] }
 const images = (p: Preview | undefined): IndexedImage[] => (p?.kind === 'images' ? p.frames : []);
 
 describe('LZW', () => {
-    it('decodes the shikadi example (Eye of the Beholder\'s BLUE.EGA)', () => {
+    it("decodes the shikadi example (Eye of the Beholder's BLUE.EGA)", () => {
         // 000 100 100 008 006 008 105 101 107, then the end marker.
         const out = new Uint8Array(64);
         const info: DecodeInfo = { read: 0, ended: false, badRefs: 0 };
@@ -88,7 +88,7 @@ describe('CPS', () => {
         expect(r.preview?.kind === 'images' && [...r.preview.palette!.subarray(0, 6)]).toEqual([0, 0, 0, 255, 0, 0]);
     });
 
-    it('reads the Amiga\'s bit planes and palettes', () => {
+    it("reads the Amiga's bit planes and palettes", () => {
         // Five planes: plane n holds bit n of each pixel, the leftmost in bit 7.
         const planes = new Uint8Array(40000);
         for (let i = 0; i < 64000; i++) for (let p = 0; p < 5; p++) if ((pixels[i] >> p) & 1) planes[p * 8000 + (i >> 3)] |= 0x80 >> (i & 7);
@@ -106,7 +106,7 @@ describe('CPS', () => {
         expect(images(parse(build(3, [0x00, 0x40, 0x9c, 0x00], { size: 40000 })).preview)[0].pixels.every((v) => v === 0)).toBe(true);
     });
 
-    it('says what doesn\'t fit the format', async () => {
+    it("says what doesn't fit the format", async () => {
         expect(parse(build(0, pixels, { fileSize: 5 })).warnings.join()).toMatch(/header says the file is 7 bytes/);
         expect(parse(build(0, pixels.subarray(0, 1000))).warnings.join()).toMatch(/comes to 1,000 bytes, short of the 64,000 bytes the header gives/);
         // LZW: a reference to a code that isn't there yet, and no end marker.
@@ -125,7 +125,7 @@ describe('CPS', () => {
 
 // Dune II's pictures, inside its PAKs, if present (they aren't committed).
 const DUNE = join(__dirname, '../../../samples/westwood/Dune II');
-describe.skipIf(!existsSync(DUNE))('Dune II\'s CPS pictures', () => {
+describe.skipIf(!existsSync(DUNE))("Dune II's CPS pictures", () => {
     it('reads all 20 with nothing to warn about', () => {
         let count = 0;
         for (const name of readdirSync(DUNE).filter((n) => /\.pak$/i.test(n))) {

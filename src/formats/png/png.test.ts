@@ -19,7 +19,12 @@ describe('PNG', () => {
 
     it.skipIf(!existsSync(samples))('draws a sample exactly as Pillow does', () => {
         const parsed = png.parse(new Uint8Array(readFileSync(join(samples, 'png-rgb.png'))), { name: null, names: [] });
-        expect(parsed.summary).toEqual(expect.arrayContaining([['Size', '626 × 626'], ['Color', 'RGB, 8-bit']]));
+        expect(parsed.summary).toEqual(
+            expect.arrayContaining([
+                ['Size', '626 × 626'],
+                ['Color', 'RGB, 8-bit'],
+            ])
+        );
         expect(parsed.fields.map((f) => f.name)).toEqual(expect.arrayContaining(['sRGB (sRGB rendering intent)', 'gAMA (Gamma)', 'pHYs (Pixel size)', 'IEND (End)']));
         const p = parsed.preview;
         if (p?.kind !== 'picture') throw new Error('expected a picture');

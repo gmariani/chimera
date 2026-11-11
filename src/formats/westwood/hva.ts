@@ -10,7 +10,7 @@ import { hvaLayout } from './sniff';
 const parser: FormatParser = {
     parse(data) {
         const layout = hvaLayout(data);
-        if (!layout) throw new Error('The counts don\'t match the size of the file.');
+        if (!layout) throw new Error("The counts don't match the size of the file.");
         const b = new Bytes(data);
         const { frames, sections } = layout;
         const names = Array.from({ length: sections }, (_, i) => b.asciiz(24 + i * 16).text.slice(0, 16));
@@ -24,7 +24,7 @@ const parser: FormatParser = {
                 ['Sections', names.join(', ')],
             ],
             fields: [
-                field('Name', 0, 16, b.asciiz(0).text.slice(0, 16), 'Where the file was on the artist\'s machine; unused.'),
+                field('Name', 0, 16, b.asciiz(0).text.slice(0, 16), "Where the file was on the artist's machine; unused."),
                 field('Frames', 16, 4, frames),
                 field('Sections', 20, 4, sections),
                 { name: 'Section names', offset: 24, length: sections * 16, children: names.map((n, i) => field(`Section ${i}`, 24 + i * 16, 16, n)) },

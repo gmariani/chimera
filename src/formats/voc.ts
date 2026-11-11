@@ -136,7 +136,8 @@ const parser: FormatParser = {
         const b = new Bytes(data);
         if (data.length < HEADER || b.ascii(0, SIGNATURE.length) !== SIGNATURE) throw new Error('There\'s no "Creative Voice File" signature.');
         const headerSize = b.u16(20);
-        if (headerSize < HEADER || headerSize > data.length) throw new Error(`The header says it's ${headerSize} bytes, which ${headerSize < HEADER ? `is less than the ${HEADER} it has to be` : 'is more than the file'}.`);
+        if (headerSize < HEADER || headerSize > data.length)
+            throw new Error(`The header says it's ${headerSize} bytes, which ${headerSize < HEADER ? `is less than the ${HEADER} it has to be` : 'is more than the file'}.`);
         const version = b.u16(22);
         const check = b.u16(24);
         const expected = (~version + 0x1234) & 0xffff;
@@ -150,7 +151,7 @@ const parser: FormatParser = {
                 length: headerSize,
                 value: `version ${version >> 8}.${String(version & 0xff).padStart(2, '0')}`,
                 children: [
-                    field('Signature', 0, 20, 'Creative Voice File', 'Ends in 0x1A, which stops DOS\'s TYPE from printing the rest.'),
+                    field('Signature', 0, 20, 'Creative Voice File', "Ends in 0x1A, which stops DOS's TYPE from printing the rest."),
                     field('Header size', 20, 2, headerSize),
                     field('Version', 22, 2, `${version >> 8}.${String(version & 0xff).padStart(2, '0')}`),
                     field('Check', 24, 2, `0x${check.toString(16).toUpperCase()}`, 'The version inverted, plus 0x1234.'),
@@ -194,7 +195,9 @@ const parser: FormatParser = {
             }
             let size = b.u8(at + 1) | (b.u8(at + 2) << 8) | (b.u8(at + 3) << 16);
             if (at + 4 + size > data.length) {
-                warnings.push(`The ${BLOCKS[type] ?? `type ${type}`} block at ${at} says it's ${bytesLabel(size)}, but only ${bytesLabel(data.length - at - 4)} are left; it's read as far as it goes.`);
+                warnings.push(
+                    `The ${BLOCKS[type] ?? `type ${type}`} block at ${at} says it's ${bytesLabel(size)}, but only ${bytesLabel(data.length - at - 4)} are left; it's read as far as it goes.`
+                );
                 size = data.length - at - 4;
             }
             const body = at + 4;
@@ -221,7 +224,10 @@ const parser: FormatParser = {
                 case 1: {
                     const divisor = b.u8(body);
                     const codec = b.u8(body + 1);
-                    children.push(field('Rate divisor', body, 1, divisor, `${divisorRate(divisor).toLocaleString('en-US')} Hz: 1,000,000 ÷ (256 − this).`), field('Codec', body + 1, 1, `${codec} (${CODECS[codec] ?? 'unknown'})`));
+                    children.push(
+                        field('Rate divisor', body, 1, divisor, `${divisorRate(divisor).toLocaleString('en-US')} Hz: 1,000,000 ÷ (256 − this).`),
+                        field('Codec', body + 1, 1, `${codec} (${CODECS[codec] ?? 'unknown'})`)
+                    );
                     // An extended block before this one overrides its rate and codec, and says whether it's stereo.
                     format = extended ?? { rate: divisorRate(divisor), channels: 1, codec };
                     extended = null;
@@ -238,7 +244,10 @@ const parser: FormatParser = {
                     const length = b.u16(body) + 1;
                     const divisor = b.u8(body + 2);
                     const rate = divisorRate(divisor);
-                    children.push(field('Length', body, 2, `${length.toLocaleString('en-US')} samples`, 'Stored as one less.'), field('Rate divisor', body + 2, 1, divisor, `${rate.toLocaleString('en-US')} Hz.`));
+                    children.push(
+                        field('Length', body, 2, `${length.toLocaleString('en-US')} samples`, 'Stored as one less.'),
+                        field('Rate divisor', body + 2, 1, divisor, `${rate.toLocaleString('en-US')} Hz.`)
+                    );
                     value = `${(length / rate).toFixed(3)} s`;
                     // Its rate only says how long it lasts: it's played at the sound's rate, not counted as a rate of its own.
                     parts.push(length / rate);
@@ -275,7 +284,11 @@ const parser: FormatParser = {
                     const channels = b.u8(body + 3) ? 2 : 1;
                     const rate = Math.floor(256_000_000 / (channels * (65536 - constant)));
                     extended = { rate, channels, codec };
-                    children.push(field('Time constant', body, 2, constant, `${rate.toLocaleString('en-US')} Hz: 256,000,000 ÷ (channels × (65,536 − this)).`), field('Codec', body + 2, 1, `${codec} (${CODECS[codec] ?? 'unknown'})`), field('Mode', body + 3, 1, channels > 1 ? 'stereo' : 'mono'));
+                    children.push(
+                        field('Time constant', body, 2, constant, `${rate.toLocaleString('en-US')} Hz: 256,000,000 ÷ (channels × (65,536 − this)).`),
+                        field('Codec', body + 2, 1, `${codec} (${CODECS[codec] ?? 'unknown'})`),
+                        field('Mode', body + 3, 1, channels > 1 ? 'stereo' : 'mono')
+                    );
                     value = `for the next sound: ${rate.toLocaleString('en-US')} Hz${channels > 1 ? ' stereo' : ''}`;
                     break;
                 }
@@ -284,7 +297,13 @@ const parser: FormatParser = {
                     const bits = b.u8(body + 4);
                     const channels = b.u8(body + 5) || 1;
                     const codec = b.u16(body + 6);
-                    children.push(field('Rate', body, 4, `${rate.toLocaleString('en-US')} Hz`), field('Bits', body + 4, 1, bits), field('Channels', body + 5, 1, channels), field('Codec', body + 6, 2, `${codec} (${CODECS[codec] ?? 'unknown'})`), field('Reserved', body + 8, 4));
+                    children.push(
+                        field('Rate', body, 4, `${rate.toLocaleString('en-US')} Hz`),
+                        field('Bits', body + 4, 1, bits),
+                        field('Channels', body + 5, 1, channels),
+                        field('Codec', body + 6, 2, `${codec} (${CODECS[codec] ?? 'unknown'})`),
+                        field('Reserved', body + 8, 4)
+                    );
                     if (rate < 1000 || rate > 192_000 || channels > 8) warnings.push(`The sound at ${at} says ${rate.toLocaleString('en-US')} Hz and ${channels} channels, which can't be right.`);
                     format = { rate, channels, codec };
                     extended = null;
@@ -302,9 +321,10 @@ const parser: FormatParser = {
             at = body + size;
         }
 
-        if (end === null && at >= data.length) warnings.push('There\'s no end block (type 0), so the file may be cut short.');
+        if (end === null && at >= data.length) warnings.push("There's no end block (type 0), so the file may be cut short.");
         if (unknown) warnings.push(`${unknown} block${unknown === 1 ? ' has a type' : 's have types'} VOC files don't define.`);
-        if (end === null && shown >= MAX_FIELDS) fields.push(field('More blocks', fields[fields.length - 1].offset + fields[fields.length - 1].length, at - (fields[fields.length - 1].offset + fields[fields.length - 1].length)));
+        if (end === null && shown >= MAX_FIELDS)
+            fields.push(field('More blocks', fields[fields.length - 1].offset + fields[fields.length - 1].length, at - (fields[fields.length - 1].offset + fields[fields.length - 1].length)));
 
         // One rate and channel count for the whole sound: the first sound block's (a file whose blocks differ would need resampling).
         const first: Format | undefined = formats[0] ?? (silenceRate ? { rate: silenceRate, channels: 1, codec: 0 } : undefined);
@@ -329,14 +349,28 @@ const parser: FormatParser = {
             const samples = all8 ? Uint8Array.from(joined, (v) => (v >> 8) + 128) : joined;
             const seconds = total / first.channels / first.rate;
             preview = { kind: 'audio', wav: wav(samples, first.rate, first.channels), sampleRate: first.rate, channels: first.channels, bits: all8 ? 8 : 16, seconds };
-            if (texts.length) preview = { kind: 'stack', items: [{ title: 'Sound', preview }, { title: 'Text', preview: { kind: 'text', text: texts.join('\n\n') } }] };
+            if (texts.length)
+                preview = {
+                    kind: 'stack',
+                    items: [
+                        { title: 'Sound', preview },
+                        { title: 'Text', preview: { kind: 'text', text: texts.join('\n\n') } },
+                    ],
+                };
         } else if (texts.length) preview = { kind: 'text', text: texts.join('\n\n') };
 
         const codecs = [...new Set(formats.map((f) => CODECS[f.codec] ?? `codec ${f.codec}`))];
         return {
             title: 'Sound (VOC)',
             summary: [
-                ...(first && total ? ([['Length', `${(total / first.channels / first.rate).toFixed(2)} s`], ['Rate', `${first.rate.toLocaleString('en-US')} Hz`], ['Channels', first.channels > 1 ? 'Stereo' : 'Mono'], ['Codec', codecs.length ? codecs.join(', ') : 'None: silence only']] as [string, string][]) : [['Sound', 'None']] as [string, string][]),
+                ...(first && total
+                    ? ([
+                          ['Length', `${(total / first.channels / first.rate).toFixed(2)} s`],
+                          ['Rate', `${first.rate.toLocaleString('en-US')} Hz`],
+                          ['Channels', first.channels > 1 ? 'Stereo' : 'Mono'],
+                          ['Codec', codecs.length ? codecs.join(', ') : 'None: silence only'],
+                      ] as [string, string][])
+                    : ([['Sound', 'None']] as [string, string][])),
                 ['Version', `${version >> 8}.${String(version & 0xff).padStart(2, '0')}`],
                 ['Blocks', shown.toLocaleString('en-US')],
                 ...(markers.length ? ([['Markers', markers.join(', ')]] as [string, string][]) : []),

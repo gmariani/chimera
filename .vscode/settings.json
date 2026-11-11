@@ -28,5 +28,11 @@
         "titleBar.inactiveBackground": "#eb542499",
         "titleBar.inactiveForeground": "#e7e7e799"
     },
-    "peacock.color": "#eb5424"
+    "peacock.color": "#eb5424",
+    "[typescript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    }
 }

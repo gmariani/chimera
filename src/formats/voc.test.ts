@@ -32,11 +32,14 @@ const ADPCM = [0x90, 0x17, 0xf3, 0x8a, 0x00, 0x7f, 0xc4, 0x29, 0xe6];
 const FFMPEG: Record<number, number[]> = {
     1: [2048, 128, 1024, -768, 768, 768, 256, 256, 256, 1152, -640, -2688, -640, 384, -128, -3200, 2944],
     2: [2048, 0, -128, -256, -1024, -1024, -1280, -1280, -768, -768, -768, -768, -768, -384, -1152, -1664, -3712, -2688, -2688, -2176, -1152, -640, -3712, -2688, -2688],
-    3: [2048, 0, 512, 1536, -512, -4608, -8704, -8704, -10752, -10752, -10752, -10752, -10752, -10752, -10752, -10752, -10752, -10240, -11264, -13312, -16384, -16384, -16384, -14336, -14336, -14336, -14336, -14336, -13824, -14848, -14848, -13824, -13824],
+    3: [
+        2048, 0, 512, 1536, -512, -4608, -8704, -8704, -10752, -10752, -10752, -10752, -10752, -10752, -10752, -10752, -10752, -10240, -11264, -13312, -16384, -16384, -16384, -14336, -14336, -14336,
+        -14336, -14336, -13824, -14848, -14848, -13824, -13824,
+    ],
 };
 
 describe('Creative Voice (VOC)', () => {
-    it('reads 8-bit sound, silence at the sound\'s rate, a marker, text and a repeat', () => {
+    it("reads 8-bit sound, silence at the sound's rate, a marker, text and a repeat", () => {
         // 10,000 Hz (divisor 156); silence of 5 samples at 5,000 Hz is a millisecond, so 10 samples here.
         const data = [...header(), ...block(6, [2, 0]), ...block(1, [156, 0, 128, 200, 56]), ...block(3, [4, 0, 56]), ...block(4, [7, 0]), ...block(5, [...enc.encode('hi'), 0]), ...block(7, []), 0];
         const r = parse(data);
@@ -45,7 +48,13 @@ describe('Creative Voice (VOC)', () => {
         const clip = audio(r);
         expect([clip.sampleRate, clip.channels, clip.bits]).toEqual([10000, 1, 8]);
         expect(samples(clip)).toEqual([0, 72 << 8, -72 << 8, ...new Array(10).fill(0)]);
-        expect(r.summary).toEqual(expect.arrayContaining([['Markers', '7'], ['Repeats', '3 times (played once here)'], ['Version', '1.10']]));
+        expect(r.summary).toEqual(
+            expect.arrayContaining([
+                ['Markers', '7'],
+                ['Repeats', '3 times (played once here)'],
+                ['Version', '1.10'],
+            ])
+        );
         expect(r.preview?.kind === 'stack' && r.preview.items[1].preview).toEqual({ kind: 'text', text: 'hi' });
         expect(r.fields.at(-1)).toMatchObject({ name: 'End', offset: data.length - 1 });
     });
@@ -70,7 +79,7 @@ describe('Creative Voice (VOC)', () => {
         expect(samples(clip)).toEqual([1, -1, -32768]);
     });
 
-    it('says what doesn\'t fit the format', async () => {
+    it("says what doesn't fit the format", async () => {
         expect(parse([...header(0x010a, 0x1234), 0]).warnings.join()).toMatch(/check \(0x1234\) doesn't match/);
         expect(parse([...header(), ...block(1, [165, 0, 1, 2])]).warnings.join()).toMatch(/no end block/);
         const cut = [...header(), 1, 100, 0, 0, 165, 0, 1, 2, 3];
@@ -88,7 +97,7 @@ describe('Creative Voice (VOC)', () => {
 
 // Dune II's sounds, inside its PAKs, if present (they aren't committed).
 const DUNE = join(__dirname, '../../samples/westwood/Dune II');
-describe.skipIf(!existsSync(DUNE))('Dune II\'s VOCs', () => {
+describe.skipIf(!existsSync(DUNE))("Dune II's VOCs", () => {
     it('reads all 226, each with a sound and nothing to warn about', () => {
         let count = 0;
         for (const name of readdirSync(DUNE).filter((n) => /\.pak$/i.test(n))) {

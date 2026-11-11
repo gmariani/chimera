@@ -40,7 +40,7 @@ interface Cell {
 const parser: FormatParser = {
     parse(data) {
         const layout = tmpLayout(data, true);
-        if (!layout) throw new Error('This isn\'t an isometric tile file the app understands.');
+        if (!layout) throw new Error("This isn't an isometric tile file the app understands.");
         const b = new Bytes(data);
         const { across, down, width, height, offsets } = layout;
         const warnings: string[] = [];
@@ -74,7 +74,12 @@ const parser: FormatParser = {
                 title: `Isometric tiles (${width === 60 ? 'RA2' : 'TS'})`,
                 summary: [['Cells', `None of ${across} × ${down}: an empty template`]],
                 fields: [
-                    { name: 'Header', offset: 0, length: 16, children: [field('Cells across', 0, 4, across), field('Cells down', 4, 4, down), field('Cell width', 8, 4, width), field('Cell height', 12, 4, height)] },
+                    {
+                        name: 'Header',
+                        offset: 0,
+                        length: 16,
+                        children: [field('Cells across', 0, 4, across), field('Cells down', 4, 4, down), field('Cell width', 8, 4, width), field('Cell height', 12, 4, height)],
+                    },
                     field('Offsets', 16, offsets.length * 4, 'all 0: no cells'),
                 ],
                 warnings,
@@ -103,7 +108,8 @@ const parser: FormatParser = {
             // The depth image (one value per diamond pixel), then the extra image and its depth, each where the header says.
             const parts: Field[] = [];
             const depthAt = c.offset + b.u32(c.offset + 12);
-            if (b.u32(c.offset + 12) && depthAt + size <= data.length) parts.push(field('Depth', depthAt, size, `${width} × ${height} diamond`, 'How far back each pixel is, for drawing objects behind it.'));
+            if (b.u32(c.offset + 12) && depthAt + size <= data.length)
+                parts.push(field('Depth', depthAt, size, `${width} × ${height} diamond`, 'How far back each pixel is, for drawing objects behind it.'));
             if (c.extra) {
                 const extraSize = c.extra.width * c.extra.height;
                 parts.push(field('Extra pixels', c.offset + b.u32(c.offset + 8), extraSize, `${c.extra.width} × ${c.extra.height}`));
@@ -125,7 +131,13 @@ const parser: FormatParser = {
                     field('Extra Y', c.offset + 24, 4, c.extra ? c.extra.y : '—'),
                     field('Extra width', c.offset + 28, 4, c.extra ? c.extra.width : '—'),
                     field('Extra height', c.offset + 32, 4, c.extra ? c.extra.height : '—'),
-                    field('Flags', c.offset + 36, 4, [c.flags & FLAG_EXTRA && 'extra image', c.flags & FLAG_DEPTH && 'depth', c.flags & FLAG_DAMAGED && 'damaged version'].filter(Boolean).join(', ') || 'none', 'Only the low byte means anything; the rest is leftover memory.'),
+                    field(
+                        'Flags',
+                        c.offset + 36,
+                        4,
+                        [c.flags & FLAG_EXTRA && 'extra image', c.flags & FLAG_DEPTH && 'depth', c.flags & FLAG_DAMAGED && 'damaged version'].filter(Boolean).join(', ') || 'none',
+                        'Only the low byte means anything; the rest is leftover memory.'
+                    ),
                     field('Height', c.offset + 40, 1, c.height, 'In levels; each lifts the cell half a cell.'),
                     field('Terrain', c.offset + 41, 1, `${c.terrain} (${TERRAIN[c.terrain] ?? 'unknown'})`),
                     field('Ramp', c.offset + 42, 1, c.ramp, 'Which way the ground slopes, 0 for flat.'),

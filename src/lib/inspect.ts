@@ -74,7 +74,7 @@ export function useParsed(file: OpenFile, names: readonly string[], { version, n
                 if (canceled) return;
                 if (!(e instanceof Stopped)) console.error(e);
                 setState({ status: 'ready', ...stoppedInspection(file.data, e instanceof Error ? e.message : String(e)) });
-            },
+            }
         );
         return () => {
             canceled = true;

@@ -25,7 +25,7 @@ function useOff<T>(toggle: { off(): Promise<T> } | undefined, on: boolean): { ot
         asked.current = toggle;
         toggle.off().then(
             (other) => setGot({ toggle, other, error: null }),
-            (e: unknown) => setGot({ toggle, other: null, error: e instanceof Error ? e.message : String(e) }),
+            (e: unknown) => setGot({ toggle, other: null, error: e instanceof Error ? e.message : String(e) })
         );
     }, [on, toggle]);
     const mine = got?.toggle === toggle ? got : null;
@@ -34,12 +34,25 @@ function useOff<T>(toggle: { off(): Promise<T> } | undefined, on: boolean): { ot
 
 /** A note beside a preview's switch while the other view is on its way, or why it couldn't be drawn. */
 function OffNote({ waiting, error }: { waiting: boolean; error: string | null }) {
-    if (waiting) return <p className="small mb-3"><Spinner animation="border" size="sm" className="me-1" /> Drawing…</p>;
-    if (error) return <p className="small text-danger mb-3">Couldn't draw it that way: {error}</p>;
+    if (waiting)
+        return (
+            <p className='small mb-3'>
+                <Spinner animation='border' size='sm' className='me-1' /> Drawing…
+            </p>
+        );
+    if (error) return <p className='small text-danger mb-3'>Couldn't draw it that way: {error}</p>;
     return null;
 }
 
-export function PreviewTab({ preview, fileName, onOpenName }: { preview: UiPreview; fileName: string; /** Opens the first of these files found among the files in use; false if none is. */ onOpenName?: (names: string[]) => Promise<boolean> }) {
+export function PreviewTab({
+    preview,
+    fileName,
+    onOpenName,
+}: {
+    preview: UiPreview;
+    fileName: string;
+    /** Opens the first of these files found among the files in use; false if none is. */ onOpenName?: (names: string[]) => Promise<boolean>;
+}) {
     switch (preview.kind) {
         case 'images':
             return (
@@ -73,8 +86,8 @@ export function PreviewTab({ preview, fileName, onOpenName }: { preview: UiPrevi
             return (
                 <>
                     {preview.items.map((item, i) => (
-                        <section key={i} className="mb-5">
-                            <SectionTitle className="mb-3">{item.title}</SectionTitle>
+                        <section key={i} className='mb-5'>
+                            <SectionTitle className='mb-3'>{item.title}</SectionTitle>
                             <PreviewTab preview={item.preview} fileName={fileName} onOpenName={onOpenName} />
                         </section>
                     ))}
@@ -121,14 +134,16 @@ const initialZoom = (width: number): Zoom => (width > 900 ? 'fit' : width <= 64 
 
 /** Fit shows the whole picture at 1:1, or smaller if that's what fits the stage (its height less its padding); it never enlarges. */
 const zoomStyle = (zoom: Zoom, width: number, height: number): React.CSSProperties =>
-    zoom === 'fit' ? { width: `min(${width}px, 100%${height ? `, calc((var(--stage-height) - 2rem) * ${width / height})` : ''})` } : { width: `calc(${zoom} * var(--w))`, ['--w' as string]: `${width}px` };
+    zoom === 'fit'
+        ? { width: `min(${width}px, 100%${height ? `, calc((var(--stage-height) - 2rem) * ${width / height})` : ''})` }
+        : { width: `calc(${zoom} * var(--w))`, ['--w' as string]: `${width}px` };
 
 /** The same zoom choices for every picture: maps of any game, sprites, tiles. */
 function ZoomButtons({ zoom, onChange }: { zoom: Zoom; onChange: (zoom: Zoom) => void }) {
     return (
-        <Form.Group className="mb-3">
-            <Form.Label className="small text-body-secondary mb-1">Zoom</Form.Label>
-            <ButtonGroup size="sm" className="d-flex">
+        <Form.Group className='mb-3'>
+            <Form.Label className='small text-body-secondary mb-1'>Zoom</Form.Label>
+            <ButtonGroup size='sm' className='d-flex'>
                 {ZOOMS.map((z) => (
                     <Button key={z} variant={zoom === z ? 'primary' : 'outline-light'} onClick={() => onChange(z)}>
                         {z === 'fit' ? 'Fit' : `${z}×`}
@@ -226,7 +241,7 @@ function ImagesPreview({
         const across = sheetColumns(frames, columns);
         const h = maxOf(frames.map((f) => f.height));
         const x = Math.floor(((e.clientX - rect.left) / rect.width) * across);
-        const y = Math.floor(((e.clientY - rect.top) / rect.height) * e.currentTarget.height / h);
+        const y = Math.floor((((e.clientY - rect.top) / rect.height) * e.currentTarget.height) / h);
         const index = y * across + x;
         if (index < frames.length) {
             setFrame(index);
@@ -237,7 +252,9 @@ function ImagesPreview({
     const saveAll = async () => {
         setBusy(true);
         try {
-            const files = await Promise.all(frames.map(async (f, i) => ({ name: `${stem(fileName)}-${String(i).padStart(4, '0')}.png`, data: new Uint8Array(await (await png(frameCanvas(f, paint))).arrayBuffer()) })));
+            const files = await Promise.all(
+                frames.map(async (f, i) => ({ name: `${stem(fileName)}-${String(i).padStart(4, '0')}.png`, data: new Uint8Array(await (await png(frameCanvas(f, paint))).arrayBuffer()) }))
+            );
             download(zip(files), `${safeName(stem(fileName))}-frames.zip`);
         } finally {
             setBusy(false);
@@ -253,16 +270,21 @@ function ImagesPreview({
     };
 
     return (
-        <div className="cell-row cell-row--boxed">
-            <div className="cell cell--stage">
+        <div className='cell-row cell-row--boxed'>
+            <div className='cell cell--stage'>
                 <div className={`image-stage ${zoom === 'fit' ? '' : 'image-stage--pannable'}`} {...pan} onPointerCancel={pan.onPointerUp}>
-                    <canvas ref={canvas} className={`image-canvas ${view === 'sheet' ? 'image-canvas--sheet' : ''}`} style={zoomStyle(zoom, (view === 'sheet' ? sheetCanvas?.width : frames[frame].width) ?? 0, (view === 'sheet' ? sheetCanvas?.height : frames[frame].height) ?? 0)} onClick={clickSheet} />
+                    <canvas
+                        ref={canvas}
+                        className={`image-canvas ${view === 'sheet' ? 'image-canvas--sheet' : ''}`}
+                        style={zoomStyle(zoom, (view === 'sheet' ? sheetCanvas?.width : frames[frame].width) ?? 0, (view === 'sheet' ? sheetCanvas?.height : frames[frame].height) ?? 0)}
+                        onClick={clickSheet}
+                    />
                 </div>
             </div>
-            <div className="cell cell--side">
+            <div className='cell cell--side'>
                 {frames.length > 1 && (
-                    <div className="mb-3">
-                        <ButtonGroup size="sm" className="mb-2 d-flex">
+                    <div className='mb-3'>
+                        <ButtonGroup size='sm' className='mb-2 d-flex'>
                             <Button variant={view === 'sheet' ? 'primary' : 'outline-light'} onClick={() => setView('sheet')}>
                                 {columns ? 'Assembled' : 'All frames'}
                             </Button>
@@ -271,18 +293,18 @@ function ImagesPreview({
                             </Button>
                         </ButtonGroup>
                         {view === 'frame' && (
-                            <div className="d-flex align-items-center gap-2">
-                                <Button size="sm" variant="outline-light" onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
+                            <div className='d-flex align-items-center gap-2'>
+                                <Button size='sm' variant='outline-light' onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
                                     <i className={`bi ${playing ? 'bi-pause-fill' : 'bi-play-fill'}`} />
                                 </Button>
-                                <Form.Range min={0} max={frames.length - 1} value={frame} onChange={(e) => setFrame(Number(e.target.value))} aria-label="Frame" />
-                                <span className="text-nowrap small">
+                                <Form.Range min={0} max={frames.length - 1} value={frame} onChange={(e) => setFrame(Number(e.target.value))} aria-label='Frame' />
+                                <span className='text-nowrap small'>
                                     {frame + 1} / {frames.length}
                                 </span>
                             </div>
                         )}
                         {view === 'sheet' && (
-                            <div className="small">
+                            <div className='small'>
                                 <Muted>Click a frame to look at it on its own.</Muted>
                             </div>
                         )}
@@ -290,14 +312,14 @@ function ImagesPreview({
                 )}
 
                 <ZoomButtons zoom={zoom} onChange={setZoom} />
-                {toggle && <Form.Check type="switch" id="images-toggle" className="mb-3" label={toggle.label} checked={on} onChange={(e) => setOn(e.target.checked)} />}
+                {toggle && <Form.Check type='switch' id='images-toggle' className='mb-3' label={toggle.label} checked={on} onChange={(e) => setOn(e.target.checked)} />}
                 <OffNote waiting={off.waiting} error={off.error} />
 
                 {legend && (
-                    <ul className="list-unstyled small mb-3 legend">
+                    <ul className='list-unstyled small mb-3 legend'>
                         {legend.map(({ label, index }) => (
-                            <li key={index} className="d-flex align-items-center gap-2">
-                                <span className="legend-swatch" style={{ background: `rgb(${palette[index * 3]}, ${palette[index * 3 + 1]}, ${palette[index * 3 + 2]})` }} />
+                            <li key={index} className='d-flex align-items-center gap-2'>
+                                <span className='legend-swatch' style={{ background: `rgb(${palette[index * 3]}, ${palette[index * 3 + 1]}, ${palette[index * 3 + 2]})` }} />
                                 {label}
                             </li>
                         ))}
@@ -306,34 +328,35 @@ function ImagesPreview({
 
                 {remap && <TeamColorSelect team={team.team} onChange={team.setTeam} range={remap} />}
 
-                <Form.Group className="mb-3">
-                    <Form.Label className="small text-body-secondary mb-1">Palette</Form.Label>
-                    {ownPalette && <Form.Check type="switch" id="own-palette" label="Use the palette in this file" checked={useOwn} onChange={(e) => setUseOwn(e.target.checked)} className="mb-2" />}
-                    {!(ownPalette && useOwn) && (
-                        <PaletteSelect />
-                    )}
-                    <div className="small mt-1">
+                <Form.Group className='mb-3'>
+                    <Form.Label className='small text-body-secondary mb-1'>Palette</Form.Label>
+                    {ownPalette && <Form.Check type='switch' id='own-palette' label='Use the palette in this file' checked={useOwn} onChange={(e) => setUseOwn(e.target.checked)} className='mb-2' />}
+                    {!(ownPalette && useOwn) && <PaletteSelect />}
+                    <div className='small mt-1'>
                         <Tip label="A .pal file, or a MIX that has palettes in it (TEMPERAT.MIX, or Red Alert's REDALERT.MIX). Palettes in any archive you open are picked up too.">
-                            <button type="button" className="btn btn-link btn-sm p-0" onClick={() => paletteInput.current?.click()}>
+                            <button type='button' className='btn btn-link btn-sm p-0' onClick={() => paletteInput.current?.click()}>
                                 Load a palette…
                             </button>
                         </Tip>
-                        {noPalettesIn && <div className="text-warning">No palettes found in {noPalettesIn}.</div>}
+                        {noPalettesIn && <div className='text-warning'>No palettes found in {noPalettesIn}.</div>}
                     </div>
-                    <input ref={paletteInput} type="file" hidden onChange={(e) => void loadPalette(e.target.files?.[0]).finally(() => (e.target.value = ''))} />
+                    <input ref={paletteInput} type='file' hidden onChange={(e) => void loadPalette(e.target.files?.[0]).finally(() => (e.target.value = ''))} />
                 </Form.Group>
 
-                <div className="d-flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline-light" onClick={async () => download(await png(frameCanvas(frames[frame], paint)), `${safeName(stem(fileName))}${frames.length > 1 ? `-${String(frame).padStart(4, '0')}` : ''}.png`)}>
-                        <i className="bi bi-image me-1" /> {frames.length > 1 ? 'This frame' : 'Save'} PNG
+                <div className='d-flex flex-wrap gap-2'>
+                    <Button
+                        size='sm'
+                        variant='outline-light'
+                        onClick={async () => download(await png(frameCanvas(frames[frame], paint)), `${safeName(stem(fileName))}${frames.length > 1 ? `-${String(frame).padStart(4, '0')}` : ''}.png`)}>
+                        <i className='bi bi-image me-1' /> {frames.length > 1 ? 'This frame' : 'Save'} PNG
                     </Button>
                     {frames.length > 1 && (
                         <>
-                            <Button size="sm" variant="outline-light" onClick={async () => download(await png(sheet(frames, paint, columns)), `${safeName(stem(fileName))}-sheet.png`)}>
-                                <i className="bi bi-grid-3x3 me-1" /> {columns ? 'Assembled' : 'Sheet'} PNG
+                            <Button size='sm' variant='outline-light' onClick={async () => download(await png(sheet(frames, paint, columns)), `${safeName(stem(fileName))}-sheet.png`)}>
+                                <i className='bi bi-grid-3x3 me-1' /> {columns ? 'Assembled' : 'Sheet'} PNG
                             </Button>
-                            <Button size="sm" variant="outline-light" disabled={busy} onClick={() => void saveAll()}>
-                                {busy ? <Spinner animation="border" size="sm" className="me-1" /> : <i className="bi bi-file-zip me-1" />} Every frame
+                            <Button size='sm' variant='outline-light' disabled={busy} onClick={() => void saveAll()}>
+                                {busy ? <Spinner animation='border' size='sm' className='me-1' /> : <i className='bi bi-file-zip me-1' />} Every frame
                             </Button>
                         </>
                     )}
@@ -404,18 +427,18 @@ function PicturePreview({ width, height, rgba, toggle, fileName }: { width: numb
     }, [width, height, shown]);
 
     return (
-        <div className="cell-row cell-row--boxed">
-            <div className="cell cell--stage">
+        <div className='cell-row cell-row--boxed'>
+            <div className='cell cell--stage'>
                 <div className={`image-stage ${zoom === 'fit' ? '' : 'image-stage--pannable'}`} {...pan} onPointerCancel={pan.onPointerUp}>
-                    <canvas ref={canvas} className="image-canvas" style={zoomStyle(zoom, width, height)} />
+                    <canvas ref={canvas} className='image-canvas' style={zoomStyle(zoom, width, height)} />
                 </div>
             </div>
-            <div className="cell cell--side">
+            <div className='cell cell--side'>
                 <ZoomButtons zoom={zoom} onChange={setZoom} />
-                {toggle && <Form.Check type="switch" id="picture-toggle" className="mb-3" label={toggle.label} checked={on} onChange={(e) => setOn(e.target.checked)} />}
+                {toggle && <Form.Check type='switch' id='picture-toggle' className='mb-3' label={toggle.label} checked={on} onChange={(e) => setOn(e.target.checked)} />}
                 <OffNote waiting={off.waiting} error={off.error} />
-                <Button size="sm" variant="outline-light" onClick={async () => canvas.current && download(await png(canvas.current), `${safeName(stem(fileName))}.png`)}>
-                    <i className="bi bi-image me-1" /> Save PNG
+                <Button size='sm' variant='outline-light' onClick={async () => canvas.current && download(await png(canvas.current), `${safeName(stem(fileName))}.png`)}>
+                    <i className='bi bi-image me-1' /> Save PNG
                 </Button>
             </div>
         </div>
@@ -427,17 +450,17 @@ function PalettePreview({ colors, fileName }: { colors: Uint8Array; fileName: st
     const id = `opened:${fileName}:${colors.slice(0, 12).join(',')}`;
     return (
         <>
-            <div className="palette-grid">
+            <div className='palette-grid'>
                 {Array.from({ length: 256 }, (_, i) => {
                     const rgb = `#${[colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
                     return (
                         <Tip key={i} label={`${i} (0x${i.toString(16).toUpperCase().padStart(2, '0')})\n${rgb}`}>
-                            <span className="palette-swatch" style={{ background: rgb }} />
+                            <span className='palette-swatch' style={{ background: rgb }} />
                         </Tip>
                     );
                 })}
             </div>
-            <Button className="mt-3" variant={current.id === id ? 'success' : 'outline-light'} onClick={() => add([{ id, label: fileName, colors }], true)}>
+            <Button className='mt-3' variant={current.id === id ? 'success' : 'outline-light'} onClick={() => add([{ id, label: fileName, colors }], true)}>
                 <i className={`bi ${current.id === id ? 'bi-check2' : 'bi-palette'} me-1`} /> {current.id === id ? 'Used for sprites' : 'Use for sprites'}
             </Button>
         </>
@@ -469,10 +492,10 @@ function AudioPreview({ clip, fileName }: { clip: AudioClip; fileName: string })
     const url = useWavUrl(clip.wav, clip.mime);
     const extension = (clip.mime && CLIP_EXTENSIONS[clip.mime]) || 'wav';
     return (
-        <div className="d-flex flex-wrap gap-3 align-items-center">
-            <audio controls src={url} className="audio-player" />
-            <Button variant="outline-light" onClick={() => download(clip.wav, `${safeName(stem(fileName))}.${extension}`, clip.mime ?? 'audio/wav')}>
-                <i className="bi bi-file-earmark-music me-1" /> Save as {extension.toUpperCase()}
+        <div className='d-flex flex-wrap gap-3 align-items-center'>
+            <audio controls src={url} className='audio-player' />
+            <Button variant='outline-light' onClick={() => download(clip.wav, `${safeName(stem(fileName))}.${extension}`, clip.mime ?? 'audio/wav')}>
+                <i className='bi bi-file-earmark-music me-1' /> Save as {extension.toUpperCase()}
             </Button>
             <Muted>{clipLabel(clip)}</Muted>
         </div>
@@ -505,17 +528,20 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
         if (drawing.current || !canvas.current || shown.current === wanted.current) return;
         const index = wanted.current;
         drawing.current = true;
-        preview.frame(index).then(
-            (f) => canvas.current?.getContext('2d')!.putImageData(image(f), 0, 0),
-            (e: unknown) => {
-                setError(`Frame ${index + 1} couldn't be decoded: ${e instanceof Error ? e.message : String(e)}`);
-                setPlaying(false);
-            },
-        ).finally(() => {
-            shown.current = index;
-            drawing.current = false;
-            draw();
-        });
+        preview
+            .frame(index)
+            .then(
+                (f) => canvas.current?.getContext('2d')!.putImageData(image(f), 0, 0),
+                (e: unknown) => {
+                    setError(`Frame ${index + 1} couldn't be decoded: ${e instanceof Error ? e.message : String(e)}`);
+                    setPlaying(false);
+                }
+            )
+            .finally(() => {
+                shown.current = index;
+                drawing.current = false;
+                draw();
+            });
     };
     useEffect(() => {
         wanted.current = frame;
@@ -581,28 +607,28 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
     };
 
     return (
-        <div className="cell-row cell-row--boxed">
-            <div className="cell cell--stage">
-                <div className="image-stage image-stage--pannable" {...pan} onPointerCancel={pan.onPointerUp}>
-                    <canvas ref={canvas} width={width} height={height} className="image-canvas" style={{ width: width * zoom }} />
+        <div className='cell-row cell-row--boxed'>
+            <div className='cell cell--stage'>
+                <div className='image-stage image-stage--pannable' {...pan} onPointerCancel={pan.onPointerUp}>
+                    <canvas ref={canvas} width={width} height={height} className='image-canvas' style={{ width: width * zoom }} />
                 </div>
             </div>
-            <div className="cell cell--side">
-                <div className="d-flex align-items-center gap-2 mb-3">
-                    <Button size="sm" variant="outline-light" onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
+            <div className='cell cell--side'>
+                <div className='d-flex align-items-center gap-2 mb-3'>
+                    <Button size='sm' variant='outline-light' onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
                         <i className={`bi ${playing ? 'bi-pause-fill' : 'bi-play-fill'}`} />
                     </Button>
-                    <Form.Range min={0} max={frameCount - 1} value={frame} onChange={(e) => seek(Number(e.target.value))} aria-label="Frame" />
-                    <span className="text-nowrap small">
+                    <Form.Range min={0} max={frameCount - 1} value={frame} onChange={(e) => seek(Number(e.target.value))} aria-label='Frame' />
+                    <span className='text-nowrap small'>
                         {frame + 1} / {frameCount}
                     </span>
                 </div>
-                {url && <audio ref={sound} src={url} preload="auto" />}
-                {error && <p className="small text-danger">{error}</p>}
+                {url && <audio ref={sound} src={url} preload='auto' />}
+                {error && <p className='small text-danger'>{error}</p>}
 
-                <Form.Group className="mb-3">
-                    <Form.Label className="small text-body-secondary mb-1">Zoom</Form.Label>
-                    <ButtonGroup size="sm" className="d-flex">
+                <Form.Group className='mb-3'>
+                    <Form.Label className='small text-body-secondary mb-1'>Zoom</Form.Label>
+                    <ButtonGroup size='sm' className='d-flex'>
                         {[1, 2, 3].map((z) => (
                             <Button key={z} variant={zoom === z ? 'primary' : 'outline-light'} onClick={() => setZoom(z)}>
                                 {z}×
@@ -611,22 +637,22 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
                     </ButtonGroup>
                 </Form.Group>
 
-                <p className="small mb-3">
+                <p className='small mb-3'>
                     <Muted>
                         {width} × {height} · {fps} fps · {(frameCount / fps).toFixed(1)} s{audio ? ` · sound: ${clipLabel(audio)}` : ' · no sound'}
                     </Muted>
                 </p>
 
-                <div className="d-flex flex-wrap gap-2">
-                    <Button size="sm" variant="outline-light" onClick={async () => download(await framePng(frame), `${safeName(stem(fileName))}-${String(frame).padStart(4, '0')}.png`)}>
-                        <i className="bi bi-image me-1" /> This frame PNG
+                <div className='d-flex flex-wrap gap-2'>
+                    <Button size='sm' variant='outline-light' onClick={async () => download(await framePng(frame), `${safeName(stem(fileName))}-${String(frame).padStart(4, '0')}.png`)}>
+                        <i className='bi bi-image me-1' /> This frame PNG
                     </Button>
-                    <Button size="sm" variant="outline-light" disabled={busy !== null || playing} onClick={() => void saveAll()}>
-                        {busy !== null ? <Spinner animation="border" size="sm" className="me-1" /> : <i className="bi bi-file-zip me-1" />} {busy ?? 'Every frame'}
+                    <Button size='sm' variant='outline-light' disabled={busy !== null || playing} onClick={() => void saveAll()}>
+                        {busy !== null ? <Spinner animation='border' size='sm' className='me-1' /> : <i className='bi bi-file-zip me-1' />} {busy ?? 'Every frame'}
                     </Button>
                     {audio && (
-                        <Button size="sm" variant="outline-light" onClick={() => download(audio.wav, `${safeName(stem(fileName))}.wav`, 'audio/wav')}>
-                            <i className="bi bi-file-earmark-music me-1" /> Sound as WAV
+                        <Button size='sm' variant='outline-light' onClick={() => download(audio.wav, `${safeName(stem(fileName))}.wav`, 'audio/wav')}>
+                            <i className='bi bi-file-earmark-music me-1' /> Sound as WAV
                         </Button>
                     )}
                 </div>

@@ -49,7 +49,18 @@ const parser: FormatParser = {
         if (tag(0) === 'ttcf') {
             const count = u32(8);
             base = u32(12);
-            fields.push({ name: 'Collection header', offset: 0, length: 12 + count * 4, value: `${count} fonts`, children: [field('Tag', 0, 4, 'ttcf'), field('Version', 4, 4, `${u16(4)}.${u16(6)}`), field('Fonts', 8, 4, count), field('Offsets', 12, count * 4, `${count} offsets; the first font is read`)] });
+            fields.push({
+                name: 'Collection header',
+                offset: 0,
+                length: 12 + count * 4,
+                value: `${count} fonts`,
+                children: [
+                    field('Tag', 0, 4, 'ttcf'),
+                    field('Version', 4, 4, `${u16(4)}.${u16(6)}`),
+                    field('Fonts', 8, 4, count),
+                    field('Offsets', 12, count * 4, `${count} offsets; the first font is read`),
+                ],
+            });
         }
         const version = u32(base);
         const flavor = version === 0x4f54544f ? 'CFF' : version === 0x00010000 || version === 0x74727565 ? 'TrueType' : `0x${hex(version)}`;
@@ -76,7 +87,13 @@ const parser: FormatParser = {
             const offset = u32(at + 8);
             const length = u32(at + 12);
             tables.set(t, { offset, length });
-            records.push({ name: t, offset: at, length: 16, value: bytesLabel(length), children: [field('Tag', at, 4, t), field('Checksum', at + 4, 4, hex(u32(at + 4))), field('Offset', at + 8, 4, offset), field('Length', at + 12, 4, bytesLabel(length))] });
+            records.push({
+                name: t,
+                offset: at,
+                length: 16,
+                value: bytesLabel(length),
+                children: [field('Tag', at, 4, t), field('Checksum', at + 4, 4, hex(u32(at + 4))), field('Offset', at + 8, 4, offset), field('Length', at + 12, 4, bytesLabel(length))],
+            });
             if (offset + length > data.length) warnings.push(`The ${t} table runs past the end of the file.`);
         }
         fields.push({ name: 'Table records', offset: base + 12, length: numTables * 16, children: records });
@@ -105,7 +122,7 @@ const parser: FormatParser = {
                         value = `${unitsPerEm} units per em`;
                         f('Version', 0, 4, `${u16(at)}.${u16(at + 2)}`);
                         f('Font revision', 4, 4, fixed(4));
-                        f('Checksum adjustment', 8, 4, hex(u32(at + 8)), 'Makes the whole file\'s checksum 0xB1B0AFBA.');
+                        f('Checksum adjustment', 8, 4, hex(u32(at + 8)), "Makes the whole file's checksum 0xB1B0AFBA.");
                         f('Magic number', 12, 4, hex(u32(at + 12)), 'Always 5F0F3CF5.');
                         f('Flags', 16, 2, `0x${hex(u16(at + 16), 4)}`);
                         f('Units per em', 18, 2, unitsPerEm);
@@ -146,7 +163,21 @@ const parser: FormatParser = {
                         f('Version', 0, 4, u32(at) === 0x5000 ? '0.5 (CFF)' : '1.0 (TrueType)');
                         f('Glyph count', 4, 2, glyphCount);
                         if (u32(at) === 0x10000) {
-                            ['Max points', 'Max contours', 'Max composite points', 'Max composite contours', 'Max zones', 'Max twilight points', 'Max storage', 'Max function defs', 'Max instruction defs', 'Max stack elements', 'Max instruction size', 'Max component elements', 'Max component depth'].forEach((n, k) => f(n, 6 + k * 2, 2, u16(at + 6 + k * 2)));
+                            [
+                                'Max points',
+                                'Max contours',
+                                'Max composite points',
+                                'Max composite contours',
+                                'Max zones',
+                                'Max twilight points',
+                                'Max storage',
+                                'Max function defs',
+                                'Max instruction defs',
+                                'Max stack elements',
+                                'Max instruction size',
+                                'Max component elements',
+                                'Max component depth',
+                            ].forEach((n, k) => f(n, 6 + k * 2, 2, u16(at + 6 + k * 2)));
                         }
                         break;
                     case 'name': {
@@ -168,7 +199,15 @@ const parser: FormatParser = {
                                 length: 12,
                                 value: text.length > 60 ? `${text.slice(0, 60)}…` : text,
                                 note: `${PLATFORMS[platform] ?? platform}, encoding ${encoding}, language 0x${hex(language, 4)}.`,
-                                children: [field('Platform', r, 2, PLATFORMS[platform] ?? platform), field('Encoding', r + 2, 2, encoding), field('Language', r + 4, 2, `0x${hex(language, 4)}`), field('Name ID', r + 6, 2, id), field('Length', r + 8, 2, len), field('Offset', r + 10, 2, off), field('String', strings + off, len, text)],
+                                children: [
+                                    field('Platform', r, 2, PLATFORMS[platform] ?? platform),
+                                    field('Encoding', r + 2, 2, encoding),
+                                    field('Language', r + 4, 2, `0x${hex(language, 4)}`),
+                                    field('Name ID', r + 6, 2, id),
+                                    field('Length', r + 8, 2, len),
+                                    field('Offset', r + 10, 2, off),
+                                    field('String', strings + off, len, text),
+                                ],
                             });
                         }
                         break;
@@ -178,15 +217,38 @@ const parser: FormatParser = {
                         value = `version ${v}`;
                         f('Version', 0, 2, v);
                         f('Average width', 2, 2, i16(at + 2));
-                        f('Weight class', 4, 2, `${u16(at + 4)}${{ 100: ' (Thin)', 200: ' (Extra-light)', 300: ' (Light)', 400: ' (Regular)', 500: ' (Medium)', 600: ' (Semi-bold)', 700: ' (Bold)', 800: ' (Extra-bold)', 900: ' (Black)' }[u16(at + 4)] ?? ''}`);
+                        f(
+                            'Weight class',
+                            4,
+                            2,
+                            `${u16(at + 4)}${{ 100: ' (Thin)', 200: ' (Extra-light)', 300: ' (Light)', 400: ' (Regular)', 500: ' (Medium)', 600: ' (Semi-bold)', 700: ' (Bold)', 800: ' (Extra-bold)', 900: ' (Black)' }[u16(at + 4)] ?? ''}`
+                        );
                         f('Width class', 6, 2, u16(at + 6));
                         f('Embedding (fsType)', 8, 2, `0x${hex(u16(at + 8), 4)}`, '0 installable, 2 restricted, 4 preview and print, 8 editable; 0x100 no subsetting, 0x200 bitmaps only.');
-                        ['Subscript x size', 'Subscript y size', 'Subscript x offset', 'Subscript y offset', 'Superscript x size', 'Superscript y size', 'Superscript x offset', 'Superscript y offset', 'Strikeout size', 'Strikeout position'].forEach((n, k) => f(n, 10 + k * 2, 2, i16(at + 10 + k * 2)));
+                        [
+                            'Subscript x size',
+                            'Subscript y size',
+                            'Subscript x offset',
+                            'Subscript y offset',
+                            'Superscript x size',
+                            'Superscript y size',
+                            'Superscript x offset',
+                            'Superscript y offset',
+                            'Strikeout size',
+                            'Strikeout position',
+                        ].forEach((n, k) => f(n, 10 + k * 2, 2, i16(at + 10 + k * 2)));
                         f('Family class', 30, 2, `${data[at + 30]}, subclass ${data[at + 31]}`);
                         f('PANOSE', 32, 10, Array.from(data.subarray(at + 32, at + 42)).join(' '), 'Ten numbers classing the typeface.');
                         f('Unicode ranges', 42, 16, `${hex(u32(at + 42))} ${hex(u32(at + 46))} ${hex(u32(at + 50))} ${hex(u32(at + 54))}`);
                         f('Vendor ID', 58, 4, tag(at + 58));
-                        f('Selection flags', 62, 2, ['Italic', 'Underscore', 'Negative', 'Outlined', 'Strikeout', 'Bold', 'Regular', 'Use typo metrics', 'WWS', 'Oblique'].filter((_, k) => u16(at + 62) & (1 << k)).join(', ') || 'None');
+                        f(
+                            'Selection flags',
+                            62,
+                            2,
+                            ['Italic', 'Underscore', 'Negative', 'Outlined', 'Strikeout', 'Bold', 'Regular', 'Use typo metrics', 'WWS', 'Oblique']
+                                .filter((_, k) => u16(at + 62) & (1 << k))
+                                .join(', ') || 'None'
+                        );
                         f('First character', 64, 2, `U+${hex(u16(at + 64), 4)}`);
                         f('Last character', 66, 2, `U+${hex(u16(at + 66), 4)}`);
                         f('Typo ascender', 68, 2, i16(at + 68));
@@ -224,7 +286,18 @@ const parser: FormatParser = {
                             const sub = at + u32(r + 4);
                             const format = u16(sub);
                             subtables.push(`format ${format}`);
-                            children.push({ name: `${PLATFORMS[u16(r)] ?? u16(r)}, encoding ${u16(r + 2)}`, offset: r, length: 8, value: `format ${format}`, children: [field('Platform', r, 2, PLATFORMS[u16(r)] ?? u16(r)), field('Encoding', r + 2, 2, u16(r + 2)), field('Offset', r + 4, 4, u32(r + 4)), field('Subtable format', sub, 2, format)] });
+                            children.push({
+                                name: `${PLATFORMS[u16(r)] ?? u16(r)}, encoding ${u16(r + 2)}`,
+                                offset: r,
+                                length: 8,
+                                value: `format ${format}`,
+                                children: [
+                                    field('Platform', r, 2, PLATFORMS[u16(r)] ?? u16(r)),
+                                    field('Encoding', r + 2, 2, u16(r + 2)),
+                                    field('Offset', r + 4, 4, u32(r + 4)),
+                                    field('Subtable format', sub, 2, format),
+                                ],
+                            });
                         }
                         value = subtables.join(', ');
                         break;
@@ -255,9 +328,9 @@ const parser: FormatParser = {
             const offsets = Array.from({ length: glyphCount + 1 }, (_, k) => (longLoca ? u32(loca.offset + k * 4) : u16(loca.offset + k * 2) * 2));
             outline = (g) => trueTypeGlyph(data, glyf.offset, offsets, g);
         } else if (tables.has('CFF2')) {
-            warnings.push('CFF2 (variable font) outlines aren\'t drawn here.');
+            warnings.push("CFF2 (variable font) outlines aren't drawn here.");
         } else {
-            warnings.push('There are no outlines (bitmap-only, or a font this doesn\'t read).');
+            warnings.push("There are no outlines (bitmap-only, or a font this doesn't read).");
         }
 
         const items: { title: string; preview: Preview }[] = [];
@@ -285,7 +358,7 @@ const parser: FormatParser = {
                     continue;
                 }
                 // Centered across by the outline's extent; the baseline where the ascender puts it.
-                const xs = path.flatMap((c) => (c[0] === 'Z' ? [] : c.filter((_, k) => k % 2 === 1) as number[]));
+                const xs = path.flatMap((c) => (c[0] === 'Z' ? [] : (c.filter((_, k) => k % 2 === 1) as number[])));
                 const left = xs.length ? minOf(xs) : 0;
                 const right = xs.length ? maxOf(xs) : 0;
                 const raster = new Raster(CELL, CELL);
@@ -301,7 +374,17 @@ const parser: FormatParser = {
             if (failed) warnings.push(`${failed} glyph${failed === 1 ? '' : 's'} couldn't be drawn.`);
             items.push({ title: `Glyphs${glyphCount > shown ? ` (the first ${shown} of ${glyphCount})` : ''}`, preview: { kind: 'picture', width, height, rgba } });
         }
-        if (names.size) items.push({ title: 'Names', preview: { kind: 'text', text: [...names].sort((a, b) => a[0] - b[0]).map(([id, text]) => `${NAME_IDS[id] ?? `Name ${id}`}: ${text}`).join('\n') } });
+        if (names.size)
+            items.push({
+                title: 'Names',
+                preview: {
+                    kind: 'text',
+                    text: [...names]
+                        .sort((a, b) => a[0] - b[0])
+                        .map(([id, text]) => `${NAME_IDS[id] ?? `Name ${id}`}: ${text}`)
+                        .join('\n'),
+                },
+            });
 
         const name = (id: number) => names.get(id) ?? '';
         return {

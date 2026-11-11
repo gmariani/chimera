@@ -17,8 +17,8 @@ export class Guard extends Component<{ what: string; children: ReactNode }, { er
         const { error } = this.state;
         if (!error) return this.props.children;
         return (
-            <Alert variant="danger" className="small">
-                <i className="bi bi-shield-exclamation me-1" />
+            <Alert variant='danger' className='small'>
+                <i className='bi bi-shield-exclamation me-1' />
                 The {this.props.what} stopped: {error.message} A damaged file can do this, and so can one made to break parsers. The structure and the hex view are still here.
             </Alert>
         );

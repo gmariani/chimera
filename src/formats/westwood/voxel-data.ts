@@ -45,7 +45,7 @@ export function decodeVxl(data: Uint8Array): Vxl {
     const [limbCount, tailerCount, bodySize] = [b.u32(20), b.u32(24), b.u32(28)];
     const body = VXL_HEADER + limbCount * LIMB_HEADER;
     const tailers = body + bodySize;
-    if (limbCount === 0 || limbCount > 256 || tailers + tailerCount * TAILER > data.length) throw new Error('The limb counts and body size don\'t fit the file.');
+    if (limbCount === 0 || limbCount > 256 || tailers + tailerCount * TAILER > data.length) throw new Error("The limb counts and body size don't fit the file.");
 
     const limbs: Limb[] = [];
     for (let i = 0; i < limbCount; i++) {
@@ -64,7 +64,7 @@ export function decodeVxl(data: Uint8Array): Vxl {
             let at = spans + start;
             // The end offset is the column's last byte.
             const last = Math.min(spans + b.u32(ends + col * 4), data.length - 1);
-            for (let z = 0; z < sz && at <= last; ) {
+            for (let z = 0; z < sz && at <= last;) {
                 z += b.u8(at++);
                 const n = b.u8(at++);
                 for (let k = 0; k < n && at < data.length; k++, z++, at += 2) {

@@ -45,7 +45,8 @@ export function pixelBuffer(width: number, height: number, channels = 1, what?: 
  */
 export function checkCount(count: number, size: number, room: number, what: string): number {
     const most = Math.floor(Math.max(0, room) / size);
-    if (!Number.isSafeInteger(count) || count < 0 || count > most) throw new Error(`${what}: the header says ${n(count)}, but the ${n(Math.max(0, room))} bytes there are can hold at most ${n(most)}.`);
+    if (!Number.isSafeInteger(count) || count < 0 || count > most)
+        throw new Error(`${what}: the header says ${n(count)}, but the ${n(Math.max(0, room))} bytes there are can hold at most ${n(most)}.`);
     return count;
 }
 
@@ -54,7 +55,7 @@ export class Budget {
     private used = 0;
     constructor(
         private readonly what: string,
-        private readonly max = MAX_BYTES,
+        private readonly max = MAX_BYTES
     ) {}
 
     take(bytes: number): void {

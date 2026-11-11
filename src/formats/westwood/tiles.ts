@@ -17,7 +17,7 @@ import { EMPTY_CELL as EMPTY, readTileSet } from './tileset';
 const parser: FormatParser = {
     parse(data, context) {
         const set = readTileSet(data);
-        if (!set) throw new Error('This isn\'t a tile set the app understands.');
+        if (!set) throw new Error("This isn't a tile set the app understands.");
         const b = new Bytes(data);
         const { game, width, height, count, icons, map, trans, colorMap } = set.layout;
         const tileSize = width * height;
@@ -54,8 +54,17 @@ const parser: FormatParser = {
             field('File size', at, 4, bytesLabel(b.u32(at))),
             field('Tiles offset', at + 4, 4, icons),
             field('Palettes', at + 8, 4, b.u32(at + 8), 'Unused.'),
-            field('Remaps', at + 12, 4, `0x${b.u32(at + 12).toString(16).toUpperCase()}`, 'A leftover pointer from the tool that wrote the file.'),
-            field('Transparency offset', at + 16, 4, trans),
+            field(
+                'Remaps',
+                at + 12,
+                4,
+                `0x${b
+                    .u32(at + 12)
+                    .toString(16)
+                    .toUpperCase()}`,
+                'A leftover pointer from the tool that wrote the file.'
+            ),
+            field('Transparency offset', at + 16, 4, trans)
         );
         if (game === 'ra') header.push(field('Land types offset', at + 20, 4, colorMap), field('Map offset', at + 24, 4, map));
         else header.push(field('Map offset', at + 20, 4, map));
@@ -80,11 +89,20 @@ const parser: FormatParser = {
                 name: 'Transparency',
                 offset: trans,
                 length: physical,
-                note: 'One byte per tile: 1 means color 0 shows what\'s underneath (for overlays like trans.icn).',
+                note: "One byte per tile: 1 means color 0 shows what's underneath (for overlays like trans.icn).",
                 children: tiles.map((_, i) => field(`Tile ${i}`, trans + i, 1, b.u8(trans + i))),
             },
         ];
-        if (game === 'ra' && colorMap) fields.push(field('Land types', colorMap, data.length - colorMap, Array.from(data.subarray(colorMap)).join(' '), 'The kind of ground in each tile (clear, water, rock…), which also sets its color on the radar.'));
+        if (game === 'ra' && colorMap)
+            fields.push(
+                field(
+                    'Land types',
+                    colorMap,
+                    data.length - colorMap,
+                    Array.from(data.subarray(colorMap)).join(' '),
+                    'The kind of ground in each tile (clear, water, rock…), which also sets its color on the radar.'
+                )
+            );
 
         return {
             title: `Tile set (${game === 'ra' ? 'RA' : 'TD'})`,

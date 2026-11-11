@@ -44,7 +44,10 @@ describe('WSA', () => {
         expect(detect(data, null).id).toBe('wsa');
         expect(wsaLayout(data)?.version).toBe(version);
         const r = parse(data);
-        expect(pixels(r)).toEqual([[3, 4], [2, 5]]);
+        expect(pixels(r)).toEqual([
+            [3, 4],
+            [2, 5],
+        ]);
         expect(r.summary[0]).toEqual(['Version', WSA_HEADERS[version].name]);
         expect(r.warnings).toEqual([]);
     });
@@ -59,7 +62,7 @@ describe('WSA', () => {
         // A loop frame that doesn't go back.
         const bad = build('cnc', { loop: true });
         bad[bad.length - 6] = 7; // XOR the first pixel with 7, not 1
-        expect(parse(bad).warnings).toEqual(['The loop frame doesn\'t lead back to the first frame.']);
+        expect(parse(bad).warnings).toEqual(["The loop frame doesn't lead back to the first frame."]);
     });
 
     it('warns about frames the game has no room for', () => {
@@ -72,7 +75,7 @@ describe('WSA', () => {
         expect(parse(build('cnc', { frames: [big, big, big] })).warnings).toContain('Frames 1, 2 and 3 reach past the 2 × 1 frame: the game would draw outside it.');
     });
 
-    it('isn\'t fooled by offsets that don\'t fit', () => {
+    it("isn't fooled by offsets that don't fit", () => {
         const good = build('dune2-100');
         // The first frame not right after the table.
         const gap = good.slice();
@@ -86,7 +89,7 @@ describe('WSA', () => {
 
 // Dune II's animations, inside its PAKs, if present (they aren't committed).
 const DUNE = join(__dirname, '../../../samples/westwood/Dune II');
-describe.skipIf(!existsSync(DUNE))('Dune II\'s WSAs', () => {
+describe.skipIf(!existsSync(DUNE))("Dune II's WSAs", () => {
     it('reads all 75, as version 1.00, with nothing to warn about but one bad loop', () => {
         let count = 0;
         // As shipped: FREMEN.WSA's loop frame is its first frame again.

@@ -25,7 +25,7 @@ export function decodeImaWav(data: Uint8Array, channels: number, blockAlign: num
         const base = blk * perBlock * channels;
         for (let c = 0; c < channels; c++) {
             const h = at + c * 4;
-            const state = { sample: (data[h] | (data[h + 1] << 8)) << 16 >> 16, index: Math.min(data[h + 2], 88) };
+            const state = { sample: ((data[h] | (data[h + 1] << 8)) << 16) >> 16, index: Math.min(data[h + 2], 88) };
             out[base + c] = state.sample;
             let n = 1;
             for (let group = 0; at + 4 * channels + (group * channels + c) * 4 < at + blockAlign; group++) {
@@ -106,12 +106,23 @@ const parser: FormatParser = {
     parse(data) {
         const b = new Bytes(data);
         if (b.ascii(0, 4) !== 'RIFF' || b.ascii(8, 4) !== 'WAVE') throw new Error('No RIFF/WAVE header.');
-        const fields: Field[] = [{ name: 'RIFF header', offset: 0, length: 12, children: [field('ID', 0, 4, 'RIFF'), field('Size', 4, 4, bytesLabel(b.u32(4)), 'Of everything after this field.'), field('Type', 8, 4, 'WAVE')] }];
+        const fields: Field[] = [
+            {
+                name: 'RIFF header',
+                offset: 0,
+                length: 12,
+                children: [field('ID', 0, 4, 'RIFF'), field('Size', 4, 4, bytesLabel(b.u32(4)), 'Of everything after this field.'), field('Type', 8, 4, 'WAVE')],
+            },
+        ];
         const warnings: string[] = [];
-        let format = 0, channels = 0, rate = 0, blockAlign = 0, bits = 0;
+        let format = 0,
+            channels = 0,
+            rate = 0,
+            blockAlign = 0,
+            bits = 0;
         let fmtAt = 0;
         let sound: Uint8Array | null = null;
-        for (let at = 12; at + 8 <= data.length; ) {
+        for (let at = 12; at + 8 <= data.length;) {
             const id = b.ascii(at, 4);
             const size = b.u32(at + 4);
             const body = at + 8;
@@ -134,7 +145,13 @@ const parser: FormatParser = {
                                   field('Extra size', body + 16, 2, b.u16(body + 16)),
                                   field('Samples per block', body + 18, 2, b.u16(body + 18)),
                                   field('Coefficient count', body + 20, 2, b.u16(body + 20)),
-                                  field('Coefficients', body + 22, b.u16(body + 20) * 4, Array.from({ length: b.u16(body + 20) }, (_, k) => `${(b.u16(body + 22 + k * 4) << 16) >> 16} ${(b.u16(body + 24 + k * 4) << 16) >> 16}`).join(', '), 'Predictor pairs, in 256ths: each block names the one it uses.'),
+                                  field(
+                                      'Coefficients',
+                                      body + 22,
+                                      b.u16(body + 20) * 4,
+                                      Array.from({ length: b.u16(body + 20) }, (_, k) => `${(b.u16(body + 22 + k * 4) << 16) >> 16} ${(b.u16(body + 24 + k * 4) << 16) >> 16}`).join(', '),
+                                      'Predictor pairs, in 256ths: each block names the one it uses.'
+                                  ),
                               ]
                             : size > 16
                               ? [field('Extra', body + 16, size - 16, format === WAV_IMA_ADPCM ? `${b.u16(body + 18)} samples per block` : undefined)]
@@ -147,7 +164,7 @@ const parser: FormatParser = {
             }
             at = body + size + (size & 1);
         }
-        if (!sound) warnings.push('There\'s no data chunk.');
+        if (!sound) warnings.push("There's no data chunk.");
 
         let clip;
         if (sound && channels > 0 && rate > 0) {
@@ -155,7 +172,9 @@ const parser: FormatParser = {
                 clip = { wav: data, sampleRate: rate, channels, bits, seconds: sound.length / (rate * channels * (bits / 8)) };
             } else if (format === WAV_MS_ADPCM && blockAlign > 7 * channels) {
                 const count = fmtAt && b.u16(fmtAt + 20);
-                const coefficients: [number, number][] = count ? Array.from({ length: count }, (_, k) => [(b.u16(fmtAt + 22 + k * 4) << 16) >> 16, (b.u16(fmtAt + 24 + k * 4) << 16) >> 16]) : MS_COEFFICIENTS;
+                const coefficients: [number, number][] = count
+                    ? Array.from({ length: count }, (_, k) => [(b.u16(fmtAt + 22 + k * 4) << 16) >> 16, (b.u16(fmtAt + 24 + k * 4) << 16) >> 16])
+                    : MS_COEFFICIENTS;
                 const samples = decodeMsAdpcm(sound, channels, blockAlign, coefficients);
                 clip = { wav: wav(samples, rate, channels), sampleRate: rate, channels, bits: 16, seconds: samples.length / channels / rate };
             } else if (format === WAV_IMA_ADPCM && blockAlign > 4 * channels) {

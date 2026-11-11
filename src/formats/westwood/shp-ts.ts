@@ -43,7 +43,17 @@ const parser: FormatParser = {
                     field('Height', at + 6, 2, h),
                     field('Compression', at + 8, 1, compression, COMPRESSION[compression] ?? 'Unknown'),
                     field('Unknown', at + 9, 3),
-                    field('Radar color', at + 12, 4, `#${b.u32(at + 12).toString(16).padStart(6, '0').slice(-6)}`, 'Used for the minimap.'),
+                    field(
+                        'Radar color',
+                        at + 12,
+                        4,
+                        `#${b
+                            .u32(at + 12)
+                            .toString(16)
+                            .padStart(6, '0')
+                            .slice(-6)}`,
+                        'Used for the minimap.'
+                    ),
                     field('Reserved', at + 16, 4),
                     field('Data offset', at + 20, 4, offset, offset ? undefined : 'Zero: the frame is empty.'),
                 ],
@@ -61,7 +71,12 @@ const parser: FormatParser = {
                     name: 'Header',
                     offset: 0,
                     length: 8,
-                    children: [field('Zero', 0, 2, 0, 'Always 0; tells this format apart from TD sprites.'), field('Width', 2, 2, width), field('Height', 4, 2, height), field('Frame count', 6, 2, count)],
+                    children: [
+                        field('Zero', 0, 2, 0, 'Always 0; tells this format apart from TD sprites.'),
+                        field('Width', 2, 2, width),
+                        field('Height', 4, 2, height),
+                        field('Frame count', 6, 2, count),
+                    ],
                 },
                 { name: 'Frame headers', offset: 8, length: count * 24, children: headerFields },
                 ...dataFields,

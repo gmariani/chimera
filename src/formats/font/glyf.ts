@@ -18,7 +18,7 @@ export function trueTypeGlyph(data: Uint8Array, glyf: number, loca: number[], in
     if (contours < 0) {
         // Composite: each part's flags, glyph, offset (or point numbers to match), and scale.
         const path: PathCommand[] = [];
-        for (let more = true; more; ) {
+        for (let more = true; more;) {
             const flags = view.getUint16(at);
             const part = view.getUint16(at + 2);
             at += 4;
@@ -48,7 +48,7 @@ export function trueTypeGlyph(data: Uint8Array, glyf: number, loca: number[], in
     at += 2 + view.getUint16(at); // the instructions
     const count = contours ? ends[contours - 1] + 1 : 0;
     const flags = new Uint8Array(count);
-    for (let i = 0; i < count; ) {
+    for (let i = 0; i < count;) {
         const f = data[at++];
         flags[i++] = f;
         if (f & 0x08) for (let r = data[at++]; r > 0 && i < count; r--) flags[i++] = f;

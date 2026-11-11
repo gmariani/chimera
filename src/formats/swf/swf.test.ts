@@ -21,7 +21,7 @@ const find = (fields: Field[], name: string): Field | undefined => {
 };
 
 describe('ADPCM', () => {
-    it('reads 2-bit codes from each packet\'s first sample and index', () => {
+    it("reads 2-bit codes from each packet's first sample and index", () => {
         // Code size 0 (2 bits), sample 100, index 0, then codes 01 (up a step) and 11 (down).
         const bits = '00' + (100).toString(2).padStart(16, '0') + '000000' + '01' + '11';
         const bytes = Uint8Array.from(bits.padEnd(Math.ceil(bits.length / 8) * 8, '0').match(/.{8}/g)!, (b) => parseInt(b, 2));
@@ -33,9 +33,15 @@ describe('ADPCM', () => {
 describe.skipIf(!existsSync(samples))('sample movies', () => {
     const open = (name: string) => swf.parse(new Uint8Array(readFileSync(join(samples, name))), { name, names: [] });
 
-    it('reads an uncompressed movie\'s tags, frame by frame', () => {
+    it("reads an uncompressed movie's tags, frame by frame", () => {
         const parsed = open('swf-v8.swf');
-        expect(parsed.summary).toEqual(expect.arrayContaining([['Stage', '550 × 400 px'], ['Frames', '226 at 24 fps'], ['Background', '#333333']]));
+        expect(parsed.summary).toEqual(
+            expect.arrayContaining([
+                ['Stage', '550 × 400 px'],
+                ['Frames', '226 at 24 fps'],
+                ['Background', '#333333'],
+            ])
+        );
         expect(parsed.fields.filter((f) => f.name.startsWith('Frame ')).length).toBe(226);
         expect(find(parsed.fields, 'DefineVideoStream')?.value).toBe('#40, 320 × 240, On2 VP6');
         expect(parsed.warnings).toEqual([]);
@@ -53,7 +59,7 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
                 ['image 25.png', 'png'],
                 ['stream.mp3', 'mp3'],
                 ['video 40.flv', 'raw'],
-            ]),
+            ])
         );
     });
 
@@ -84,7 +90,13 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
         const kernel = open('swf-v10-pixelbender.swf').entries!.find((e) => e.label.includes('GrayScaleKernel'))!;
         expect(detect(kernel.data, null).id).toBe('pbj');
         const parsed = pbj.parse(kernel.data, { name: null, names: [] });
-        expect(parsed.summary).toEqual(expect.arrayContaining([['Name', 'GrayScale'], ['Vendor', 'Mike Chambers'], ['Instructions', '21']]));
+        expect(parsed.summary).toEqual(
+            expect.arrayContaining([
+                ['Name', 'GrayScale'],
+                ['Vendor', 'Mike Chambers'],
+                ['Instructions', '21'],
+            ])
+        );
         const text = parsed.preview?.kind === 'text' ? parsed.preview.text : '';
         expect(text).toContain('f2.xyzw = sampleNearest(texture 0, f0.xy)');
         expect(text).toContain('f0.z = 0.7154');
@@ -94,7 +106,13 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
         const font = open('swf-v10-pixelbender.swf').entries!.find((e) => e.label.startsWith('font 42'))!;
         expect(typeEntries([font])[0].fileName).toBe('font 42 (FlashbugDemo_fla.MainTimeline_AdobeArabicFullFont).otf');
         const parsed = sfnt.parse(font.data, { name: null, names: [] });
-        expect(parsed.summary).toEqual(expect.arrayContaining([['Family', 'Adobe Arabic'], ['Glyphs', '1214'], ['Outlines', 'CFF']]));
+        expect(parsed.summary).toEqual(
+            expect.arrayContaining([
+                ['Family', 'Adobe Arabic'],
+                ['Glyphs', '1214'],
+                ['Outlines', 'CFF'],
+            ])
+        );
         expect(parsed.warnings).toEqual([]);
         const sheet = parsed.preview?.kind === 'stack' ? parsed.preview.items[0].preview : undefined;
         if (sheet?.kind !== 'picture') throw new Error('expected a glyph sheet');
@@ -105,6 +123,6 @@ describe.skipIf(!existsSync(samples))('sample movies', () => {
     });
 
     it('says when an obfuscator has been at it', () => {
-        expect(open('swf-obfuscated-swfprotector.swf').summary).toContainEqual(['Obfuscated', 'Yes: it has an obfuscator\'s tags']);
+        expect(open('swf-obfuscated-swfprotector.swf').summary).toContainEqual(['Obfuscated', "Yes: it has an obfuscator's tags"]);
     });
 });

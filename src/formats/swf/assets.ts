@@ -50,7 +50,8 @@ export function extractAssets(data: Uint8Array, tags: TagRef[], frameRate: numbe
         }
     }
     const label = (kind: string, id: number) => `${kind} ${id}${names.has(id) ? ` (${names.get(id)})` : ''}`;
-    const add = (name: string, t: TagRef, bytes: Uint8Array, meta?: Record<string, string>) => entries.push({ name: null, label: name, offset: t.at, size: bytes.length, data: bytes, meta: { Tag: tagName(t.code), ...meta } });
+    const add = (name: string, t: TagRef, bytes: Uint8Array, meta?: Record<string, string>) =>
+        entries.push({ name: null, label: name, offset: t.at, size: bytes.length, data: bytes, meta: { Tag: tagName(t.code), ...meta } });
     const attempt = (what: string, run: () => void) => {
         try {
             run();
@@ -177,7 +178,22 @@ export function extractAssets(data: Uint8Array, tags: TagRef[], frameRate: numbe
     return { entries, texts, warnings };
 }
 
-const TAG_NAMES_SHORT: Record<number, string> = { 6: 'DefineBits', 14: 'DefineSound', 18: 'SoundStreamHead', 20: 'DefineBitsLossless', 21: 'DefineBitsJPEG2', 35: 'DefineBitsJPEG3', 36: 'DefineBitsLossless2', 45: 'SoundStreamHead2', 60: 'DefineVideoStream', 72: 'DoABC', 82: 'DoABC', 87: 'DefineBinaryData', 90: 'DefineBitsJPEG4', 91: 'DefineFont4' };
+const TAG_NAMES_SHORT: Record<number, string> = {
+    6: 'DefineBits',
+    14: 'DefineSound',
+    18: 'SoundStreamHead',
+    20: 'DefineBitsLossless',
+    21: 'DefineBitsJPEG2',
+    35: 'DefineBitsJPEG3',
+    36: 'DefineBitsLossless2',
+    45: 'SoundStreamHead2',
+    60: 'DefineVideoStream',
+    72: 'DoABC',
+    82: 'DoABC',
+    87: 'DefineBinaryData',
+    90: 'DefineBitsJPEG4',
+    91: 'DefineFont4',
+};
 const tagName = (code: number) => TAG_NAMES_SHORT[code] ?? String(code);
 
 const isJpeg = (b: Uint8Array) => b[0] === 0xff && b[1] === 0xd8;

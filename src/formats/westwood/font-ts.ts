@@ -42,7 +42,10 @@ const parser: FormatParser = {
 
         // The values the format always has.
         for (const [at, value, name] of layout.fixed) if (b.u32(at) !== value) warnings.push(`The header's ${name} at offset ${at} is ${b.u32(at)}, where every known font has ${value}.`);
-        if (glyphSize !== 1 + stride * lines) warnings.push(`Each glyph takes ${bytesLabel(glyphSize)}, but a width byte and ${lines} rows of ${stride} make ${bytesLabel(1 + stride * lines)}: ${glyphSize - 1 - stride * lines === 1 ? 'the byte left over in each never shows' : `the ${glyphSize - 1 - stride * lines} bytes left over in each never show`}.`);
+        if (glyphSize !== 1 + stride * lines)
+            warnings.push(
+                `Each glyph takes ${bytesLabel(glyphSize)}, but a width byte and ${lines} rows of ${stride} make ${bytesLabel(1 + stride * lines)}: ${glyphSize - 1 - stride * lines === 1 ? 'the byte left over in each never shows' : `the ${glyphSize - 1 - stride * lines} bytes left over in each never show`}.`
+            );
         if (lines > height) warnings.push(`The glyphs have ${lines} rows, more than the font's height of ${height}.`);
 
         // Code points with a glyph, and where it is.
@@ -64,7 +67,10 @@ const parser: FormatParser = {
             used.fill(1);
             for (let cp = first; cp <= last; cp++) mapped.push([cp, glyphStart + (cp - first) * glyphSize]);
         }
-        if (pastEnd) warnings.push(`${pastEnd.toLocaleString('en-US')} character${pastEnd === 1 ? '' : 's'} in the table point${pastEnd === 1 ? 's' : ''} past the font's ${count.toLocaleString('en-US')} glyph${count === 1 ? '' : 's'}.`);
+        if (pastEnd)
+            warnings.push(
+                `${pastEnd.toLocaleString('en-US')} character${pastEnd === 1 ? '' : 's'} in the table point${pastEnd === 1 ? 's' : ''} past the font's ${count.toLocaleString('en-US')} glyph${count === 1 ? '' : 's'}.`
+            );
 
         // What never shows: pixels past a glyph's width (or past the stride's rows), and glyphs nothing points at.
         const has = (at: number, from: number, to: number) => {
@@ -97,8 +103,12 @@ const parser: FormatParser = {
             if (hidden) hiddenPixels++;
         }
         if (tooWide) warnings.push(`${tooWide.toLocaleString('en-US')} glyph${tooWide === 1 ? ' is' : 's are'} said to be wider than a row holds (${widest} pixels).`);
-        if (hiddenPixels) warnings.push(`${hiddenPixels.toLocaleString('en-US')} glyph${hiddenPixels === 1 ? ' has' : 's have'} pixels set past ${hiddenPixels === 1 ? 'its' : 'their'} width, which never show: a place data can hide.`);
-        if (hiddenUnused) warnings.push(`${hiddenUnused.toLocaleString('en-US')} glyph${hiddenUnused === 1 ? '' : 's'} that no character uses hold${hiddenUnused === 1 ? 's' : ''} pixels, which never show.`);
+        if (hiddenPixels)
+            warnings.push(
+                `${hiddenPixels.toLocaleString('en-US')} glyph${hiddenPixels === 1 ? ' has' : 's have'} pixels set past ${hiddenPixels === 1 ? 'its' : 'their'} width, which never show: a place data can hide.`
+            );
+        if (hiddenUnused)
+            warnings.push(`${hiddenUnused.toLocaleString('en-US')} glyph${hiddenUnused === 1 ? '' : 's'} that no character uses hold${hiddenUnused === 1 ? 's' : ''} pixels, which never show.`);
 
         const frames: IndexedImage[] = mapped.slice(0, MAX_SHOWN).map(([, at]) => {
             const w = Math.max(1, Math.min(data[at], widest));
@@ -113,10 +123,10 @@ const parser: FormatParser = {
 
         const headerFields: Field[] = [field('ID', 0, 4, JSON.stringify(b.ascii(0, 4)))];
         const named: [number, string, string | number, string?][] = [
-            [layout.width, unicode ? 'Ideograph width' : 'Width', width, unicode ? 'The ideographic space\'s width (U+3000), for Japanese.' : 'Perhaps the space\'s width, if the font has none.'],
+            [layout.width, unicode ? 'Ideograph width' : 'Width', width, unicode ? "The ideographic space's width (U+3000), for Japanese." : "Perhaps the space's width, if the font has none."],
             [layout.stride, 'Stride', stride, 'Bytes in each row of every glyph.'],
             [layout.lines, 'Lines', lines, 'Rows stored for each glyph.'],
-            ...(layout.height >= 0 ? [[layout.height, 'Height', height, 'The font\'s height: below the lines is padding.'] as [number, string, number, string]] : []),
+            ...(layout.height >= 0 ? [[layout.height, 'Height', height, "The font's height: below the lines is padding."] as [number, string, number, string]] : []),
             ...(unicode ? [[20, 'Glyphs', count] as [number, string, number]] : []),
             [layout.glyphSize, 'Glyph size', glyphSize, 'A width byte, then the rows.'],
             ...layout.fixed.map(([at, value]) => [at, 'Unknown', b.u32(at), `Always ${value}.`] as [number, string, number, string]),

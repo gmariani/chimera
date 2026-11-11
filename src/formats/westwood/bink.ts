@@ -65,7 +65,8 @@ function layout(data: Uint8Array): Layout {
     const offsets = Array.from({ length: count + 1 }, (_, i) => b.u32(index + i * 4));
     // The last frame may run a little past the end (it's cut to fit); the others must be inside.
     for (let i = 0; i < count; i++) {
-        if ((offsets[i] & ~1) < index + (count + 1) * 4 || (offsets[i] & ~1) > (offsets[i + 1] & ~1) || (i + 1 < count && (offsets[i + 1] & ~1) > data.length)) throw new Error(`Frame ${i}'s place in the frame index (${offsets[i] & ~1} to ${offsets[i + 1] & ~1}) isn't inside the file, in order.`);
+        if ((offsets[i] & ~1) < index + (count + 1) * 4 || (offsets[i] & ~1) > (offsets[i + 1] & ~1) || (i + 1 < count && (offsets[i + 1] & ~1) > data.length))
+            throw new Error(`Frame ${i}'s place in the frame index (${offsets[i] & ~1} to ${offsets[i + 1] & ~1}) isn't inside the file, in order.`);
     }
     return {
         tag: b.u32(0),
@@ -136,7 +137,7 @@ class Player {
     constructor(
         private readonly w: BinkWasm,
         private readonly data: Uint8Array,
-        private readonly l: Layout,
+        private readonly l: Layout
     ) {
         this.open();
     }
@@ -146,7 +147,7 @@ class Player {
         current = this;
         if (this.decoder) return;
         this.decoder = this.w._video_open(this.l.tag, this.l.flags, this.l.width, this.l.height);
-        if (!this.decoder) throw new Error('The Bink decoder wouldn\'t open this video.');
+        if (!this.decoder) throw new Error("The Bink decoder wouldn't open this video.");
         this.rgba = this.w._malloc(this.l.width * this.l.height * 4);
         this.input = new Input(this.w);
         this.position = -1;
@@ -243,13 +244,17 @@ const parser: FormatParser = {
         let audio: AudioClip | undefined;
         /** Bink 2's other sound tracks (the Remastered Collection's movies have one per language, it seems). */
         let others: AudioClip[] = [];
-        if (!wasm) warnings.push('The Bink decoder couldn\'t be loaded, so only the header is shown.');
+        if (!wasm) warnings.push("The Bink decoder couldn't be loaded, so only the header is shown.");
         else {
             try {
-                if (l.two) warnings.push('Bink 2 video can\'t be shown: RAD never published the format and FFmpeg has no decoder for it. The sound plays.');
+                if (l.two) warnings.push("Bink 2 video can't be shown: RAD never published the format and FFmpeg has no decoder for it. The sound plays.");
                 else player = new Player(wasm, data, l);
                 audio = sound(wasm, data, l);
-                if (l.two) others = l.tracks.slice(1).map((_, i) => sound(wasm!, data, l, i + 1)).filter((c): c is AudioClip => !!c);
+                if (l.two)
+                    others = l.tracks
+                        .slice(1)
+                        .map((_, i) => sound(wasm!, data, l, i + 1))
+                        .filter((c): c is AudioClip => !!c);
             } catch (e) {
                 warnings.push(e instanceof Error ? e.message : String(e));
             }
@@ -260,9 +265,12 @@ const parser: FormatParser = {
             summary: [
                 ['Version', b.ascii(3, 1)],
                 ['Size', `${l.width} × ${l.height}`],
-                ['Frames', `${count} at ${+fps.toFixed(3)} per second (${fps ? (count / fps).toFixed(1) : '?'} s), ${((k) => `${k} keyframe${k === 1 ? '' : 's'}`)(l.frames.filter((f) => f.key).length)}`],
+                [
+                    'Frames',
+                    `${count} at ${+fps.toFixed(3)} per second (${fps ? (count / fps).toFixed(1) : '?'} s), ${((k) => `${k} keyframe${k === 1 ? '' : 's'}`)(l.frames.filter((f) => f.key).length)}`,
+                ],
                 ['Sound', l.tracks.length ? l.tracks.map((t) => `${t.rate} Hz ${t.flags & AUDIO_STEREO ? 'stereo' : 'mono'}, ${t.flags & AUDIO_DCT ? 'DCT' : 'RDFT'}`).join('; ') : 'None'],
-                ['Decoder', l.two ? 'Sound only: FFmpeg\'s Bink audio decoder, compiled to WebAssembly' : 'FFmpeg\'s Bink decoders, compiled to WebAssembly'],
+                ['Decoder', l.two ? "Sound only: FFmpeg's Bink audio decoder, compiled to WebAssembly" : "FFmpeg's Bink decoders, compiled to WebAssembly"],
             ],
             fields: [
                 {
@@ -284,9 +292,11 @@ const parser: FormatParser = {
                         field('Sound tracks', 40, 4, l.tracks.length),
                     ],
                 },
-                ...(l.base > 44 ? [field('Unknown', 44, 4, `0x${b.u32(44).toString(16).padStart(8, '0')}`, 'Added in Bink 1\'s revision k and Bink 2\'s i; not documented.')] : []),
+                ...(l.base > 44 ? [field('Unknown', 44, 4, `0x${b.u32(44).toString(16).padStart(8, '0')}`, "Added in Bink 1's revision k and Bink 2's i; not documented.")] : []),
                 ...l.tracks.map((_, i) => field(`Track ${i} largest decoded size`, l.base + i * 4, 4, bytesLabel(b.u32(l.base + i * 4)))),
-                ...l.tracks.map((t, i) => field(`Track ${i} format`, l.base + l.tracks.length * 4 + i * 4, 4, `${t.rate} Hz${t.flags & AUDIO_STEREO ? ', stereo' : ''}${t.flags & AUDIO_DCT ? ', DCT' : ', RDFT'}`)),
+                ...l.tracks.map((t, i) =>
+                    field(`Track ${i} format`, l.base + l.tracks.length * 4 + i * 4, 4, `${t.rate} Hz${t.flags & AUDIO_STEREO ? ', stereo' : ''}${t.flags & AUDIO_DCT ? ', DCT' : ', RDFT'}`)
+                ),
                 ...l.tracks.map((_, i) => field(`Track ${i} ID`, l.base + l.tracks.length * 8 + i * 4, 4, b.u32(l.base + l.tracks.length * 8 + i * 4))),
                 field('Frame index', l.base + l.tracks.length * 12, (count + 1) * 4, `${count + 1} offsets`, 'Where each frame starts; bit 0 marks a keyframe.'),
                 ...l.frames.slice(0, 2000).map((f, i) => field(`Frame ${i}${f.key ? ' (keyframe)' : ''}`, f.start, f.end - f.start, bytesLabel(f.end - f.start))),

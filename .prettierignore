@@ -1,0 +1,16 @@
+# Built and generated
+build/
+fuzz/build/
+fuzz/findings/
+fuzz/last-run.json
+src/formats/westwood/bink-wasm/
+wasm/bink/build/
+package-lock.json
+
+# Not ours: game files and samples
+samples/
+legacy/
+dune2k/
+
+# Local settings
+.claude/

@@ -69,7 +69,7 @@ const parser: FormatParser = {
         let frames = 0;
 
         let at = 8;
-        for (; at + 12 <= data.length; ) {
+        for (; at + 12 <= data.length;) {
             const length = view.getUint32(at);
             const type = String.fromCharCode(...data.subarray(at + 4, at + 8));
             const body = at + 8;
@@ -98,7 +98,7 @@ const parser: FormatParser = {
                         field('Color type', body + 9, 1, `${header.color} (${COLOR_TYPES[header.color] ?? 'unknown'})`, '1: palette, 2: color, 4: alpha, added together.'),
                         field('Compression', body + 10, 1, chunk[10], '0 is deflate, the only one.'),
                         field('Filter method', body + 11, 1, chunk[11], '0: the five row filters, the only method.'),
-                        field('Interlace', body + 12, 1, `${chunk[12]} (${chunk[12] ? 'Adam7' : 'None'})`),
+                        field('Interlace', body + 12, 1, `${chunk[12]} (${chunk[12] ? 'Adam7' : 'None'})`)
                     );
                     break;
                 case 'PLTE':
@@ -125,7 +125,11 @@ const parser: FormatParser = {
                 case 'pHYs': {
                     const unit = chunk[8] === 1 ? 'per meter' : '(aspect ratio only)';
                     value = `${u32(0)} × ${u32(4)} ${unit}`;
-                    children.push(field('Pixels per unit, X', body, 4, u32(0)), field('Pixels per unit, Y', body + 4, 4, u32(4)), field('Unit', body + 8, 1, `${chunk[8]} (${chunk[8] === 1 ? 'meter' : 'unknown'})`));
+                    children.push(
+                        field('Pixels per unit, X', body, 4, u32(0)),
+                        field('Pixels per unit, Y', body + 4, 4, u32(4)),
+                        field('Unit', body + 8, 1, `${chunk[8]} (${chunk[8] === 1 ? 'meter' : 'unknown'})`)
+                    );
                     break;
                 }
                 case 'tIME': {
@@ -176,7 +180,7 @@ const parser: FormatParser = {
         }
         const iendEnd = at;
         if (at < data.length) fields.push(field('After the end', at, data.length - at, bytesLabel(data.length - at), 'Not part of the PNG.'));
-        if (!header) throw new Error('There\'s no IHDR chunk.');
+        if (!header) throw new Error("There's no IHDR chunk.");
 
         let preview: Preview | undefined;
         try {
@@ -236,7 +240,7 @@ export function decodePng(h: { width: number; height: number; depth: number; col
             };
             const to8 = (v: number) => (h.depth === 16 ? v >> 8 : h.depth === 8 ? v : Math.round((v * 255) / max));
             for (let i = 0; i < w; i++) {
-                const o = (((y0 + r * dy) * h.width) + x0 + i * dx) * 4;
+                const o = ((y0 + r * dy) * h.width + x0 + i * dx) * 4;
                 const s = i * channels;
                 let px: number[];
                 switch (h.color) {

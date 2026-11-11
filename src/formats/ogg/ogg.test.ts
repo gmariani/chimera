@@ -73,7 +73,7 @@ function vorbisFile(tags: string[], { rate = 44100, channels = 2, granule = 8820
     return concat(
         page({ flags: 2, sequence: 0, packets: [vorbisIdent(rate, channels)] }),
         page({ sequence: 1, granule: -1, packets: [vorbisComment(tags), concat(Uint8Array.from([5]), enc.encode('vorbis'))] }),
-        page({ flags: 4, sequence: 2, granule, packets: [new Uint8Array(10)] }),
+        page({ flags: 4, sequence: 2, granule, packets: [new Uint8Array(10)] })
     );
 }
 
@@ -83,7 +83,9 @@ const summary = (data: Uint8Array) => Object.fromEntries(parse(data).summary);
 describe('Ogg', () => {
     it('computes the same page CRC as a real encoder', () => {
         // The first page of a Vorbis file written by FFmpeg, as is.
-        const real = Uint8Array.from('4f67675300020000000000000000d43ae91a00000000ee3c08ff011e01766f72626973000000000122560000000000001e9d000000000000a901'.match(/../g)!.map((pair) => parseInt(pair, 16)));
+        const real = Uint8Array.from(
+            '4f67675300020000000000000000d43ae91a00000000ee3c08ff011e01766f72626973000000000122560000000000001e9d000000000000a901'.match(/../g)!.map((pair) => parseInt(pair, 16))
+        );
         expect(real.length).toBe(58);
         expect(pageCrc(real, 0, real.length)).toBe(new DataView(real.buffer).getUint32(22, true));
     });
@@ -99,7 +101,15 @@ describe('Ogg', () => {
         const parsed = parse(data);
         expect(parsed.title).toBe('Sound (Ogg Vorbis)');
         const rows = Object.fromEntries(parsed.summary);
-        expect(rows).toMatchObject({ Codec: 'Vorbis', Length: '2.00 s', 'Sample rate': '44100 Hz', Channels: '2', TITLE: 'Hell March (Remastered)', ARTIST: 'Frank Klepacki; Someone Else', TITLE2: 'Ünï' });
+        expect(rows).toMatchObject({
+            Codec: 'Vorbis',
+            Length: '2.00 s',
+            'Sample rate': '44100 Hz',
+            Channels: '2',
+            TITLE: 'Hell March (Remastered)',
+            ARTIST: 'Frank Klepacki; Someone Else',
+            TITLE2: 'Ünï',
+        });
         expect(parsed.warnings).toEqual([]);
         expect(parsed.preview).toMatchObject({ kind: 'audio', mime: 'audio/ogg', sampleRate: 44100, channels: 2, seconds: 2 });
     });
@@ -108,7 +118,11 @@ describe('Ogg', () => {
         const long = `COMMENT=${'x'.repeat(600)}`;
         const packet = vorbisComment(['TITLE=Span', long]);
         const [a, c] = [packet.subarray(0, 510), packet.subarray(510)];
-        const data = concat(page({ flags: 2, sequence: 0, packets: [vorbisIdent(44100, 2)] }), page({ sequence: 1, granule: -1, packets: [a], open: true }), page({ flags: 5, sequence: 2, granule: 44100, packets: [c] }));
+        const data = concat(
+            page({ flags: 2, sequence: 0, packets: [vorbisIdent(44100, 2)] }),
+            page({ sequence: 1, granule: -1, packets: [a], open: true }),
+            page({ flags: 5, sequence: 2, granule: 44100, packets: [c] })
+        );
         const parsed = parse(data);
         expect(parsed.warnings).toEqual([]);
         expect(Object.fromEntries(parsed.summary).TITLE).toBe('Span');
@@ -130,7 +144,11 @@ describe('Ogg', () => {
         head[9] = 2;
         new DataView(head.buffer).setUint16(10, 312, true);
         new DataView(head.buffer).setUint32(12, 44100, true);
-        const data = concat(page({ flags: 2, sequence: 0, packets: [head] }), page({ sequence: 1, granule: -1, packets: [concat(enc.encode('OpusTags'), commentBlock(['TITLE=Op']))] }), page({ flags: 4, sequence: 2, granule: 48312, packets: [new Uint8Array(4)] }));
+        const data = concat(
+            page({ flags: 2, sequence: 0, packets: [head] }),
+            page({ sequence: 1, granule: -1, packets: [concat(enc.encode('OpusTags'), commentBlock(['TITLE=Op']))] }),
+            page({ flags: 4, sequence: 2, granule: 48312, packets: [new Uint8Array(4)] })
+        );
         expect(summary(data)).toMatchObject({ Codec: 'Opus', 'Sample rate': '48000 Hz', Length: '1.00 s', TITLE: 'Op' });
     });
 
@@ -143,13 +161,19 @@ describe('Ogg', () => {
         // 44100 Hz (0x0AC44), 2 channels (1), 16 bits (15).
         head.set([0x0a, 0xc4, 0x42, 0xf0], 27);
         const comment = concat(Uint8Array.from([4, 0, 0, 0]), commentBlock(['TITLE=Fl']));
-        const data = concat(page({ flags: 2, sequence: 0, packets: [head] }), page({ sequence: 1, granule: -1, packets: [comment] }), page({ flags: 4, sequence: 2, granule: 44100, packets: [new Uint8Array(4)] }));
+        const data = concat(
+            page({ flags: 2, sequence: 0, packets: [head] }),
+            page({ sequence: 1, granule: -1, packets: [comment] }),
+            page({ flags: 4, sequence: 2, granule: 44100, packets: [new Uint8Array(4)] })
+        );
         expect(summary(data)).toMatchObject({ Codec: 'FLAC', 'Sample rate': '44100 Hz', Channels: '2', Length: '1.00 s', TITLE: 'Fl' });
         expect(parse(data).preview).toMatchObject({ kind: 'audio', bits: 16 });
     });
 
     it('describes video without offering a player', () => {
-        const parsed = parse(concat(page({ flags: 2, sequence: 0, packets: [concat(Uint8Array.from([0x80]), enc.encode('theora'), new Uint8Array(30))] }), page({ flags: 4, sequence: 1, packets: [new Uint8Array(4)] })));
+        const parsed = parse(
+            concat(page({ flags: 2, sequence: 0, packets: [concat(Uint8Array.from([0x80]), enc.encode('theora'), new Uint8Array(30))] }), page({ flags: 4, sequence: 1, packets: [new Uint8Array(4)] }))
+        );
         expect(parsed.title).toBe('Video (Ogg Theora)');
         expect(parsed.preview).toBeUndefined();
     });
@@ -159,7 +183,7 @@ describe('Ogg', () => {
             page({ flags: 2, serial: 7, sequence: 0, packets: [concat(Uint8Array.from([0x80]), enc.encode('theora'), new Uint8Array(30))] }),
             page({ flags: 2, serial: 9, sequence: 0, packets: [vorbisIdent(22050, 1)] }),
             page({ flags: 4, serial: 7, sequence: 1, granule: 100, packets: [new Uint8Array(4)] }),
-            page({ flags: 4, serial: 9, sequence: 1, granule: 22050, packets: [new Uint8Array(4)] }),
+            page({ flags: 4, serial: 9, sequence: 1, granule: 22050, packets: [new Uint8Array(4)] })
         );
         expect(summary(data)).toMatchObject({ Codec: 'Vorbis', Streams: 'Theora, Vorbis', Length: '1.00 s' });
     });

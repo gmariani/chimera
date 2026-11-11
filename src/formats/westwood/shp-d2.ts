@@ -17,7 +17,7 @@ const FLAG_VARIABLE_REMAP = 4;
 
 function unzero(src: Uint8Array, dest: Uint8Array): void {
     let d = 0;
-    for (let s = 0; s < src.length && d < dest.length; ) {
+    for (let s = 0; s < src.length && d < dest.length;) {
         const value = src[s++];
         if (value === 0) d += src[s++];
         else dest[d++] = value;
@@ -27,7 +27,7 @@ function unzero(src: Uint8Array, dest: Uint8Array): void {
 const parser: FormatParser = {
     parse(data) {
         const offsets = shpD2Offsets(data);
-        if (!offsets) throw new Error('The frame offsets don\'t line up with the file.');
+        if (!offsets) throw new Error("The frame offsets don't line up with the file.");
         const b = new Bytes(data);
         const count = offsets.length - 1;
         const wide = b.u16(4) === 0;
@@ -77,7 +77,13 @@ const parser: FormatParser = {
 
             frames.push({ width, height, pixels });
             const shared = offsets.findIndex((o) => o === at);
-            frameFields.push({ name: `Frame ${i + 1}`, offset: at, length: frameSize, value: shared < i ? `${width} × ${height}, same data as frame ${shared + 1}` : `${width} × ${height}`, children });
+            frameFields.push({
+                name: `Frame ${i + 1}`,
+                offset: at,
+                length: frameSize,
+                value: shared < i ? `${width} × ${height}, same data as frame ${shared + 1}` : `${width} × ${height}`,
+                children,
+            });
         }
 
         const sizes = new Set(frames.map((f) => `${f.width} × ${f.height}`));
@@ -96,7 +102,7 @@ const parser: FormatParser = {
                     name: 'Offsets',
                     offset: 2,
                     length: offsets[0] - 2,
-                    note: `Where each frame starts, counted from ${base === 0 ? 'the start of the file (as Dune II stores them)' : 'byte 2 (as TD\'s and RA\'s cursors store them)'}; the last one is the end of the file. Frames that look the same share one copy of the data.`,
+                    note: `Where each frame starts, counted from ${base === 0 ? 'the start of the file (as Dune II stores them)' : "byte 2 (as TD's and RA's cursors store them)"}; the last one is the end of the file. Frames that look the same share one copy of the data.`,
                     children: offsets.map((o, i) => field(i < count ? `Frame ${i + 1}` : 'End of file', 2 + i * size, size, o, i < count ? undefined : 'Any entries after this are unused.')),
                 },
                 ...frameFields,

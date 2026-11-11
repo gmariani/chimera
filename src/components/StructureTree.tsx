@@ -32,7 +32,7 @@ export function StructureTree({
     }, [selectedKey]);
 
     return (
-        <div ref={root} className="structure-tree" role="tree" onMouseLeave={() => onHover(null)}>
+        <div ref={root} className='structure-tree' role='tree' onMouseLeave={() => onHover(null)}>
             <Nodes fields={fields} path={[]} depth={0} selectedKey={selectedKey} expanded={expanded} onSelect={onSelect} onToggle={onToggle} onHover={onHover} />
         </div>
     );
@@ -71,7 +71,7 @@ function Nodes({
                 const open = expanded.has(key);
                 const hasChildren = !!field.children?.length;
                 return (
-                    <div key={i} role="treeitem" aria-expanded={hasChildren ? open : undefined} aria-selected={key === selectedKey}>
+                    <div key={i} role='treeitem' aria-expanded={hasChildren ? open : undefined} aria-selected={key === selectedKey}>
                         <div
                             data-path={key}
                             className={`tree-row ${key === selectedKey ? 'tree-row--selected' : ''}`}
@@ -80,32 +80,32 @@ function Nodes({
                                 onSelect(here);
                                 if (hasChildren && !open) onToggle(here);
                             }}
-                            onMouseEnter={() => onHover(field)}
-                        >
+                            onMouseEnter={() => onHover(field)}>
                             <button
-                                type="button"
-                                className="tree-caret"
+                                type='button'
+                                className='tree-caret'
                                 tabIndex={-1}
                                 aria-label={open ? 'Collapse' : 'Expand'}
                                 style={{ visibility: hasChildren ? 'visible' : 'hidden' }}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onToggle(here);
-                                }}
-                            >
+                                }}>
                                 <i className={`bi ${open ? 'bi-caret-down-fill' : 'bi-caret-right-fill'}`} />
                             </button>
-                            <span className="tree-name">{field.name}</span>
-                            {field.value !== undefined && <span className="tree-value">{field.value}</span>}
-                            <span className="tree-offset">{hex(field.offset, 6)}</span>
+                            <span className='tree-name'>{field.name}</span>
+                            {field.value !== undefined && <span className='tree-value'>{field.value}</span>}
+                            <span className='tree-offset'>{hex(field.offset, 6)}</span>
                         </div>
-                        {hasChildren && open && <Nodes fields={field.children!} path={here} depth={depth + 1} selectedKey={selectedKey} expanded={expanded} onSelect={onSelect} onToggle={onToggle} onHover={onHover} />}
+                        {hasChildren && open && (
+                            <Nodes fields={field.children!} path={here} depth={depth + 1} selectedKey={selectedKey} expanded={expanded} onSelect={onSelect} onToggle={onToggle} onHover={onHover} />
+                        )}
                     </div>
                 );
             })}
             {fields.length > limit && (
                 <div style={{ paddingLeft: `${depth * 1.1 + 1.6}rem` }}>
-                    <button type="button" className="btn btn-link btn-sm p-0" onClick={() => setShown((n) => n + PAGE * 5)}>
+                    <button type='button' className='btn btn-link btn-sm p-0' onClick={() => setShown((n) => n + PAGE * 5)}>
                         Show {Math.min(PAGE * 5, fields.length - limit)} more of {fields.length - limit}
                     </button>
                 </div>

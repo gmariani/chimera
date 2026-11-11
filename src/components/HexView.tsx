@@ -74,30 +74,36 @@ export function HexView({
         for (let c = 0; c < COLUMNS; c++) {
             const offset = r * COLUMNS + c;
             if (offset >= data.length) {
-                hexCells.push(<span key={c} className="hx-byte hx-empty" />);
+                hexCells.push(<span key={c} className='hx-byte hx-empty' />);
                 continue;
             }
             while (leaf < leaves.length && leaves[leaf].end <= offset) leaf++;
             const tone = leaf < leaves.length && leaves[leaf].offset <= offset ? leaves[leaf].tone : -1;
             const { value, overlaid } = byteAt(offset);
-            const classes = ['hx-byte', tone >= 0 ? `hx-tone-${tone}` : '', inRange(hovered, offset) ? 'hx-hover' : '', inRange(selected, offset) ? 'hx-selected' : '', overlaid ? 'hx-overlaid' : ''].join(' ');
+            const classes = [
+                'hx-byte',
+                tone >= 0 ? `hx-tone-${tone}` : '',
+                inRange(hovered, offset) ? 'hx-hover' : '',
+                inRange(selected, offset) ? 'hx-selected' : '',
+                overlaid ? 'hx-overlaid' : '',
+            ].join(' ');
             hexCells.push(
                 <span key={c} className={classes} onClick={() => onPick(offset)}>
                     {value.toString(16).padStart(2, '0')}
-                </span>,
+                </span>
             );
             textCells.push(
                 <span key={c} className={classes} onClick={() => onPick(offset)}>
                     {value >= 32 && value < 127 ? String.fromCharCode(value) : '.'}
-                </span>,
+                </span>
             );
         }
         rows.push(
-            <div key={r} className="hx-row">
-                <span className="hx-offset">{hex(r * COLUMNS, 8)}</span>
-                <span className="hx-hex">{hexCells}</span>
-                <span className="hx-text">{textCells}</span>
-            </div>,
+            <div key={r} className='hx-row'>
+                <span className='hx-offset'>{hex(r * COLUMNS, 8)}</span>
+                <span className='hx-hex'>{hexCells}</span>
+                <span className='hx-text'>{textCells}</span>
+            </div>
         );
     }
 
@@ -111,26 +117,25 @@ export function HexView({
     };
 
     return (
-        <div className="hex-view">
-            <div className="hex-toolbar">
+        <div className='hex-view'>
+            <div className='hex-toolbar'>
                 <Form
-                    className="d-flex gap-2 align-items-center"
+                    className='d-flex gap-2 align-items-center'
                     onSubmit={(e) => {
                         e.preventDefault();
                         jump();
-                    }}
-                >
-                    <Form.Control size="sm" className="hex-goto" placeholder="Go to offset (0x1A or 26)" value={goTo} onChange={(e) => setGoTo(e.target.value)} />
+                    }}>
+                    <Form.Control size='sm' className='hex-goto' placeholder='Go to offset (0x1A or 26)' value={goTo} onChange={(e) => setGoTo(e.target.value)} />
                 </Form>
-                {overlays.length > 0 && <Form.Check type="switch" id="hex-overlay" label={`Show ${overlays[0].label} bytes`} checked={useOverlay} onChange={(e) => setUseOverlay(e.target.checked)} />}
-                <span className="text-body-secondary small ms-auto">
+                {overlays.length > 0 && <Form.Check type='switch' id='hex-overlay' label={`Show ${overlays[0].label} bytes`} checked={useOverlay} onChange={(e) => setUseOverlay(e.target.checked)} />}
+                <span className='text-body-secondary small ms-auto'>
                     {hex(top * COLUMNS, 8)}–{hex(Math.min(data.length, (top + ROWS) * COLUMNS) - 1 || 0, 8)} of {hex(data.length, 8)}
                 </span>
             </div>
-            <div className="hex-body">
+            <div className='hex-body'>
                 <div
                     ref={box}
-                    className="hex-rows"
+                    className='hex-rows'
                     tabIndex={0}
                     onKeyDown={(e) => {
                         const moves: Record<string, number> = { ArrowDown: 1, ArrowUp: -1, PageDown: ROWS, PageUp: -ROWS, Home: -Infinity, End: Infinity };
@@ -138,11 +143,10 @@ export function HexView({
                             e.preventDefault();
                             setTop((t) => clamp(t + moves[e.key]));
                         }
-                    }}
-                >
+                    }}>
                     {rows}
                 </div>
-                {maxTop > 0 && <input type="range" className="hex-scroll" min={0} max={maxTop} value={top} onChange={(e) => setTop(Number(e.target.value))} aria-label="Scroll through the file" />}
+                {maxTop > 0 && <input type='range' className='hex-scroll' min={0} max={maxTop} value={top} onChange={(e) => setTop(Number(e.target.value))} aria-label='Scroll through the file' />}
             </div>
         </div>
     );

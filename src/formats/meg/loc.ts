@@ -60,7 +60,11 @@ const parser: FormatParser = {
                     offset: r,
                     length: RECORD,
                     value: shown,
-                    children: [field('Key CRC', r, 4, hex(crc), 'CRC-32 of the key.'), field('Value length', r + 4, 4, `${valueChars} characters`), field('Key length', r + 8, 4, `${keyLength} bytes`)],
+                    children: [
+                        field('Key CRC', r, 4, hex(crc), 'CRC-32 of the key.'),
+                        field('Value length', r + 4, 4, `${valueChars} characters`),
+                        field('Key length', r + 8, 4, `${keyLength} bytes`),
+                    ],
                 });
                 valueFields.push(field(key, valueAt, valueChars * 2, shown));
                 keyFields.push(field(`${i}`, keyAt, keyLength, key));

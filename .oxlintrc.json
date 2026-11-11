@@ -1,0 +1,35 @@
+{
+    "$schema": "./node_modules/oxlint/configuration_schema.json",
+    "plugins": ["typescript", "react", "jsx-a11y", "import", "oxc"],
+    "categories": {
+        "correctness": "error"
+    },
+    "env": {
+        "browser": true,
+        "node": true,
+        "es2024": true
+    },
+    "ignorePatterns": ["build/**", "fuzz/build/**", "fuzz/findings/**", "src/formats/westwood/bink-wasm/**", "wasm/bink/build/**", "samples/**", "legacy/**", "dune2k/**"],
+    "rules": {
+        "no-console": "warn",
+        "no-unused-vars": "warn",
+        "react/rules-of-hooks": "error",
+        "react/exhaustive-deps": "warn",
+        "import/no-default-export": "error",
+        "oxc/no-barrel-file": "error"
+    },
+    "overrides": [
+        {
+            "files": ["src/formats/**/*.ts", "vite.config.ts"],
+            "rules": {
+                "import/no-default-export": "off"
+            }
+        },
+        {
+            "files": ["fuzz/**/*.ts", "**/*.test.ts"],
+            "rules": {
+                "no-console": "off"
+            }
+        }
+    ]
+}

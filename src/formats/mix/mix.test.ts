@@ -180,7 +180,16 @@ describe('MIX parsing', () => {
     });
 
     it('finds the gaps between, before and after entries, ignoring overlaps', () => {
-        expect(unlistedRanges([{ id: 1, offset: 4, size: 4 }, { id: 2, offset: 6, size: 4 }, { id: 3, offset: 14, size: 2 }], 20)).toEqual([
+        expect(
+            unlistedRanges(
+                [
+                    { id: 1, offset: 4, size: 4 },
+                    { id: 2, offset: 6, size: 4 },
+                    { id: 3, offset: 14, size: 2 },
+                ],
+                20
+            )
+        ).toEqual([
             { offset: 0, length: 4 },
             { offset: 10, length: 4 },
             { offset: 16, length: 4 },

@@ -101,7 +101,7 @@ export class Engine {
 
     constructor(
         private readonly connect: () => Transport,
-        private readonly hangLimit = HANG_LIMIT * 1000,
+        private readonly hangLimit = HANG_LIMIT * 1000
     ) {}
 
     on(listener: (event: EngineEvent) => void): () => void {
@@ -126,7 +126,10 @@ export class Engine {
 
     private watch() {
         if (!this.pending.size) return;
-        if (Date.now() - this.lastSign > this.hangLimit) this.kill(`It ran for more than ${Math.round(this.hangLimit / 1000)} seconds without finishing, so it was stopped. A file made to hang parsers does this; so can a very big file on a slow computer.`);
+        if (Date.now() - this.lastSign > this.hangLimit)
+            this.kill(
+                `It ran for more than ${Math.round(this.hangLimit / 1000)} seconds without finishing, so it was stopped. A file made to hang parsers does this; so can a very big file on a slow computer.`
+            );
     }
 
     private receive(m: FromWorker) {
@@ -183,7 +186,14 @@ export class Engine {
         // The new worker: the names, the session's files, then what was waiting.
         this.start();
         if (this.names.length) this.send(this.nextId++, { build: () => ({ op: 'names', names: this.names }), what: 'Setting names', resolve: () => {}, reject: () => {} });
-        for (const f of this.session) this.send(this.nextId++, { build: () => ({ op: 'add', name: f.name, data: this.ref(f.data), how: f.how }), what: `Adding ${f.name}`, poison: this.poisonKey(f.data), resolve: () => {}, reject: () => this.forget(f.id) });
+        for (const f of this.session)
+            this.send(this.nextId++, {
+                build: () => ({ op: 'add', name: f.name, data: this.ref(f.data), how: f.how }),
+                what: `Adding ${f.name}`,
+                poison: this.poisonKey(f.data),
+                resolve: () => {},
+                reject: () => this.forget(f.id),
+            });
         for (const [id, p] of waiting) this.send(id, p);
         this.emit({ kind: 'restarted', generation: this.generation });
     }
@@ -267,7 +277,11 @@ export class Engine {
 
     async inspect(data: Uint8Array, { name, shownName, as, near }: { name: string | null; shownName: string; as?: string; near?: string }): Promise<UiInspection> {
         const generation = this.generation;
-        const wire = await this.request<'inspect'>(`Reading ${shownName}${as ? ` as ${formatOf(as).name}` : ''}`, () => ({ op: 'inspect', data: this.ref(data), name, shownName, as, near }), this.poisonKey(data, as));
+        const wire = await this.request<'inspect'>(
+            `Reading ${shownName}${as ? ` as ${formatOf(as).name}` : ''}`,
+            () => ({ op: 'inspect', data: this.ref(data), name, shownName, as, near }),
+            this.poisonKey(data, as)
+        );
         return this.fromWire(wire, data, generation);
     }
 

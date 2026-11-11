@@ -36,11 +36,20 @@ const f32 = (...values: number[]) => {
 const prop = (tag: number, value: Uint8Array) => concat(Uint8Array.from([tag, value.length]), value);
 
 /** A widget: a chunk 1 of its type (tag 3 of chunk 2) and contents (chunk 4). */
-const widget = (type: number, name: string, ...inside: Uint8Array[]) => container(1, leaf(2, prop(3, u32(type))), container(4, container(0, leaf(0, prop(2, f32(0, 0, 1, 1))), leaf(5, text(name))), ...inside));
+const widget = (type: number, name: string, ...inside: Uint8Array[]) =>
+    container(1, leaf(2, prop(3, u32(type))), container(4, container(0, leaf(0, prop(2, f32(0, 0, 1, 1))), leaf(5, text(name))), ...inside));
 
 const layout = concat(
     leaf(1, prop(0, u32(0x0b00))),
-    container(2, container(0, container(0, leaf(0, prop(2, f32(0, 0, 1, 1))), leaf(5, text('Dialog'))), widget(19, 'Group', widget(2, 'Title_Text', container(1, leaf(1, text('TEXT_MUSIC_JUKEBOX_PLAYER')), leaf(2, text('46 Point Outline')))), widget(99, 'Odd'))), leaf(3, text('MusicJukeboxDialog'))),
+    container(
+        2,
+        container(
+            0,
+            container(0, leaf(0, prop(2, f32(0, 0, 1, 1))), leaf(5, text('Dialog'))),
+            widget(19, 'Group', widget(2, 'Title_Text', container(1, leaf(1, text('TEXT_MUSIC_JUKEBOX_PLAYER')), leaf(2, text('46 Point Outline')))), widget(99, 'Odd'))
+        ),
+        leaf(3, text('MusicJukeboxDialog'))
+    )
 );
 
 function wrap(inner: Uint8Array): Uint8Array {
@@ -103,11 +112,16 @@ describe('Petroglyph chunk files', () => {
         expect(parsed.summary).toContainEqual(['Layout', 'MusicJukeboxDialog']);
         expect(parsed.summary).toContainEqual(['Root', 'Dialog']);
         expect(parsed.summary).toContainEqual(['Widgets', '3']);
-        expect(previewText(wrap(layout))).toBe(['MusicJukeboxDialog', 'Root: Dialog', '  Group: Group', '    Text: Title_Text "TEXT_MUSIC_JUKEBOX_PLAYER" "46 Point Outline"', '    Type 99: Odd'].join('\n'));
+        expect(previewText(wrap(layout))).toBe(
+            ['MusicJukeboxDialog', 'Root: Dialog', '  Group: Group', '    Text: Title_Text "TEXT_MUSIC_JUKEBOX_PLAYER" "46 Point Outline"', '    Type 99: Odd'].join('\n')
+        );
     });
 
     it('takes a layout with no widgets, and no name chunk, as a layout', () => {
-        const empty = concat(leaf(1, prop(0, u32(0x0470))), container(2, container(0, container(0, leaf(0, prop(2, f32(0, 0, 1, 1))), leaf(5, text('TooltipPlacementScene')))), leaf(4, new Uint8Array(0))));
+        const empty = concat(
+            leaf(1, prop(0, u32(0x0470))),
+            container(2, container(0, container(0, leaf(0, prop(2, f32(0, 0, 1, 1))), leaf(5, text('TooltipPlacementScene')))), leaf(4, new Uint8Array(0)))
+        );
         const parsed = parse(wrap(empty));
         expect(parsed.title).toBe('UI layout (Petroglyph)');
         expect(parsed.summary).toContainEqual(['Widgets', '0']);

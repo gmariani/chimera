@@ -42,7 +42,17 @@ type Finder = (name: string) => Companion[];
 
 export function rulesTable(ini: Ini, fileName: string | null, find: Finder | undefined, links: Links): { preview: Preview; summary: [string, string][] } | null {
     const yuri = /md\.ini$/i.test(fileName ?? '');
-    const groups: [string, string[]][] = LISTS.map(([list, group]) => [group, [...new Set(ini.entries(list).map(([, v]) => v.trim()).filter(Boolean))]]);
+    const groups: [string, string[]][] = LISTS.map(([list, group]) => [
+        group,
+        [
+            ...new Set(
+                ini
+                    .entries(list)
+                    .map(([, v]) => v.trim())
+                    .filter(Boolean)
+            ),
+        ],
+    ]);
     let listed = groups.some(([, ids]) => ids.length);
     if (!listed) {
         const objects = ini.sections.filter((s) => {
@@ -68,7 +78,7 @@ export function rulesTable(ini: Ini, fileName: string | null, find: Finder | und
     };
     const artFile = listed ? pick(yuri ? ['artmd.ini', 'art.ini'] : ['art.ini', 'artmd.ini'], 'Art (which picture each object uses)') : undefined;
     const art = artFile ? Ini.of(artFile.data) : null;
-    const csfFile = listed ? (yuri ? find?.('ra2md.csf')[0] ?? find?.('ra2.csf')[0] : find?.('ra2.csf')[0]) : undefined;
+    const csfFile = listed ? (yuri ? (find?.('ra2md.csf')[0] ?? find?.('ra2.csf')[0]) : find?.('ra2.csf')[0]) : undefined;
     if (csfFile) links.use(yuri ? 'ra2md.csf' : 'ra2.csf', csfFile, 'Names (UIName=)');
     const strings = csfFile ? readCsf(csfFile.data) : null;
     const exists = (name: string) => (find?.(name).length ?? 0) > 0;

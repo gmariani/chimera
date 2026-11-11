@@ -89,7 +89,11 @@ const parser: FormatParser = {
                 const type = data[at + 1];
                 const key = cString(at + 2);
                 const v = value(type, key.next);
-                children.push(field('Type', at + 1, 1, TYPES[type]?.[0] ?? `0x${hex(type, 2)}`), field('Key', at + 2, key.next - at - 2, key.text), field('Value', key.next, v.next - key.next, v.text));
+                children.push(
+                    field('Type', at + 1, 1, TYPES[type]?.[0] ?? `0x${hex(type, 2)}`),
+                    field('Key', at + 2, key.next - at - 2, key.text),
+                    field('Value', key.next, v.next - key.next, v.text)
+                );
                 if (op === 0xa0) meta.set(key.text, v.text);
                 else params[params.length - 1] += `\n    ${key.text}: ${v.text}`;
                 shown = `${key.text}: ${v.text}`;
@@ -102,7 +106,13 @@ const parser: FormatParser = {
                 const n = cString(at + 6);
                 // Matrices take whole registers; the mask holds their size instead.
                 const where = type >= 0x05 && type <= 0x07 ? register(reg) : `${register(reg)}.${maskLetters(mask)}`;
-                children.push(field('Qualifier', at + 1, 1, qualifier === 2 ? 'Out' : 'In'), field('Type', at + 2, 1, TYPES[type]?.[0] ?? `0x${hex(type, 2)}`), field('Register', at + 3, 2, register(reg)), field('Mask', at + 5, 1, maskLetters(mask) || `0x${hex(mask, 2)}`), field('Name', at + 6, n.next - at - 6, n.text));
+                children.push(
+                    field('Qualifier', at + 1, 1, qualifier === 2 ? 'Out' : 'In'),
+                    field('Type', at + 2, 1, TYPES[type]?.[0] ?? `0x${hex(type, 2)}`),
+                    field('Register', at + 3, 2, register(reg)),
+                    field('Mask', at + 5, 1, maskLetters(mask) || `0x${hex(mask, 2)}`),
+                    field('Name', at + 6, n.next - at - 6, n.text)
+                );
                 shown = `${qualifier === 2 ? 'out' : 'in'} ${TYPES[type]?.[0] ?? '?'} ${n.text} (${where})`;
                 params.push(shown);
                 at = n.next;
@@ -147,7 +157,12 @@ const parser: FormatParser = {
                 text = `${out} = ${source}`;
             } else {
                 text = `${out} = ${name_}(${out}, ${source})`;
-                if ([0x04, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1e, 0x1f, 0x23, 0x24, 0x2c, 0x37, 0x38, 0x39, 0x3a, 0x3d, 0x3e].includes(op)) text = `${out} = ${name_}(${source})`;
+                if (
+                    [
+                        0x04, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1e, 0x1f, 0x23, 0x24, 0x2c, 0x37, 0x38, 0x39, 0x3a, 0x3d, 0x3e,
+                    ].includes(op)
+                )
+                    text = `${out} = ${name_}(${source})`;
             }
             if (op === 0x35 || op === 0x36) indent--;
             lines.push(`${'    '.repeat(Math.max(1, indent))}${text}`);

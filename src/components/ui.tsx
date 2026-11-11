@@ -4,7 +4,7 @@ import { OverlayTrigger, Tooltip } from 'react-bootstrap';
 export function Tip({ label, children }: { label: ReactNode; children: ReactElement }) {
     if (label === null || label === undefined || label === '') return children;
     return (
-        <OverlayTrigger placement="top" overlay={<Tooltip className="tip-multiline">{label}</Tooltip>}>
+        <OverlayTrigger placement='top' overlay={<Tooltip className='tip-multiline'>{label}</Tooltip>}>
             {children}
         </OverlayTrigger>
     );
@@ -14,16 +14,15 @@ export function CopyButton({ text }: { text: string }) {
     const [copied, setCopied] = useState(false);
     return (
         <button
-            type="button"
-            className="btn btn-clipboard"
+            type='button'
+            className='btn btn-clipboard'
             title={copied ? 'Copied!' : 'Copy to clipboard'}
             onClick={() => {
                 navigator.clipboard.writeText(text).then(() => {
                     setCopied(true);
                     setTimeout(() => setCopied(false), 1200);
                 });
-            }}
-        >
+            }}>
             <i className={`bi ${copied ? 'bi-check2' : 'bi-clipboard'}`} />
         </button>
     );
@@ -57,10 +56,10 @@ export function SectionTitle({ children, className = '' }: { children: ReactNode
 
 export function CodeBlock({ children, copy }: { children: string; copy?: boolean }) {
     return (
-        <div className="bd-code-snippet">
-            <div className="highlight">
+        <div className='bd-code-snippet'>
+            <div className='highlight'>
                 {copy && (
-                    <div className="code-copy">
+                    <div className='code-copy'>
                         <CopyButton text={children} />
                     </div>
                 )}
@@ -71,7 +70,7 @@ export function CodeBlock({ children, copy }: { children: string; copy?: boolean
 }
 
 export function Muted({ children }: { children: ReactNode }) {
-    return <span className="text-body-secondary">{children}</span>;
+    return <span className='text-body-secondary'>{children}</span>;
 }
 
 /**
@@ -80,11 +79,11 @@ export function Muted({ children }: { children: ReactNode }) {
  */
 export function SectionBar({ index, title, children }: { index?: string; title: ReactNode; children?: ReactNode }) {
     return (
-        <div className="section-bar">
-            <span className="section-title">
-                {index && <span className="section-index">{index} /</span>} {title}
+        <div className='section-bar'>
+            <span className='section-title'>
+                {index && <span className='section-index'>{index} /</span>} {title}
             </span>
-            {children && <div className="section-aside">{children}</div>}
+            {children && <div className='section-aside'>{children}</div>}
         </div>
     );
 }

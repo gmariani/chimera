@@ -189,13 +189,27 @@ function identify(data: Uint8Array, stream: Stream, warnings: string[]): Codec {
         const channels = ((b.u8(29) >> 1) & 7) + 1;
         const bits = (((b.u8(29) & 1) << 4) | (b.u8(30) >> 4)) + 1;
         const tags = second && (joined(data, second)[0] & 0x7f) === 4 ? tagsFrom(second, 4) : { tags: [], fields: [] };
-        const fields = [at(first, 'Signature', 0, 5, '7F, "FLAC"'), at(first, 'Mapping version', 5, 2, `${b.u8(5)}.${b.u8(6)}`), at(first, 'Marker', 9, 4, 'fLaC'), at(first, 'Stream information', 13, 38, `${rate} Hz, ${channels} channel${channels === 1 ? '' : 's'}, ${bits}-bit`), ...tags.fields];
+        const fields = [
+            at(first, 'Signature', 0, 5, '7F, "FLAC"'),
+            at(first, 'Mapping version', 5, 2, `${b.u8(5)}.${b.u8(6)}`),
+            at(first, 'Marker', 9, 4, 'fLaC'),
+            at(first, 'Stream information', 13, 38, `${rate} Hz, ${channels} channel${channels === 1 ? '' : 's'}, ${bits}-bit`),
+            ...tags.fields,
+        ];
         return { name: 'FLAC', rate, channels, bits, skip: 0, tags: tags.tags, fields };
     }
     if (latin1(bytes, 0, 8) === 'Speex   ') {
         const tags = tagsFrom(second, 0);
         const [rate, channels] = [b.u32(36), b.u32(48)];
-        return { name: 'Speex', rate, channels, bits: 0, skip: 0, tags: tags.tags, fields: [at(first, 'Signature', 0, 8, 'Speex'), at(first, 'Sample rate', 36, 4, `${rate} Hz`), at(first, 'Channels', 48, 4, channels), ...tags.fields] };
+        return {
+            name: 'Speex',
+            rate,
+            channels,
+            bits: 0,
+            skip: 0,
+            tags: tags.tags,
+            fields: [at(first, 'Signature', 0, 8, 'Speex'), at(first, 'Sample rate', 36, 4, `${rate} Hz`), at(first, 'Channels', 48, 4, channels), ...tags.fields],
+        };
     }
     if (bytes[0] === 0x80 && latin1(bytes, 1, 6) === 'theora') {
         const tags = tagsFrom(second, 7);
@@ -343,7 +357,9 @@ const parser: FormatParser = {
                 })),
                 { name: 'Pages', offset: 0, length: at, value: `${pages} page${pages === 1 ? '' : 's'}`, children: pageFields },
             ],
-            ...(PLAYABLE.has(codec.name) && sound.length ? { preview: { kind: 'audio' as const, wav: data, mime: 'audio/ogg', sampleRate: codec.rate, channels: codec.channels, bits: codec.bits, seconds } } : {}),
+            ...(PLAYABLE.has(codec.name) && sound.length
+                ? { preview: { kind: 'audio' as const, wav: data, mime: 'audio/ogg', sampleRate: codec.rate, channels: codec.channels, bits: codec.bits, seconds } }
+                : {}),
             warnings,
         };
     },

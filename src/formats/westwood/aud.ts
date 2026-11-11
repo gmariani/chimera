@@ -63,7 +63,7 @@ const parser: FormatParser = {
             if (compression === 0) {
                 if (sixteen) {
                     const n = Math.min(src.length >> 1, pcm.length - written);
-                    for (let i = 0; i < n; i++) pcm[written + i] = (src[i * 2] | (src[i * 2 + 1] << 8)) << 16 >> 16;
+                    for (let i = 0; i < n; i++) pcm[written + i] = ((src[i * 2] | (src[i * 2 + 1] << 8)) << 16) >> 16;
                     written += n;
                 } else {
                     const n = Math.min(src.length, pcm.length - written);
@@ -95,7 +95,11 @@ const parser: FormatParser = {
             const f = off[0];
             const what = `chunk ${f.index + 1} says ${f.says.toLocaleString('en-US')} bytes but makes ${f.made.toLocaleString('en-US')}`;
             const plain = compression === 0 ? ' Nothing is compressed, so the two sizes should match.' : '';
-            warnings.push(off.length === 1 ? `A chunk doesn't decode to the size it gives: ${what}.${plain}` : `${off.length.toLocaleString('en-US')} chunks don't decode to the size they give (the first: ${what}).${plain}`);
+            warnings.push(
+                off.length === 1
+                    ? `A chunk doesn't decode to the size it gives: ${what}.${plain}`
+                    : `${off.length.toLocaleString('en-US')} chunks don't decode to the size they give (the first: ${what}).${plain}`
+            );
         }
         if (chunks.length && claimed !== outSize && outSize <= most) warnings.push(`The header says the sound is ${bytesLabel(outSize)}, but its chunks add up to ${bytesLabel(claimed)}.`);
         const seconds = written / (rate * channels);

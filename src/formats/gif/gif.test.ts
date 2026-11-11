@@ -141,7 +141,13 @@ describe('GIF', () => {
     });
 
     it('times frames on a common tick, taking delays under 2 as 10', () => {
-        const parsed = parse(build(1, 1, [{ width: 1, height: 1, pixels: [1], delay: 20 }, { width: 1, height: 1, pixels: [2], delay: 1 }, { width: 1, height: 1, pixels: [3], delay: 30 }]));
+        const parsed = parse(
+            build(1, 1, [
+                { width: 1, height: 1, pixels: [1], delay: 20 },
+                { width: 1, height: 1, pixels: [2], delay: 1 },
+                { width: 1, height: 1, pixels: [3], delay: 30 },
+            ])
+        );
         expect(parsed.title).toBe('Animation (GIF89a)');
         const v = video(parsed.preview);
         // Delays 20, 10, 30: a tick of 10 hundredths, so 10 fps and 2 + 1 + 3 ticks.
@@ -163,8 +169,8 @@ describe('GIF', () => {
                         { width: 2, height: 1, pixels: [1, 1], delay: 10, disposal: 1 },
                         { width: 1, height: 1, pixels: [2], delay: 10, disposal },
                         { width: 1, height: 1, pixels: [0], delay: 10, transparent: 0 },
-                    ]),
-                ).preview,
+                    ])
+                ).preview
             );
             return pixelAt((v.frame(2) as { rgba: Uint8Array }).rgba, 2, 0, 0);
         };
@@ -176,7 +182,17 @@ describe('GIF', () => {
     it('reads the loop count and comments', () => {
         const loop = concat([0x21, 0xff, 11], enc.encode('NETSCAPE2.0'), [3, 1, 0, 0, 0]);
         const comment = concat([0x21, 0xfe, 5], enc.encode('hello'), [0]);
-        const parsed = parse(build(1, 1, [{ width: 1, height: 1, pixels: [1], delay: 10 }, { width: 1, height: 1, pixels: [2], delay: 10 }], [loop, comment]));
+        const parsed = parse(
+            build(
+                1,
+                1,
+                [
+                    { width: 1, height: 1, pixels: [1], delay: 10 },
+                    { width: 1, height: 1, pixels: [2], delay: 10 },
+                ],
+                [loop, comment]
+            )
+        );
         expect(parsed.summary).toContainEqual(['Loops', 'Forever']);
         expect(parsed.preview?.kind).toBe('stack');
         if (parsed.preview?.kind === 'stack') expect(parsed.preview.items[1].preview).toEqual({ kind: 'text', text: 'hello' });

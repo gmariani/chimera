@@ -47,7 +47,13 @@ function views(l: Limb): IndexedImage[] {
                 if (!c) continue;
                 const u = (x - y + sy) * 2;
                 const v = x + y + (sz - 1 - z) * 2;
-                for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) pixels[(v + dy) * w + u + dx] = c;
+                for (const [dx, dy] of [
+                    [0, 0],
+                    [1, 0],
+                    [0, 1],
+                    [1, 1],
+                ])
+                    pixels[(v + dy) * w + u + dx] = c;
             }
         }
     }
@@ -117,7 +123,10 @@ const parser: FormatParser = {
             const turretOffset = artFile ? Number(Ini.of(artFile.data).get(stem, 'TurretOffset') ?? 0) : 0;
             const offset: [number, number, number] = [(turretOffset * VOXELS_PER_CELL) / 256, 0, 0];
             // Not every unit has these, so they're only listed when found.
-            for (const [extra, role] of [[`${stem}tur.vxl`, 'Turret'], [`${stem}barl.vxl`, 'Barrel']]) {
+            for (const [extra, role] of [
+                [`${stem}tur.vxl`, 'Turret'],
+                [`${stem}barl.vxl`, 'Barrel'],
+            ]) {
                 const found = context.find?.(extra)[0];
                 if (!found) continue;
                 links.use(extra, found, role);
@@ -138,7 +147,7 @@ const parser: FormatParser = {
                     field('Limbs', 20, 4, limbs.length),
                     field('Tailers', 24, 4, tailerCount),
                     field('Body size', 28, 4, bytesLabel(bodySize)),
-                    field('Remap start', 32, 1, vxl.remap[0], 'The palette range recolored to the owner\'s color.'),
+                    field('Remap start', 32, 1, vxl.remap[0], "The palette range recolored to the owner's color."),
                     field('Remap end', 33, 1, vxl.remap[1]),
                     field('Palette', 34, 768, undefined, 'Unused by the games, which draw voxels with the unit palette.'),
                 ],
@@ -149,7 +158,7 @@ const parser: FormatParser = {
                 length: LIMB_HEADER,
                 children: [field('Name', VXL_HEADER + i * LIMB_HEADER, 16, l.name), field('Number', VXL_HEADER + i * LIMB_HEADER + 16, 4, b.u32(VXL_HEADER + i * LIMB_HEADER + 16))],
             })),
-            field('Body', body, bodySize, bytesLabel(bodySize), 'Each limb\'s column offsets and spans.'),
+            field('Body', body, bodySize, bytesLabel(bodySize), "Each limb's column offsets and spans."),
             ...limbs.map((l, i) => ({
                 name: `Limb tailer ${i}: ${l.name}`,
                 offset: l.tailer,
@@ -174,8 +183,16 @@ const parser: FormatParser = {
             title: 'Voxel model (TS/RA2)',
             summary: [
                 ['Limbs', limbs.map((l) => `${l.name} (${l.size.join(' × ')}, ${l.count} voxels)`).join('; ')],
-                ['Shown with', all.length > 1 ? all.slice(1).map((p) => p.parts[0].name.split(' › ')[0]).join(', ') : 'Nothing else'],
-                ['Animation', own.animated ? `${stem}.hva, ${own.frames} frame${own.frames === 1 ? '' : 's'}` : 'None found, so the limbs aren\'t placed'],
+                [
+                    'Shown with',
+                    all.length > 1
+                        ? all
+                              .slice(1)
+                              .map((p) => p.parts[0].name.split(' › ')[0])
+                              .join(', ')
+                        : 'Nothing else',
+                ],
+                ['Animation', own.animated ? `${stem}.hva, ${own.frames} frame${own.frames === 1 ? '' : 's'}` : "None found, so the limbs aren't placed"],
                 ['Colors', 'Best with the unit palette (unittem.pal)'],
             ],
             fields,
@@ -183,7 +200,10 @@ const parser: FormatParser = {
                 kind: 'stack',
                 items: [
                     { title: '3D', preview: { kind: 'voxels', parts: all.flatMap((p) => p.parts), frameCount, palette: ownPalette, remap: vxl.remap[1] > vxl.remap[0] ? vxl.remap : [16, 31] } },
-                    { title: 'Each limb, from four sides', preview: { kind: 'images', frames: limbs.flatMap(views), palette: ownPalette, transparentIndex: 0, remap: vxl.remap[1] > vxl.remap[0] ? vxl.remap : [16, 31] } },
+                    {
+                        title: 'Each limb, from four sides',
+                        preview: { kind: 'images', frames: limbs.flatMap(views), palette: ownPalette, transparentIndex: 0, remap: vxl.remap[1] > vxl.remap[0] ? vxl.remap : [16, 31] },
+                    },
                 ],
             },
             links: links.list,

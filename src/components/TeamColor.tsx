@@ -15,17 +15,17 @@ export function useTeamColor(palette: Uint8Array, range: RemapRange | undefined)
 /** Picks the owner's color for unit and building art. */
 export function TeamColorSelect({ team, onChange, range }: { team: string; onChange: (name: string) => void; range: RemapRange }) {
     return (
-        <Form.Group className="mb-3">
-            <Form.Label className="small text-body-secondary mb-1">Team color</Form.Label>
-            <Form.Select size="sm" value={team} onChange={(e) => onChange(e.target.value)}>
-                <option value="">As in the palette</option>
+        <Form.Group className='mb-3'>
+            <Form.Label className='small text-body-secondary mb-1'>Team color</Form.Label>
+            <Form.Select size='sm' value={team} onChange={(e) => onChange(e.target.value)}>
+                <option value=''>As in the palette</option>
                 {TEAM_COLORS.map((c) => (
                     <option key={c.name} value={c.name}>
                         {c.name}
                     </option>
                 ))}
             </Form.Select>
-            <div className="small text-body-secondary mt-1">
+            <div className='small text-body-secondary mt-1'>
                 Recolors entries {range[0]}–{range[1]}, the ones the game swaps for the owner's color. The shades are close to the game's, not exact.
             </div>
         </Form.Group>

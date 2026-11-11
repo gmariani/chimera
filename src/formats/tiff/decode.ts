@@ -73,8 +73,9 @@ export function decodeTiff(data: Uint8Array, tiff: Tiff, ifd: Ifd): Picture {
     const planar = one(TAG.planar, 1);
     const extra = all(TAG.extraSamples);
 
-    if (photometric === 32803 || photometric === 34892) throw new Error('It\'s raw sensor data, which isn\'t drawn here.');
-    if (!(photometric in PHOTOMETRICS) || photometric === 9 || photometric === 10) throw new Error(`${PHOTOMETRICS[photometric] ?? `Photometric interpretation ${photometric}`} pictures aren't drawn here.`);
+    if (photometric === 32803 || photometric === 34892) throw new Error("It's raw sensor data, which isn't drawn here.");
+    if (!(photometric in PHOTOMETRICS) || photometric === 9 || photometric === 10)
+        throw new Error(`${PHOTOMETRICS[photometric] ?? `Photometric interpretation ${photometric}`} pictures aren't drawn here.`);
 
     // Old-style JPEG (section 22, since withdrawn): drawn when the whole JPEG stream is in one place, by
     // JPEGInterchangeFormat or as the only strip (as Canon's raw files have it).
@@ -83,7 +84,7 @@ export function decodeTiff(data: Uint8Array, tiff: Tiff, ifd: Ifd): Picture {
         const [length] = all(TAG.stripCounts);
         const strip = all(TAG.stripOffsets).length === 1 && at !== undefined && data[at] === 0xff && data[at + 1] === 0xd8 ? data.subarray(at, at + length) : null;
         const stream = jpeg ?? strip;
-        if (!stream) throw new Error('Old-style JPEG without a whole JPEG stream isn\'t drawn here.');
+        if (!stream) throw new Error("Old-style JPEG without a whole JPEG stream isn't drawn here.");
         return decodeJpeg(stream, segmentsOf(stream).segments, photometric === 6 ? true : photometric === 2 ? false : undefined);
     }
 
@@ -99,7 +100,7 @@ export function decodeTiff(data: Uint8Array, tiff: Tiff, ifd: Ifd): Picture {
 
     if (compression === 7) {
         // Each strip or tile is a JPEG stream; JPEGTables holds the tables they share.
-        if (planes > 1) throw new Error('JPEG-compressed pictures stored plane by plane aren\'t drawn here.');
+        if (planes > 1) throw new Error("JPEG-compressed pictures stored plane by plane aren't drawn here.");
         const tables = all(TAG.jpegTables);
         const tableBytes = tables.length > 4 ? Uint8Array.from(tables.slice(0, -2)) : null;
         for (let c = 0; c < across * down && c < offsets.length; c++) {
@@ -123,7 +124,7 @@ export function decodeTiff(data: Uint8Array, tiff: Tiff, ifd: Ifd): Picture {
     const [subX, subY] = photometric === 6 ? [one(TAG.yccSubsampling, 2), all(TAG.yccSubsampling)[1] ?? 2] : [1, 1];
     const fillOrder = one(TAG.fillOrder, 1);
     const predictor = one(TAG.predictor, 1);
-    if (predictor === 3) throw new Error('Floating-point prediction isn\'t drawn here.');
+    if (predictor === 3) throw new Error("Floating-point prediction isn't drawn here.");
 
     for (let plane = 0; plane < planes; plane++) {
         for (let c = 0; c < across * down; c++) {
@@ -143,7 +144,7 @@ export function decodeTiff(data: Uint8Array, tiff: Tiff, ifd: Ifd): Picture {
             if (predictor === 2) raw = undoPredictor(raw, chunkWidth, rows, rowBytes, perPixel, bits, tiff.little);
 
             if (subsampled) {
-                if (bits !== 8) throw new Error('Subsampled YCbCr that isn\'t 8-bit isn\'t drawn here.');
+                if (bits !== 8) throw new Error("Subsampled YCbCr that isn't 8-bit isn't drawn here.");
                 const blocksAcross = Math.ceil(chunkWidth / subX);
                 for (let b = 0, p = 0; p + subX * subY + 2 <= raw.length && b < blocksAcross * Math.ceil(rows / subY); b++, p += subX * subY + 2) {
                     const bx = x0 + (b % blocksAcross) * subX;
@@ -203,7 +204,7 @@ function sampleReader(raw: Uint8Array, bits: number, format: number, little: boo
     const signed = format === 2;
     if (bits === 8) return signed ? (row, n) => raw[row + n] ^ 0x80 : (row, n) => raw[row + n];
     if (bits === 16) {
-        if (format === 3) throw new Error('16-bit floating-point samples aren\'t drawn here.');
+        if (format === 3) throw new Error("16-bit floating-point samples aren't drawn here.");
         // A palette's 16-bit indexes stay whole.
         return (row, n) => {
             const at = row + n * 2;
@@ -240,7 +241,8 @@ function undoPredictor(raw: Uint8Array, width: number, rows: number, rowBytes: n
         if (bits === 8) {
             for (let i = perPixel; i < width * perPixel && row + i < out.length; i++) out[row + i] = (out[row + i] + out[row + i - perPixel]) & 0xff;
         } else {
-            for (let i = perPixel; i < width * perPixel && row + i * 2 + 2 <= out.length; i++) view.setUint16(row + i * 2, (view.getUint16(row + i * 2, little) + view.getUint16(row + (i - perPixel) * 2, little)) & 0xffff, little);
+            for (let i = perPixel; i < width * perPixel && row + i * 2 + 2 <= out.length; i++)
+                view.setUint16(row + i * 2, (view.getUint16(row + i * 2, little) + view.getUint16(row + (i - perPixel) * 2, little)) & 0xffff, little);
         }
     }
     return out;
@@ -269,7 +271,7 @@ function decompress(compression: number, packed: Uint8Array, expected: number, f
 export function unpackBits(packed: Uint8Array, expected: number): Uint8Array {
     const out = new Uint8Array(expected);
     let o = 0;
-    for (let i = 0; i < packed.length && o < expected; ) {
+    for (let i = 0; i < packed.length && o < expected;) {
         const n = (packed[i++] << 24) >> 24;
         if (n >= 0) {
             out.set(packed.subarray(i, i + n + 1).subarray(0, expected - o), o);
@@ -325,7 +327,7 @@ export function lzw(packed: Uint8Array, expected: number): Uint8Array {
         if (next + early >= 1 << width && width < 12) width++;
     };
 
-    for (let previous = -1; o < expected; ) {
+    for (let previous = -1; o < expected;) {
         const code = read();
         if (code === 257) break;
         if (code === 256) {
@@ -349,7 +351,17 @@ export function lzw(packed: Uint8Array, expected: number): Uint8Array {
 }
 
 /** The samples as RGBA, by PhotometricInterpretation. */
-function toRgba(samples: Uint16Array, rgba: Uint8Array, pixels: number, spp: number, photometric: number, bits: number, extra: number[], all: (tag: number) => number[], one: (tag: number, fallback: number) => number) {
+function toRgba(
+    samples: Uint16Array,
+    rgba: Uint8Array,
+    pixels: number,
+    spp: number,
+    photometric: number,
+    bits: number,
+    extra: number[],
+    all: (tag: number) => number[],
+    one: (tag: number, fallback: number) => number
+) {
     // An alpha channel: the first extra sample, when it says so.
     const colors = photometric === 2 || photometric === 6 || photometric === 8 ? 3 : photometric === 5 ? Math.min(4, spp) : 1;
     const alphaKind = extra[0] ?? 0;
@@ -362,7 +374,7 @@ function toRgba(samples: Uint16Array, rgba: Uint8Array, pixels: number, spp: num
     const rbw = all(TAG.referenceBlackWhite);
     const [yBlack, yWhite, cbZero, cbTop, crZero, crTop] = rbw.length === 6 ? rbw : [0, 255, 128, 255, 128, 255];
     const clamp = (v: number) => (v < 0 ? 0 : v > 255 ? 255 : Math.round(v));
-    if (photometric === 5 && one(TAG.inkSet, 1) !== 1) throw new Error('Inks other than CMYK aren\'t drawn here.');
+    if (photometric === 5 && one(TAG.inkSet, 1) !== 1) throw new Error("Inks other than CMYK aren't drawn here.");
 
     for (let i = 0, s = 0, o = 0; i < pixels; i++, s += spp, o += 4) {
         let r: number, g: number, b: number;

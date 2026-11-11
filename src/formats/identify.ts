@@ -80,7 +80,15 @@ export function signature(data: Uint8Array): Signature | null {
         return { name: 'DOS or Windows program (MZ)', ext: 'exe', exts: PROGRAMS, length: 2, runs: true };
     }
     if (bytes(data, 0, [0x7f, 0x45, 0x4c, 0x46])) return { name: 'Linux or Unix program (ELF)', ext: 'elf', length: 4, runs: true };
-    if ([[0xfe, 0xed, 0xfa, 0xce], [0xce, 0xfa, 0xed, 0xfe], [0xfe, 0xed, 0xfa, 0xcf], [0xcf, 0xfa, 0xed, 0xfe]].some((m) => bytes(data, 0, m))) return { name: 'Mac program (Mach-O)', ext: 'macho', length: 4, runs: true };
+    if (
+        [
+            [0xfe, 0xed, 0xfa, 0xce],
+            [0xce, 0xfa, 0xed, 0xfe],
+            [0xfe, 0xed, 0xfa, 0xcf],
+            [0xcf, 0xfa, 0xed, 0xfe],
+        ].some((m) => bytes(data, 0, m))
+    )
+        return { name: 'Mac program (Mach-O)', ext: 'macho', length: 4, runs: true };
     if (bytes(data, 0, [0xca, 0xfe, 0xba, 0xbe])) return { name: 'Java class or Mac universal program', ext: 'class', length: 4, runs: true };
     if (ascii(data, 0, 'dex\n')) return { name: 'Android program (DEX)', ext: 'dex', length: 4, runs: true };
     if (bytes(data, 0, [0x00, 0x61, 0x73, 0x6d])) return { name: 'WebAssembly module', ext: 'wasm', length: 4, runs: true };
@@ -88,7 +96,13 @@ export function signature(data: Uint8Array): Signature | null {
     if (ascii(data, 0, '#!')) return { name: 'Script (#! line)', ext: 'sh', length: 2, runs: true };
 
     // Archives and compressed data.
-    if (ascii(data, 0, 'PK\x03\x04') || ascii(data, 0, 'PK\x05\x06') || ascii(data, 0, 'PK\x07\x08')) return { name: 'ZIP archive (or a .docx, .xlsx, .jar, .apk)', ext: 'zip', exts: ['zip', 'docx', 'xlsx', 'pptx', 'jar', 'apk', 'odt', 'ods', 'odp', 'epub', 'xpi', 'crx', 'nupkg', 'whl', 'vsix', 'ipa', 'appx', 'msix', 'kmz', '3mf', 'pk3', 'pk4'], length: 4 };
+    if (ascii(data, 0, 'PK\x03\x04') || ascii(data, 0, 'PK\x05\x06') || ascii(data, 0, 'PK\x07\x08'))
+        return {
+            name: 'ZIP archive (or a .docx, .xlsx, .jar, .apk)',
+            ext: 'zip',
+            exts: ['zip', 'docx', 'xlsx', 'pptx', 'jar', 'apk', 'odt', 'ods', 'odp', 'epub', 'xpi', 'crx', 'nupkg', 'whl', 'vsix', 'ipa', 'appx', 'msix', 'kmz', '3mf', 'pk3', 'pk4'],
+            length: 4,
+        };
     if (ascii(data, 0, 'Rar!\x1a\x07')) return { name: 'RAR archive', ext: 'rar', length: 6 };
     if (bytes(data, 0, [0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c])) return { name: '7-Zip archive', ext: '7z', length: 6 };
     if (bytes(data, 0, [0x1f, 0x8b, 0x08])) return { name: 'gzip-compressed data', ext: 'gz', length: 3 };
@@ -100,7 +114,13 @@ export function signature(data: Uint8Array): Signature | null {
 
     // Documents.
     if (ascii(data, 0, '%PDF-')) return { name: 'PDF document', ext: 'pdf', length: 5 };
-    if (bytes(data, 0, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])) return { name: 'Compound file (old Office document, MSI installer, Outlook message)', ext: 'doc', exts: ['doc', 'xls', 'ppt', 'msi', 'msg', 'dot', 'xlt', 'pot', 'mpp', 'vsd', 'pub', 'db'], length: 8 };
+    if (bytes(data, 0, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))
+        return {
+            name: 'Compound file (old Office document, MSI installer, Outlook message)',
+            ext: 'doc',
+            exts: ['doc', 'xls', 'ppt', 'msi', 'msg', 'dot', 'xlt', 'pot', 'mpp', 'vsd', 'pub', 'db'],
+            length: 8,
+        };
     if (ascii(data, 0, '{\\rtf')) return { name: 'RTF document', ext: 'rtf', length: 5 };
     if (ascii(data, 0, 'ITSF')) return { name: 'Compiled help (CHM)', ext: 'chm', length: 4, runs: true };
     if (ascii(data, 0, 'SQLite format 3\0')) return { name: 'SQLite database', ext: 'sqlite', length: 16 };

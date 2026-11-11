@@ -235,7 +235,13 @@ const GPS_TAGS: Record<number, string> = {
     0x1f: 'GPSHPositioningError',
 };
 
-const INTEROP_TAGS: Record<number, string> = { 0x0001: 'InteroperabilityIndex', 0x0002: 'InteroperabilityVersion', 0x1000: 'RelatedImageFileFormat', 0x1001: 'RelatedImageWidth', 0x1002: 'RelatedImageLength' };
+const INTEROP_TAGS: Record<number, string> = {
+    0x0001: 'InteroperabilityIndex',
+    0x0002: 'InteroperabilityVersion',
+    0x1000: 'RelatedImageFileFormat',
+    0x1001: 'RelatedImageWidth',
+    0x1002: 'RelatedImageLength',
+};
 
 /** TIFF's compression schemes: the 6.0 ones, and others in common use. */
 export const COMPRESSIONS: Record<number, string> = {
@@ -253,7 +259,20 @@ export const COMPRESSIONS: Record<number, string> = {
     34892: 'Lossy JPEG (DNG)',
 };
 
-export const PHOTOMETRICS: Record<number, string> = { 0: 'WhiteIsZero', 1: 'BlackIsZero', 2: 'RGB', 3: 'Palette', 4: 'Transparency mask', 5: 'CMYK', 6: 'YCbCr', 8: 'CIE L*a*b*', 9: 'ICC L*a*b*', 10: 'ITU L*a*b*', 32803: 'Color filter array', 34892: 'Linear raw' };
+export const PHOTOMETRICS: Record<number, string> = {
+    0: 'WhiteIsZero',
+    1: 'BlackIsZero',
+    2: 'RGB',
+    3: 'Palette',
+    4: 'Transparency mask',
+    5: 'CMYK',
+    6: 'YCbCr',
+    8: 'CIE L*a*b*',
+    9: 'ICC L*a*b*',
+    10: 'ITU L*a*b*',
+    32803: 'Color filter array',
+    34892: 'Linear raw',
+};
 
 const RESOLUTION_UNIT = { 1: 'None', 2: 'Inches', 3: 'Centimeters' };
 
@@ -271,15 +290,52 @@ const MEANINGS: Record<string, Record<number, string>> = {
     ExtraSamples: { 0: 'Unspecified', 1: 'Associated alpha', 2: 'Unassociated alpha' },
     GrayResponseUnit: { 1: 'Tenths', 2: 'Hundredths', 3: 'Thousandths', 4: 'Ten-thousandths', 5: 'Hundred-thousandths' },
     JPEGProc: { 1: 'Baseline', 14: 'Lossless' },
-    Orientation: { 1: 'Normal', 2: 'Mirrored', 3: 'Rotated 180°', 4: 'Mirrored vertically', 5: 'Mirrored and rotated 270° clockwise', 6: 'Rotated 90° clockwise', 7: 'Mirrored and rotated 90° clockwise', 8: 'Rotated 270° clockwise' },
+    Orientation: {
+        1: 'Normal',
+        2: 'Mirrored',
+        3: 'Rotated 180°',
+        4: 'Mirrored vertically',
+        5: 'Mirrored and rotated 270° clockwise',
+        6: 'Rotated 90° clockwise',
+        7: 'Mirrored and rotated 90° clockwise',
+        8: 'Rotated 270° clockwise',
+    },
     ResolutionUnit: RESOLUTION_UNIT,
     FocalPlaneResolutionUnit: RESOLUTION_UNIT,
     YCbCrPositioning: { 1: 'Centered', 2: 'Co-sited' },
     PlanarConfiguration: { 1: 'Chunky', 2: 'Planar' },
     ColorSpace: { 1: 'sRGB', 0xffff: 'Uncalibrated' },
-    ExposureProgram: { 0: 'Not defined', 1: 'Manual', 2: 'Normal program', 3: 'Aperture priority', 4: 'Shutter priority', 5: 'Creative program', 6: 'Action program', 7: 'Portrait mode', 8: 'Landscape mode' },
+    ExposureProgram: {
+        0: 'Not defined',
+        1: 'Manual',
+        2: 'Normal program',
+        3: 'Aperture priority',
+        4: 'Shutter priority',
+        5: 'Creative program',
+        6: 'Action program',
+        7: 'Portrait mode',
+        8: 'Landscape mode',
+    },
     MeteringMode: { 0: 'Unknown', 1: 'Average', 2: 'Center-weighted average', 3: 'Spot', 4: 'Multi-spot', 5: 'Pattern', 6: 'Partial', 255: 'Other' },
-    LightSource: { 0: 'Unknown', 1: 'Daylight', 2: 'Fluorescent', 3: 'Tungsten', 4: 'Flash', 9: 'Fine weather', 10: 'Cloudy', 11: 'Shade', 17: 'Standard light A', 18: 'Standard light B', 19: 'Standard light C', 20: 'D55', 21: 'D65', 22: 'D75', 23: 'D50', 24: 'ISO studio tungsten', 255: 'Other' },
+    LightSource: {
+        0: 'Unknown',
+        1: 'Daylight',
+        2: 'Fluorescent',
+        3: 'Tungsten',
+        4: 'Flash',
+        9: 'Fine weather',
+        10: 'Cloudy',
+        11: 'Shade',
+        17: 'Standard light A',
+        18: 'Standard light B',
+        19: 'Standard light C',
+        20: 'D55',
+        21: 'D65',
+        22: 'D75',
+        23: 'D50',
+        24: 'ISO studio tungsten',
+        255: 'Other',
+    },
     SensingMethod: { 1: 'Not defined', 2: 'One-chip color area', 3: 'Two-chip color area', 4: 'Three-chip color area', 5: 'Color sequential area', 7: 'Trilinear', 8: 'Color sequential linear' },
     CustomRendered: { 0: 'Normal', 1: 'Custom' },
     ExposureMode: { 0: 'Auto', 1: 'Manual', 2: 'Auto bracket' },
@@ -352,16 +408,25 @@ export function readTiff(data: Uint8Array, base: number, end: number, mode: 'exi
     /** One value of a tag, as a number. */
     const number = (type: number, at: number): number => {
         switch (type) {
-            case 1: case 2: case 7: return data[at]; // prettier-ignore
-            case 3: return u16(at);
-            case 4: case 13: return u32(at); // prettier-ignore
-            case 6: return (data[at] << 24) >> 24;
-            case 8: return (u16(at) << 16) >> 16;
-            case 9: return view.getInt32(at, little);
+            case 1:
+            case 2:
+            case 7: return data[at]; // prettier-ignore
+            case 3:
+                return u16(at);
+            case 4:
+            case 13: return u32(at); // prettier-ignore
+            case 6:
+                return (data[at] << 24) >> 24;
+            case 8:
+                return (u16(at) << 16) >> 16;
+            case 9:
+                return view.getInt32(at, little);
             case 5: { const d = u32(at + 4); return d ? u32(at) / d : 0; } // prettier-ignore
             case 10: { const d = view.getInt32(at + 4, little); return d ? view.getInt32(at, little) / d : 0; } // prettier-ignore
-            case 11: return view.getFloat32(at, little);
-            case 12: return view.getFloat64(at, little);
+            case 11:
+                return view.getFloat32(at, little);
+            case 12:
+                return view.getFloat64(at, little);
         }
         return 0;
     };
@@ -376,7 +441,11 @@ export function readTiff(data: Uint8Array, base: number, end: number, mode: 'exi
         name: 'TIFF header',
         offset: base,
         length: 8,
-        children: [field('Byte order', base, 2, little ? 'II (little-endian)' : 'MM (big-endian)'), field('Magic', base + 2, 2, u16(base + 2), 'Always 42.'), field('IFD0 offset', base + 4, 4, u32(base + 4))],
+        children: [
+            field('Byte order', base, 2, little ? 'II (little-endian)' : 'MM (big-endian)'),
+            field('Magic', base + 2, 2, u16(base + 2), 'Always 42.'),
+            field('IFD0 offset', base + 4, 4, u32(base + 4)),
+        ],
     });
 
     const rational = (type: number, at: number): string => {
@@ -423,7 +492,13 @@ export function readTiff(data: Uint8Array, base: number, end: number, mode: 'exi
                 value = String.fromCharCode(...data.subarray(valueAt, valueAt + Math.min(n, 4)));
             } else if (type === 7 && tag === 'UserComment') {
                 const charset = String.fromCharCode(...data.subarray(valueAt, valueAt + 8)).replace(/\0+$/, '');
-                const text = charset === 'ASCII' ? new TextDecoder('latin1').decode(data.subarray(valueAt + 8, valueAt + n)).replace(/\0+$/, '').trim() : '';
+                const text =
+                    charset === 'ASCII'
+                        ? new TextDecoder('latin1')
+                              .decode(data.subarray(valueAt + 8, valueAt + n))
+                              .replace(/\0+$/, '')
+                              .trim()
+                        : '';
                 value = text || (charset ? `${charset} text` : bytesLabel(n));
             } else if (type === 1 && tag.startsWith('XP')) {
                 // Windows' tags: UTF-16LE text in bytes.
@@ -450,13 +525,15 @@ export function readTiff(data: Uint8Array, base: number, end: number, mode: 'exi
                 // SubIFDs: more pictures of this one (a DNG's raw data, smaller previews).
                 if (tag === 'SubIFDs') values({ type, count: n, at: valueAt }).forEach((o, k) => pointers.push([`${name} › SubIFD ${k + 1}`, base + o, TIFF_TAGS, true]));
             }
-            const note = tag === 'MakerNote' ? 'In the camera maker\'s own format.' : undefined;
+            const note = tag === 'MakerNote' ? "In the camera maker's own format." : undefined;
             // The entry's four parts, and the value where it's stored: in the entry when it fits in 4 bytes, else at its offset.
             const parts = [
                 field('Tag', entry, 2, `0x${hex(id, 4)}`),
                 field('Type', entry + 2, 2, `${type} (${TYPE_NAME[type] || 'unknown'})`),
                 field('Count', entry + 4, 4, n, 'Values, not bytes.'),
-                size <= 4 ? field('Value', entry + 8, 4, value, size < 4 ? 'Left-aligned; the rest is padding.' : undefined) : field('Value offset', entry + 8, 4, u32(entry + 8), 'From the TIFF header.'),
+                size <= 4
+                    ? field('Value', entry + 8, 4, value, size < 4 ? 'Left-aligned; the rest is padding.' : undefined)
+                    : field('Value offset', entry + 8, 4, u32(entry + 8), 'From the TIFF header.'),
                 ...(size > 4 ? [field('Value', valueAt, size, value)] : []),
             ];
             children.push({ name: tag, offset: entry, length: 12, value, note: [note, `${what}.`].filter(Boolean).join(' '), children: parts });
@@ -513,7 +590,12 @@ export function exifSummary(exif: Tiff): [string, string][] {
     if (typeof focal === 'number' && focal > 0) exposure.push(`${+focal.toPrecision(4)} mm`);
     if (exposure.length) out.push(['Exposure', exposure.join(', ')]);
     const orientation = t.get('Orientation');
-    if (typeof orientation === 'number' && orientation > 1) out.push(['Orientation', ['', '', 'Mirrored', 'Rotated 180°', 'Mirrored vertically', 'Mirrored, rotated 270°', 'Rotated 90° clockwise', 'Mirrored, rotated 90°', 'Rotated 270° clockwise'][orientation] ?? String(orientation)]);
+    if (typeof orientation === 'number' && orientation > 1)
+        out.push([
+            'Orientation',
+            ['', '', 'Mirrored', 'Rotated 180°', 'Mirrored vertically', 'Mirrored, rotated 270°', 'Rotated 90° clockwise', 'Mirrored, rotated 90°', 'Rotated 270° clockwise'][orientation] ??
+                String(orientation),
+        ]);
     if (exif.position) out.push(['GPS', exif.position.map((d) => d.toFixed(6)).join(', ')]);
     return out;
 }
@@ -521,7 +603,7 @@ export function exifSummary(exif: Tiff): [string, string][] {
 /** The Flash tag's bits: fired, the strobe's return, the mode, red-eye. */
 function flash(v: number): string {
     if (v & 0x20) return 'No flash';
-    const parts = [v & 1 ? 'Fired' : 'Didn\'t fire'];
+    const parts = [v & 1 ? 'Fired' : "Didn't fire"];
     const mode = (v >> 3) & 3;
     if (mode) parts.push(['', 'compulsory', 'suppressed', 'auto'][mode]);
     if (v & 0x40) parts.push('red-eye reduction');

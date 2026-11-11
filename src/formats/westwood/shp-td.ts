@@ -40,7 +40,9 @@ const parser: FormatParser = {
             };
         });
 
-        const dataFields: Field[] = headers.slice(0, count).map((h, i) => field(`Frame ${i + 1} data`, h.offset, headers[i + 1].offset - h.offset, bytesLabel(headers[i + 1].offset - h.offset), FORMAT_NAMES[h.format]));
+        const dataFields: Field[] = headers
+            .slice(0, count)
+            .map((h, i) => field(`Frame ${i + 1} data`, h.offset, headers[i + 1].offset - h.offset, bytesLabel(headers[i + 1].offset - h.offset), FORMAT_NAMES[h.format]));
 
         return {
             title: 'Sprite (TD/RA SHP)',
@@ -70,11 +72,7 @@ const parser: FormatParser = {
                     offset: 14,
                     length: (count + 2) * 8,
                     note: 'One entry per frame, then one marking the end of the file, then a zero entry.',
-                    children: [
-                        ...frameFields,
-                        field('End of file', headers[count].at, 8, headers[count].offset, 'Where the last frame ends.'),
-                        field('Terminator', headers[count + 1].at, 8),
-                    ],
+                    children: [...frameFields, field('End of file', headers[count].at, 8, headers[count].offset, 'Where the last frame ends.'), field('Terminator', headers[count + 1].at, 8)],
                 },
                 ...(embedded ? [field('Palette', table, 768)] : []),
                 ...dataFields,

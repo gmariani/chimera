@@ -87,7 +87,7 @@ class Decoder {
     constructor(
         private readonly data: Uint8Array,
         private readonly header: Header,
-        private readonly frames: Chunk[][],
+        private readonly frames: Chunk[][]
     ) {
         this.blockSize = header.blockWidth * header.blockHeight;
         this.pointers = new Uint8Array((header.width / header.blockWidth) * (header.height / header.blockHeight) * 2);
@@ -197,7 +197,7 @@ class HighColorDecoder {
     constructor(
         private readonly data: Uint8Array,
         private readonly header: Header,
-        private readonly frames: Chunk[][],
+        private readonly frames: Chunk[][]
     ) {
         this.blockSize = header.blockWidth * header.blockHeight;
         this.across = header.width / header.blockWidth;
@@ -241,7 +241,7 @@ class HighColorDecoder {
         if (!vectors) return;
         const src = this.bytes(vectors, this.commands);
         let at = 0;
-        for (let s = 0; s + 1 < src.length && at < this.blocks; ) {
+        for (let s = 0; s + 1 < src.length && at < this.blocks;) {
             const command = src[s] | (src[s + 1] << 8);
             s += 2;
             const run = 2 * (((command >> 8) & 0x1f) + 1);
@@ -359,7 +359,7 @@ const parser: FormatParser = {
         const frameChunks: Chunk[][] = [];
         const listed: Field[] = [];
         let ahead: Chunk[] = [];
-        for (let at = 12; at + 8 <= data.length; ) {
+        for (let at = 12; at + 8 <= data.length;) {
             const id = b.ascii(at, 4);
             const size = be(at + 4);
             const end = Math.min(at + 8 + size, data.length);
@@ -368,7 +368,7 @@ const parser: FormatParser = {
             if (CONTAINERS.has(id)) {
                 const subs: Chunk[] = [];
                 children = [];
-                for (let s = at + 8; s + 8 <= end; ) {
+                for (let s = at + 8; s + 8 <= end;) {
                     const sid = b.ascii(s, 4);
                     const ssize = be(s + 4);
                     subs.push({ id: sid, start: s + 8, end: Math.min(s + 8 + ssize, end) });
@@ -380,7 +380,10 @@ const parser: FormatParser = {
                     frameChunks.push([...ahead, ...subs]);
                     ahead = [];
                 } else {
-                    append(ahead, subs.filter((c) => !c.id.startsWith('VPT')));
+                    append(
+                        ahead,
+                        subs.filter((c) => !c.id.startsWith('VPT'))
+                    );
                 }
             }
             if (listed.length < MAX_LISTED) listed.push({ name: id, offset: at, length: end - at, value: bytesLabel(size), note: CHUNKS[id], children });
@@ -405,7 +408,7 @@ const parser: FormatParser = {
         const flags = h >= 0 ? b.u16(h + 2) : 0;
         if (vqhd) {
             listed.find((c) => c.name === 'VQHD')!.children = [
-                field('Version', h, 2, b.u16(h), '2 for TD and RA; 3 for Tiberian Sun\'s high-color movies.'),
+                field('Version', h, 2, b.u16(h), "2 for TD and RA; 3 for Tiberian Sun's high-color movies."),
                 field('Flags', h + 2, 2, `0x${flags.toString(16)}`, 'Bit 0: has sound. Bit 4: high color (15-bit codebook, no palette).'),
                 field('Frames', h + 4, 2, b.u16(h + 4)),
                 field('Width', h + 6, 2, b.u16(h + 6)),
@@ -448,7 +451,13 @@ const parser: FormatParser = {
                 ['Sound', sound ? `${sound.sampleRate} Hz, ${sound.channels === 2 ? 'stereo' : 'mono'}, ${top.find((c) => c.id.startsWith('SND'))?.id}` : 'None'],
             ],
             fields: [
-                { name: 'FORM', offset: 0, length: 12, value: 'WVQA', children: [field('ID', 0, 4, 'FORM'), field('Size', 4, 4, bytesLabel(be(4)), 'Big-endian, like every IFF size.'), field('Type', 8, 4, 'WVQA')] },
+                {
+                    name: 'FORM',
+                    offset: 0,
+                    length: 12,
+                    value: 'WVQA',
+                    children: [field('ID', 0, 4, 'FORM'), field('Size', 4, 4, bytesLabel(be(4)), 'Big-endian, like every IFF size.'), field('Type', 8, 4, 'WVQA')],
+                },
                 ...listed,
             ],
             preview: decoder

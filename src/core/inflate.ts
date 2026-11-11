@@ -81,7 +81,7 @@ export function inflate(input: Uint8Array, expected = 0, limit = MAX_BYTES): Uin
         out = grown;
     };
 
-    for (let last = 0; !last; ) {
+    for (let last = 0; !last;) {
         last = bits(1);
         const type = bits(2);
         if (type === 0) {
@@ -105,7 +105,7 @@ export function inflate(input: Uint8Array, expected = 0, limit = MAX_BYTES): Uin
             for (let i = 0; i < nCode; i++) codeLengths[CODE_ORDER[i]] = bits(3);
             const codes = huffman(codeLengths);
             const lengths = new Uint8Array(nLit + nDist);
-            for (let i = 0; i < nLit + nDist; ) {
+            for (let i = 0; i < nLit + nDist;) {
                 const sym = decode(codes);
                 if (sym < 16) lengths[i++] = sym;
                 else {

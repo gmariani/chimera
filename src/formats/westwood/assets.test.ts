@@ -48,7 +48,10 @@ describe('tile sets', () => {
         expect(detect(data, null).id).toBe('tiles');
         // TD's SH4 is 2 × 1 cells; with 3 cells this doesn't fit, so the tiles are shown as they are.
         const parsed = tiles.parse(data, context('sh4.tem'));
-        expect(images(parsed.preview).frames.map((f) => [...f.pixels])).toEqual([[1, 2, 3, 4], [5, 6, 7, 8]]);
+        expect(images(parsed.preview).frames.map((f) => [...f.pixels])).toEqual([
+            [1, 2, 3, 4],
+            [5, 6, 7, 8],
+        ]);
         expect(parsed.warnings).toEqual([]);
     });
 
@@ -70,7 +73,11 @@ describe('tile sets', () => {
         });
         const preview = images(tiles.parse(data, context()).preview);
         expect(preview.columns).toBe(3);
-        expect(preview.frames.map((f) => [...f.pixels])).toEqual([[5, 6, 7, 8], [0, 0, 0, 0], [1, 2, 3, 4]]);
+        expect(preview.frames.map((f) => [...f.pixels])).toEqual([
+            [5, 6, 7, 8],
+            [0, 0, 0, 0],
+            [1, 2, 3, 4],
+        ]);
     });
 });
 
@@ -94,7 +101,10 @@ describe('WSA', () => {
             b.set(frame2, table + frame1.length);
         });
         expect(detect(data, null).id).toBe('wsa');
-        expect(images(wsa.parse(data, context()).preview).frames.map((f) => [...f.pixels])).toEqual([[3, 4], [2, 5]]);
+        expect(images(wsa.parse(data, context()).preview).frames.map((f) => [...f.pixels])).toEqual([
+            [3, 4],
+            [2, 5],
+        ]);
     });
 });
 
@@ -227,8 +237,7 @@ function tileSet(color: number): Uint8Array {
 }
 
 describe('maps with real tiles', () => {
-
-    it('draws a TD mission from its .bin and the theater\'s tiles', () => {
+    it("draws a TD mission from its .bin and the theater's tiles", () => {
         const bin = new Uint8Array(8192).fill(0xff);
         const text = '[MAP]\nTheater=DESERT\nX=1\nY=1\nWidth=2\nHeight=1\n';
         const files: Record<string, Uint8Array> = { 'scg01ea.bin': bin, 'clear1.des': tileSet(7), 'desert.pal': new Uint8Array(768).fill(63) };
@@ -245,7 +254,7 @@ describe('maps with real tiles', () => {
         expect(images(preview.items[1].preview).legend).toEqual([{ label: 'Clear', index: 0 }]);
     });
 
-    it('says which archive would draw it when the tiles aren\'t open', () => {
+    it("says which archive would draw it when the tiles aren't open", () => {
         const parsed = mapTd.parse(new Uint8Array(8192).fill(0xff), { name: 'scg01ea.bin', names: [], find: () => [] });
         expect(parsed.wanted).toMatch(/SCG01EA\.INI/);
     });
@@ -254,7 +263,8 @@ describe('maps with real tiles', () => {
 describe('objects on TD and RA maps', () => {
     it('reads units, infantry, buildings and smudges, and marks them on the terrain view', () => {
         const bin = new Uint8Array(8192).fill(0xff);
-        const text = '[MAP]\nTheater=DESERT\nX=0\nY=0\nWidth=4\nHeight=2\n[UNITS]\n0=BadGuy,MTNK,256,65,64,Guard,None\n[INFANTRY]\n0=GoodGuy,E1,256,66,2,Guard,0,None\n[STRUCTURES]\n0=GoodGuy,FACT,256,1,0,None\n[SMUDGE]\n2=CR1,2,0\n';
+        const text =
+            '[MAP]\nTheater=DESERT\nX=0\nY=0\nWidth=4\nHeight=2\n[UNITS]\n0=BadGuy,MTNK,256,65,64,Guard,None\n[INFANTRY]\n0=GoodGuy,E1,256,66,2,Guard,0,None\n[STRUCTURES]\n0=GoodGuy,FACT,256,1,0,None\n[SMUDGE]\n2=CR1,2,0\n';
         const files: Record<string, Uint8Array> = { 'scg01ea.bin': bin };
         const parsed = ini.parse(new TextEncoder().encode(text), { name: 'scg01ea.ini', names: [], find: (n) => (files[n] ? [{ data: files[n], source: 'X.MIX' }] : []) });
         expect(parsed.summary).toContainEqual(['Building', '1 cells']);

@@ -13,7 +13,7 @@ export class Raster {
 
     constructor(
         readonly width: number,
-        readonly height: number,
+        readonly height: number
     ) {
         this.acc = new Float32Array(width * height + 4);
     }

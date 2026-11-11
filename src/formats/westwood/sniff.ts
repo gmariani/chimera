@@ -490,9 +490,34 @@ export const BITFONT = {
     // TS and RA2's Unicode fonts: the header, then the 65,536-entry character map.
     fonT: { width: 4, stride: 8, lines: 12, height: 16, glyphSize: 24, header: 28 + 65536 * 2, fixed: [] as [number, number, string][] },
     // RA2's map editor fonts.
-    FoNt: { width: 4, stride: 8, lines: 12, height: 16, glyphSize: 24, header: 48, fixed: [[20, 1, 'value'], [28, 0x24, 'value'], [32, 0x30, 'value'], [36, 0, 'value']] as [number, number, string][] },
+    FoNt: {
+        width: 4,
+        stride: 8,
+        lines: 12,
+        height: 16,
+        glyphSize: 24,
+        header: 48,
+        fixed: [
+            [20, 1, 'value'],
+            [28, 0x24, 'value'],
+            [32, 0x30, 'value'],
+            [36, 0, 'value'],
+        ] as [number, number, string][],
+    },
     // Nox's: no height of its own, and 16-bit first and last characters.
-    tNoF: { width: 8, stride: 12, lines: 16, height: -1, glyphSize: 24, header: 36, fixed: [[4, 1, 'value'], [20, 1, 'value'], [28, 0, 'value']] as [number, number, string][] },
+    tNoF: {
+        width: 8,
+        stride: 12,
+        lines: 16,
+        height: -1,
+        glyphSize: 24,
+        header: 36,
+        fixed: [
+            [4, 1, 'value'],
+            [20, 1, 'value'],
+            [28, 0, 'value'],
+        ] as [number, number, string][],
+    },
 } as const;
 export type BitFontKind = keyof typeof BITFONT;
 

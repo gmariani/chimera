@@ -130,7 +130,13 @@ export type Preview =
     /** Rows of values in groups, to filter and sort; a cell can name files to open. */
     | { kind: 'table'; columns: TableColumn[]; groups: string[]; rows: TableRow[] }
     /** A voxel model, to turn around in 3D. */
-    | { kind: 'voxels'; parts: VoxelPart[]; frameCount: number; /** 8-bit RGB, when the file brings a usable one. */ palette?: Uint8Array; /** The owner's color range, first and last. */ remap?: [number, number] }
+    | {
+          kind: 'voxels';
+          parts: VoxelPart[];
+          frameCount: number;
+          /** 8-bit RGB, when the file brings a usable one. */ palette?: Uint8Array;
+          /** The owner's color range, first and last. */ remap?: [number, number];
+      }
     /** Several previews of the same file, e.g. a mission's map and its text. */
     | { kind: 'stack'; items: { title: string; preview: Preview }[] };
 

@@ -21,7 +21,14 @@ describe.skipIf(!existsSync(samples))('sample fonts', () => {
 
     it('reads an OpenType font with CFF outlines', () => {
         const parsed = open('otf-cff.otf');
-        expect(parsed.summary).toEqual(expect.arrayContaining([['Family', 'C059'], ['Style', 'Bold Italic'], ['Glyphs', '855'], ['Outlines', 'CFF']]));
+        expect(parsed.summary).toEqual(
+            expect.arrayContaining([
+                ['Family', 'C059'],
+                ['Style', 'Bold Italic'],
+                ['Glyphs', '855'],
+                ['Outlines', 'CFF'],
+            ])
+        );
         expect(parsed.warnings).toEqual([]);
         expect(ink(parsed)).toBeGreaterThan(0.02);
         expect(ink(parsed)).toBeLessThan(0.3);
@@ -29,7 +36,14 @@ describe.skipIf(!existsSync(samples))('sample fonts', () => {
 
     it('reads a TrueType font', () => {
         const parsed = open('ttf-truetype.ttf');
-        expect(parsed.summary).toEqual(expect.arrayContaining([['Family', 'Droid Sans Fallback'], ['Glyphs', '49382'], ['Units per em', '256'], ['Outlines', 'TrueType']]));
+        expect(parsed.summary).toEqual(
+            expect.arrayContaining([
+                ['Family', 'Droid Sans Fallback'],
+                ['Glyphs', '49382'],
+                ['Units per em', '256'],
+                ['Outlines', 'TrueType'],
+            ])
+        );
         expect(parsed.warnings).toEqual([]);
         expect(ink(parsed)).toBeGreaterThan(0.02);
     });
@@ -37,7 +51,12 @@ describe.skipIf(!existsSync(samples))('sample fonts', () => {
     it('reads the first font of a collection, a CID-keyed CFF one', () => {
         const parsed = open('ttc-cid-cff.ttc');
         expect(parsed.title).toBe('Font (OpenType, CFF outlines, collection)');
-        expect(parsed.summary).toEqual(expect.arrayContaining([['Family', 'Noto Sans CJK JP'], ['Glyphs', '65535']]));
+        expect(parsed.summary).toEqual(
+            expect.arrayContaining([
+                ['Family', 'Noto Sans CJK JP'],
+                ['Glyphs', '65535'],
+            ])
+        );
         expect(parsed.fields.find((f) => f.name.startsWith('CFF'))?.children?.some((c) => c.name === 'FDArray INDEX')).toBe(true);
         expect(parsed.warnings).toEqual([]);
         expect(ink(parsed)).toBeGreaterThan(0.02);

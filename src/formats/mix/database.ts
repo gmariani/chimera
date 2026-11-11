@@ -11,7 +11,7 @@ const parser: FormatParser = {
     parse(data) {
         const b = new Bytes(data);
         const names = readLocalMixDatabase(data);
-        if (!names) throw new Error('It doesn\'t start with XCC\'s signature.');
+        if (!names) throw new Error("It doesn't start with XCC's signature.");
         let at = 52;
         const entries = names.map((name, i) => {
             const f = field(`Name ${i + 1}`, at, name.length + 1, name);

@@ -37,9 +37,9 @@ export function TablePreview({ columns, groups, rows, onOpenName }: { columns: T
 
     return (
         <div>
-            <div className="d-flex flex-wrap gap-2 align-items-center mb-2">
+            <div className='d-flex flex-wrap gap-2 align-items-center mb-2'>
                 {groups.length > 1 && (
-                    <ButtonGroup size="sm">
+                    <ButtonGroup size='sm'>
                         <Button variant={group ? 'outline-light' : 'primary'} onClick={() => setGroup('')}>
                             All {rows.length}
                         </Button>
@@ -50,15 +50,11 @@ export function TablePreview({ columns, groups, rows, onOpenName }: { columns: T
                         ))}
                     </ButtonGroup>
                 )}
-                <Form.Control size="sm" className="ms-auto" style={{ maxWidth: '16rem' }} placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} />
+                <Form.Control size='sm' className='ms-auto' style={{ maxWidth: '16rem' }} placeholder='Filter' value={filter} onChange={(e) => setFilter(e.target.value)} />
             </div>
-            {missing && (
-                <div className="small text-warning mb-2">
-                    {missing} isn't in the files in use. Add the archive that has it (Files in use, top right) and try again.
-                </div>
-            )}
-            <div className="table-responsive">
-                <Table size="sm" hover className="small contents-table">
+            {missing && <div className='small text-warning mb-2'>{missing} isn't in the files in use. Add the archive that has it (Files in use, top right) and try again.</div>}
+            <div className='table-responsive'>
+                <Table size='sm' hover className='small contents-table'>
                     <thead>
                         <tr>
                             {columns.map((c) => (
@@ -66,8 +62,7 @@ export function TablePreview({ columns, groups, rows, onOpenName }: { columns: T
                                     key={c.key}
                                     className={`sortable ${c.numeric ? 'text-end' : ''}`}
                                     onClick={() => setSort((s) => ({ key: c.key, descending: s?.key === c.key ? !s.descending : false }))}
-                                    aria-sort={sort?.key === c.key ? (sort.descending ? 'descending' : 'ascending') : undefined}
-                                >
+                                    aria-sort={sort?.key === c.key ? (sort.descending ? 'descending' : 'ascending') : undefined}>
                                     {c.label}
                                     {sort?.key === c.key && <i className={`bi ms-1 ${sort.descending ? 'bi-caret-down-fill' : 'bi-caret-up-fill'}`} />}
                                 </th>
@@ -83,7 +78,10 @@ export function TablePreview({ columns, groups, rows, onOpenName }: { columns: T
                                     return (
                                         <td key={c.key} className={c.numeric ? 'text-end font-monospace' : c.key === 'id' ? 'font-monospace' : ''}>
                                             {files?.length && value ? (
-                                                <button type="button" className={`btn btn-link btn-sm p-0 text-start font-monospace ${value.includes('(not in') ? 'link-secondary' : ''}`} onClick={() => open(files)}>
+                                                <button
+                                                    type='button'
+                                                    className={`btn btn-link btn-sm p-0 text-start font-monospace ${value.includes('(not in') ? 'link-secondary' : ''}`}
+                                                    onClick={() => open(files)}>
                                                     {value}
                                                 </button>
                                             ) : (
@@ -98,7 +96,7 @@ export function TablePreview({ columns, groups, rows, onOpenName }: { columns: T
                 </Table>
             </div>
             {visible.length > shown && (
-                <Button size="sm" variant="outline-light" onClick={() => setShown((n) => n + PAGE)}>
+                <Button size='sm' variant='outline-light' onClick={() => setShown((n) => n + PAGE)}>
                     Show {Math.min(PAGE, visible.length - shown)} more of {visible.length - shown}
                 </Button>
             )}

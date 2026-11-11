@@ -13,7 +13,7 @@ const latin1 = new TextDecoder('latin1');
 const parser: FormatParser = {
     parse(data) {
         const offsets = stringOffsets(data);
-        if (!offsets) throw new Error('The offsets at the start don\'t point at a list of strings.');
+        if (!offsets) throw new Error("The offsets at the start don't point at a list of strings.");
         const strings = offsets.map((offset) => {
             const end = data.indexOf(0, offset);
             const stop = end < 0 ? data.length : end;

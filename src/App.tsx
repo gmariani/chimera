@@ -56,24 +56,24 @@ export function App() {
     return (
         <LibraryProvider names={names}>
             <PaletteProvider>
-                <div className="page">
+                <div className='page'>
                     <TopBar onNew={current ? () => setTrail([]) : undefined} onShowFiles={() => setShowFiles(true)} />
                     <FilesPanel show={showFiles} onHide={() => setShowFiles(false)} />
                     <EngineNotices />
                     {current ? (
-                        <main className="frame bd-content">
+                        <main className='frame bd-content'>
                             <SectionBar
-                                index="01"
+                                index='01'
                                 title={
                                     trail.length > 1 ? (
-                                        <nav aria-label="Where this file came from" className="d-inline">
-                                            <ol className="breadcrumb">
+                                        <nav aria-label='Where this file came from' className='d-inline'>
+                                            <ol className='breadcrumb'>
                                                 {trail.map((file, i) => (
                                                     <li key={i} className={`breadcrumb-item ${i === trail.length - 1 ? 'active' : ''}`} aria-current={i === trail.length - 1 ? 'page' : undefined}>
                                                         {i === trail.length - 1 ? (
                                                             file.name
                                                         ) : (
-                                                            <button type="button" className="btn btn-link p-0" onClick={() => setTrail((t) => t.slice(0, i + 1))}>
+                                                            <button type='button' className='btn btn-link p-0' onClick={() => setTrail((t) => t.slice(0, i + 1))}>
                                                                 {file.name}
                                                             </button>
                                                         )}
@@ -84,8 +84,7 @@ export function App() {
                                     ) : (
                                         'File'
                                     )
-                                }
-                            >
+                                }>
                                 {trail.length > 1 && `${trail.length - 1} level${trail.length > 2 ? 's' : ''} in`}
                             </SectionBar>
                             <Inspector

@@ -15,7 +15,7 @@ export class SwfReader {
         readonly data: Uint8Array,
         public at: number,
         readonly end: number,
-        readonly version: number,
+        readonly version: number
     ) {
         this.view = new DataView(data.buffer, data.byteOffset, data.byteLength);
     }
@@ -134,7 +134,15 @@ export class SwfReader {
         const [xMin, xMax, yMin, yMax] = [bits.sb(n), bits.sb(n), bits.sb(n), bits.sb(n)];
         this.at = bits.byteEnd();
         const px = (t: number) => +(t / 20).toFixed(2);
-        this.fields.push(field(name, start, this.at - start, `${px(xMax - xMin)} × ${px(yMax - yMin)} px at (${px(xMin)}, ${px(yMin)})`, `Bit-packed: ${n} bits a value, in twips (1/20 pixel): x ${xMin} to ${xMax}, y ${yMin} to ${yMax}.`));
+        this.fields.push(
+            field(
+                name,
+                start,
+                this.at - start,
+                `${px(xMax - xMin)} × ${px(yMax - yMin)} px at (${px(xMin)}, ${px(yMin)})`,
+                `Bit-packed: ${n} bits a value, in twips (1/20 pixel): x ${xMin} to ${xMax}, y ${yMin} to ${yMax}.`
+            )
+        );
         return { xMin, xMax, yMin, yMax };
     }
 
@@ -185,7 +193,7 @@ export class Bits {
 
     constructor(
         private readonly data: Uint8Array,
-        private readonly start: number,
+        private readonly start: number
     ) {}
 
     ub(n: number): number {

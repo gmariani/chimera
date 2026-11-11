@@ -30,7 +30,15 @@ const samples = (c: AudioClip) => {
 
 describe('Westwood AUD', () => {
     it('reads compression 0: plain 8-bit PCM, in chunks', () => {
-        const data = build(0, 0, [[128, 200, 56], [129, 130]], { rate: 11025 });
+        const data = build(
+            0,
+            0,
+            [
+                [128, 200, 56],
+                [129, 130],
+            ],
+            { rate: 11025 }
+        );
         expect(detect(data, null).id).toBe('aud');
         const r = parse(data);
         expect(r.warnings).toEqual([]);
@@ -47,7 +55,7 @@ describe('Westwood AUD', () => {
         expect(samples(clip(r))).toEqual([1, -1, -32768, 32767]);
     });
 
-    it('takes IMA\'s one-sample-short last chunk as the games\' files have it', () => {
+    it("takes IMA's one-sample-short last chunk as the games' files have it", () => {
         // 3 bytes of codes are 6 samples (12 bytes); the encoder counted a seventh it couldn't store.
         const r = parse(build(99, 2, [[[0x17, 0x8a, 0x29], 14]]));
         expect(r.warnings).toEqual([]);
@@ -57,12 +65,24 @@ describe('Westwood AUD', () => {
         expect(parse(build(99, 2, [[[0x17, 0x8a, 0x29], 16]])).warnings.join()).toMatch(/says 16 bytes but makes 12/);
     });
 
-    it('says what doesn\'t fit the format', async () => {
+    it("says what doesn't fit the format", async () => {
         const good = build(0, 0, [[1, 2, 3, 4]]);
         // The size after the header.
         expect(parse(build(0, 0, [[1, 2, 3, 4]], { size: 99 })).warnings).toEqual(['The header says 99 bytes follow it, but 12 bytes do.']);
         // The decoded size against the chunks'.
-        expect(parse(build(0, 0, [[1, 2, 3, 4], [5, 6]], { out: 5 })).warnings.join()).toMatch(/header says the sound is 5 bytes, but its chunks add up to 6 bytes/);
+        expect(
+            parse(
+                build(
+                    0,
+                    0,
+                    [
+                        [1, 2, 3, 4],
+                        [5, 6],
+                    ],
+                    { out: 5 }
+                )
+            ).warnings.join()
+        ).toMatch(/header says the sound is 5 bytes, but its chunks add up to 6 bytes/);
         // Plain PCM whose chunk says it decodes to something else.
         expect(parse(build(0, 0, [[[1, 2, 3, 4], 6]])).warnings.join()).toMatch(/Nothing is compressed, so the two sizes should match/);
         // A chunk without its marker, and one cut short.
@@ -82,7 +102,7 @@ describe('Westwood AUD', () => {
         expect(r.checks[0].text).toMatch(/10 bytes after the end/);
     });
 
-    it('doesn\'t take other files for plain PCM', () => {
+    it("doesn't take other files for plain PCM", () => {
         // Compression 0 is only sniffed when the first chunk's two sizes match.
         const data = build(0, 0, [[[1, 2, 3, 4], 9]]);
         expect(detect(data, null).id).not.toBe('aud');

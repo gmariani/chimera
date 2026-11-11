@@ -72,7 +72,12 @@ const parser: FormatParser = {
                         field('Offset', s.at + 16, 4, s.offset, `In ${bagName}.`),
                         field('Size', s.at + 20, 4, bytesLabel(s.length)),
                         field('Sample rate', s.at + 24, 4, `${s.rate} Hz`),
-                        field('Flags', s.at + 28, 4, [s.flags & FLAG_STEREO ? 'stereo' : 'mono', s.flags & FLAG_16BIT ? '16-bit' : '8-bit', s.flags & FLAG_IMA && 'IMA ADPCM'].filter(Boolean).join(', ')),
+                        field(
+                            'Flags',
+                            s.at + 28,
+                            4,
+                            [s.flags & FLAG_STEREO ? 'stereo' : 'mono', s.flags & FLAG_16BIT ? '16-bit' : '8-bit', s.flags & FLAG_IMA && 'IMA ADPCM'].filter(Boolean).join(', ')
+                        ),
                         ...(version === 2 ? [field('Block size', s.at + 32, 4, s.chunk, 'Bytes per IMA ADPCM block.')] : []),
                     ],
                 })),

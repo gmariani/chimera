@@ -45,7 +45,7 @@ export function ramp(rgb: [number, number, number]): [number, number, number][] 
 export function teamPalette(palette: Uint8Array, range: RemapRange, rgb: [number, number, number]): Uint8Array {
     const out = palette.slice();
     const shades = ramp(rgb);
-    for (let i = range[0]; i <= range[1]; i++) out.set(shades[(i - range[0]) * (16 / (range[1] - range[0] + 1)) | 0], i * 3);
+    for (let i = range[0]; i <= range[1]; i++) out.set(shades[((i - range[0]) * (16 / (range[1] - range[0] + 1))) | 0], i * 3);
     return out;
 }
 
@@ -57,7 +57,7 @@ export function teamRemap(palette: Uint8Array, range: RemapRange, rgb: [number, 
     const table = Uint8Array.from({ length: 256 }, (_, i) => i);
     const shades = ramp(rgb);
     for (let i = range[0]; i <= range[1]; i++) {
-        const [r, g, b] = shades[(i - range[0]) * (16 / (range[1] - range[0] + 1)) | 0];
+        const [r, g, b] = shades[((i - range[0]) * (16 / (range[1] - range[0] + 1))) | 0];
         let best = 0;
         let bestDistance = Infinity;
         for (let j = 1; j < 256; j++) {

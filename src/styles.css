@@ -5,7 +5,7 @@
  * mascot's purple) for what's active or focused.
  */
 
-[data-bs-theme="dark"] {
+[data-bs-theme='dark'] {
     --bp-ink: #0c2a4d;
     --bp-ink-rgb: 12, 42, 77;
     /* Panels a step up from the ground, so data never sits on the grid. */
@@ -50,23 +50,25 @@
     --bs-box-shadow: none;
     --bs-box-shadow-sm: none;
     --bs-focus-ring-color: rgba(var(--bp-accent-rgb), 0.45);
-    --bs-font-monospace: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --bs-font-monospace: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 
     --bd-pre-bg: var(--bp-panel);
     --bd-callout-code-color: var(--bp-accent);
 }
 
 body {
-    font-family: "Lato", Helvetica, Arial, sans-serif;
+    font-family: 'Lato', Helvetica, Arial, sans-serif;
     text-rendering: optimizeLegibility;
     /* A faint drafting grid behind everything: fine squares within larger ones. */
     background-color: var(--bp-ink);
     background-image:
-        linear-gradient(rgba(var(--bp-line-rgb), 0.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(var(--bp-line-rgb), 0.04) 1px, transparent 1px),
-        linear-gradient(rgba(var(--bp-line-rgb), 0.015) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(var(--bp-line-rgb), 0.015) 1px, transparent 1px);
-    background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+        linear-gradient(rgba(var(--bp-line-rgb), 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--bp-line-rgb), 0.04) 1px, transparent 1px),
+        linear-gradient(rgba(var(--bp-line-rgb), 0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--bp-line-rgb), 0.015) 1px, transparent 1px);
+    background-size:
+        100px 100px,
+        100px 100px,
+        20px 20px,
+        20px 20px;
     background-position: -1px -1px;
 }
 
@@ -76,7 +78,7 @@ html {
 }
 
 /* One short, gentle fade for every hover and focus change, so nothing snaps. */
-[data-bs-theme="dark"] {
+[data-bs-theme='dark'] {
     --bp-ease: 0.2s ease-out;
 }
 
@@ -100,7 +102,7 @@ html {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    [data-bs-theme="dark"] {
+    [data-bs-theme='dark'] {
         --bp-ease: 0s;
     }
 }
@@ -145,7 +147,7 @@ html {
 }
 
 .bp-label::after {
-    content: "";
+    content: '';
     flex: 1;
     border-top: 1px solid var(--bp-rule);
 }
@@ -168,7 +170,7 @@ html {
 
 /* A word set in italic serif, for emphasis in a headline. */
 .bd-title em {
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: Georgia, 'Times New Roman', serif;
     font-weight: 400;
     letter-spacing: 0;
 }
@@ -267,7 +269,7 @@ html {
 
 /* The rule under a section, out to both edges of the window. */
 .frame-section::after {
-    content: "";
+    content: '';
     position: absolute;
     left: 50%;
     bottom: -1px;
@@ -279,7 +281,7 @@ html {
 
 /* A cross where the rule meets each side of the frame. */
 .frame-section::before {
-    content: "";
+    content: '';
     position: absolute;
     left: -6px;
     right: -6px;
@@ -445,7 +447,9 @@ html {
     height: 2.25rem;
     border-radius: 50%;
     background: var(--bp-accent);
-    box-shadow: 0 0 0 1px var(--bp-deep), 0 0 0 2px rgba(var(--bp-accent-rgb), 0.5);
+    box-shadow:
+        0 0 0 1px var(--bp-deep),
+        0 0 0 2px rgba(var(--bp-accent-rgb), 0.5);
 }
 
 .brand-mark img {
@@ -684,7 +688,9 @@ html {
 /* ---- Open panel ---- */
 
 .drop-zone {
-    transition: background-color var(--bp-ease), box-shadow var(--bp-ease);
+    transition:
+        background-color var(--bp-ease),
+        box-shadow var(--bp-ease);
 }
 
 .drop-zone--active {
@@ -703,13 +709,27 @@ html {
     cursor: pointer;
     --mark: var(--bp-line);
     background-image:
-        linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark)),
-        linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark)),
-        linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark)),
-        linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark));
+        linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark)),
+        linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark)), linear-gradient(var(--mark), var(--mark));
     background-repeat: no-repeat;
-    background-size: 14px 1px, 1px 14px, 14px 1px, 1px 14px, 14px 1px, 1px 14px, 14px 1px, 1px 14px;
-    background-position: 0 0, 0 0, 100% 0, 100% 0, 0 100%, 0 100%, 100% 100%, 100% 100%;
+    background-size:
+        14px 1px,
+        1px 14px,
+        14px 1px,
+        1px 14px,
+        14px 1px,
+        1px 14px,
+        14px 1px,
+        1px 14px;
+    background-position:
+        0 0,
+        0 0,
+        100% 0,
+        100% 0,
+        0 100%,
+        0 100%,
+        100% 100%,
+        100% 100%;
 }
 
 .drop-target:hover,
@@ -1147,12 +1167,24 @@ html {
 }
 
 /* Neighboring fields alternate tints, like a 010 Editor template. */
-.hx-tone-0 { background: rgba(110, 168, 254, 0.14); }
-.hx-tone-1 { background: rgba(32, 201, 151, 0.14); }
-.hx-tone-2 { background: rgba(255, 193, 7, 0.13); }
-.hx-tone-3 { background: rgba(214, 51, 132, 0.14); }
-.hx-tone-4 { background: rgba(148, 97, 251, 0.16); }
-.hx-tone-5 { background: rgba(253, 126, 20, 0.13); }
+.hx-tone-0 {
+    background: rgba(110, 168, 254, 0.14);
+}
+.hx-tone-1 {
+    background: rgba(32, 201, 151, 0.14);
+}
+.hx-tone-2 {
+    background: rgba(255, 193, 7, 0.13);
+}
+.hx-tone-3 {
+    background: rgba(214, 51, 132, 0.14);
+}
+.hx-tone-4 {
+    background: rgba(148, 97, 251, 0.16);
+}
+.hx-tone-5 {
+    background: rgba(253, 126, 20, 0.13);
+}
 
 .hx-hover {
     box-shadow: inset 0 -2px 0 var(--hx-text);
@@ -1192,9 +1224,15 @@ html {
     /* A checkerboard behind transparent pixels. */
     border: 1px solid var(--bp-rule);
     background-color: var(--bp-deep);
-    background-image: linear-gradient(45deg, var(--bp-panel) 25%, transparent 25%), linear-gradient(-45deg, var(--bp-panel) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--bp-panel) 75%), linear-gradient(-45deg, transparent 75%, var(--bp-panel) 75%);
+    background-image:
+        linear-gradient(45deg, var(--bp-panel) 25%, transparent 25%), linear-gradient(-45deg, var(--bp-panel) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--bp-panel) 75%),
+        linear-gradient(-45deg, transparent 75%, var(--bp-panel) 75%);
     background-size: 16px 16px;
-    background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+    background-position:
+        0 0,
+        0 8px,
+        8px -8px,
+        -8px 0;
 }
 
 /* Centered while it fits; bigger than the stage, it starts at the top left so all of it scrolls into view (centering with justify-content would push its edges out of reach). */

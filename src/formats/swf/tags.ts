@@ -94,7 +94,16 @@ export const TAG_NAMES: Record<number, string> = {
     1022: 'Obfuscator (Amayeta SWF Compress)',
 };
 
-export const SOUND_FORMATS: Record<number, string> = { 0: 'Uncompressed, native byte order', 1: 'ADPCM', 2: 'MP3', 3: 'Uncompressed, little-endian', 4: 'Nellymoser 16 kHz', 5: 'Nellymoser 8 kHz', 6: 'Nellymoser', 11: 'Speex' };
+export const SOUND_FORMATS: Record<number, string> = {
+    0: 'Uncompressed, native byte order',
+    1: 'ADPCM',
+    2: 'MP3',
+    3: 'Uncompressed, little-endian',
+    4: 'Nellymoser 16 kHz',
+    5: 'Nellymoser 8 kHz',
+    6: 'Nellymoser',
+    11: 'Speex',
+};
 export const SOUND_RATES = [5512, 11025, 22050, 44100];
 const VIDEO_CODECS: Record<number, string> = { 1: 'JPEG', 2: 'Sorenson H.263', 3: 'Screen video', 4: 'On2 VP6', 5: 'On2 VP6 with alpha', 6: 'Screen video 2', 7: 'AVC (H.264)' };
 const BITMAP_FORMATS: Record<number, string> = { 3: '8-bit, color-mapped', 4: '15-bit RGB', 5: '24-bit RGB' };
@@ -107,7 +116,11 @@ const describeSound = (b: number) => {
     return `${SOUND_FORMATS[s.format] ?? `format ${s.format}`}, ${s.rate} Hz, ${s.bits}-bit, ${s.channels === 2 ? 'stereo' : 'mono'}`;
 };
 
-const flags = (v: number, names: [number, string][]) => names.filter(([bit]) => v & bit).map(([, n]) => n).join(', ') || 'None';
+const flags = (v: number, names: [number, string][]) =>
+    names
+        .filter(([bit]) => v & bit)
+        .map(([, n]) => n)
+        .join(', ') || 'None';
 
 /**
  * Reads a tag's body into fields. Returns a value to show beside the tag (an
@@ -126,7 +139,13 @@ export function readTag(code: number, r: SwfReader, nested: (r: SwfReader) => st
             r.rect('Bounds');
             if (code === 83) {
                 r.rect('Edge bounds');
-                r.u8('Flags', 'Uses fill winding rule (bit 2), non-scaling strokes (1), scaling strokes (0).', (v) => flags(v, [[4, 'Fill winding rule'], [2, 'Non-scaling strokes'], [1, 'Scaling strokes']]));
+                r.u8('Flags', 'Uses fill winding rule (bit 2), non-scaling strokes (1), scaling strokes (0).', (v) =>
+                    flags(v, [
+                        [4, 'Fill winding rule'],
+                        [2, 'Non-scaling strokes'],
+                        [1, 'Scaling strokes'],
+                    ])
+                );
             }
             r.bytes('Shapes', undefined, 'Fill and line styles, then shape records (edges and style changes), bit-packed.');
             return `#${id}`;
@@ -165,13 +184,24 @@ export function readTag(code: number, r: SwfReader, nested: (r: SwfReader) => st
             return r.rgb('Color');
         case 10: {
             const id = r.u16('Font ID');
-            r.bytes('Glyphs', undefined, 'An offset table, then each glyph\'s shape.');
+            r.bytes('Glyphs', undefined, "An offset table, then each glyph's shape.");
             return `#${id}`;
         }
         case 48:
         case 75: {
             const id = r.u16('Font ID');
-            r.u8('Flags', undefined, (v) => flags(v, [[0x80, 'Has layout'], [0x40, 'Shift-JIS'], [0x20, 'Small text'], [0x10, 'ANSI'], [0x08, 'Wide offsets'], [0x04, 'Wide codes'], [0x02, 'Italic'], [0x01, 'Bold']]));
+            r.u8('Flags', undefined, (v) =>
+                flags(v, [
+                    [0x80, 'Has layout'],
+                    [0x40, 'Shift-JIS'],
+                    [0x20, 'Small text'],
+                    [0x10, 'ANSI'],
+                    [0x08, 'Wide offsets'],
+                    [0x04, 'Wide codes'],
+                    [0x02, 'Italic'],
+                    [0x01, 'Bold'],
+                ])
+            );
             r.u8('Language', undefined, (v) => LANGUAGES[v] ?? String(v));
             const name = r.shortString('Name');
             r.u16('Glyph count');
@@ -180,7 +210,13 @@ export function readTag(code: number, r: SwfReader, nested: (r: SwfReader) => st
         }
         case 91: {
             const id = r.u16('Font ID');
-            r.u8('Flags', undefined, (v) => flags(v, [[4, 'Has font data'], [2, 'Italic'], [1, 'Bold']]));
+            r.u8('Flags', undefined, (v) =>
+                flags(v, [
+                    [4, 'Has font data'],
+                    [2, 'Italic'],
+                    [1, 'Bold'],
+                ])
+            );
             const name = r.string('Name');
             if (r.left) r.bytes('Font data', undefined, 'An OpenType CFF font.');
             return `#${id} ${name}`;
@@ -200,15 +236,24 @@ export function readTag(code: number, r: SwfReader, nested: (r: SwfReader) => st
             return;
         case 59:
             r.u16('Sprite ID');
-            r.bytes('Actions', undefined, 'ActionScript 1 and 2 bytecode (AVM1), run once before the sprite\'s first frame.');
+            r.bytes('Actions', undefined, "ActionScript 1 and 2 bytecode (AVM1), run once before the sprite's first frame.");
             return;
         case 13:
         case 62: {
             const id = r.u16('Font ID');
             const name = r.shortString('Name');
-            r.u8('Flags', undefined, (v) => flags(v, [[0x20, 'Small text'], [0x10, 'Shift-JIS'], [0x08, 'ANSI'], [0x04, 'Italic'], [0x02, 'Bold'], [0x01, 'Wide codes']]));
+            r.u8('Flags', undefined, (v) =>
+                flags(v, [
+                    [0x20, 'Small text'],
+                    [0x10, 'Shift-JIS'],
+                    [0x08, 'ANSI'],
+                    [0x04, 'Italic'],
+                    [0x02, 'Bold'],
+                    [0x01, 'Wide codes'],
+                ])
+            );
             if (code === 62) r.u8('Language', undefined, (v) => LANGUAGES[v] ?? String(v));
-            r.bytes('Character codes', undefined, 'One for each of the font\'s glyphs.');
+            r.bytes('Character codes', undefined, "One for each of the font's glyphs.");
             return `#${id} ${name}`;
         }
         case 14: {
@@ -234,7 +279,7 @@ export function readTag(code: number, r: SwfReader, nested: (r: SwfReader) => st
             return SOUND_FORMATS[soundFormat(format).format];
         }
         case 19:
-            r.bytes('Sound data', undefined, 'This frame\'s part of the streaming sound (for MP3, a sample count and seek first).');
+            r.bytes('Sound data', undefined, "This frame's part of the streaming sound (for MP3, a sample count and seek first).");
             return;
         case 20:
         case 36: {
@@ -254,8 +299,32 @@ export function readTag(code: number, r: SwfReader, nested: (r: SwfReader) => st
             return;
         case 26:
         case 70: {
-            const f = r.u8('Flags', undefined, (v) => flags(v, [[0x80, 'Clip actions'], [0x40, 'Clip depth'], [0x20, 'Name'], [0x10, 'Ratio'], [0x08, 'Color transform'], [0x04, 'Matrix'], [0x02, 'Character'], [0x01, 'Move']]));
-            const f2 = code === 70 ? r.u8('More flags', undefined, (v) => flags(v, [[0x40, 'Opaque background'], [0x20, 'Visible'], [0x10, 'Image'], [0x08, 'Class name'], [0x04, 'Cache as bitmap'], [0x02, 'Blend mode'], [0x01, 'Filters']])) : 0;
+            const f = r.u8('Flags', undefined, (v) =>
+                flags(v, [
+                    [0x80, 'Clip actions'],
+                    [0x40, 'Clip depth'],
+                    [0x20, 'Name'],
+                    [0x10, 'Ratio'],
+                    [0x08, 'Color transform'],
+                    [0x04, 'Matrix'],
+                    [0x02, 'Character'],
+                    [0x01, 'Move'],
+                ])
+            );
+            const f2 =
+                code === 70
+                    ? r.u8('More flags', undefined, (v) =>
+                          flags(v, [
+                              [0x40, 'Opaque background'],
+                              [0x20, 'Visible'],
+                              [0x10, 'Image'],
+                              [0x08, 'Class name'],
+                              [0x04, 'Cache as bitmap'],
+                              [0x02, 'Blend mode'],
+                              [0x01, 'Filters'],
+                          ])
+                      )
+                    : 0;
             const depth = r.u16('Depth');
             if (f2 & 0x08 || (f2 & 0x10 && f & 0x02)) r.string('Class name');
             let id: number | undefined;
@@ -287,7 +356,24 @@ export function readTag(code: number, r: SwfReader, nested: (r: SwfReader) => st
             const id = r.u16('Character ID');
             r.rect('Bounds');
             const f = r.u16('Flags', undefined, (v) =>
-                flags(v, [[0x80, 'Has text'], [0x40, 'Word wrap'], [0x20, 'Multiline'], [0x10, 'Password'], [0x08, 'Read only'], [0x04, 'Has text color'], [0x02, 'Has max length'], [0x01, 'Has font'], [0x8000, 'Has font class'], [0x4000, 'Auto size'], [0x2000, 'Has layout'], [0x1000, 'No select'], [0x0800, 'Border'], [0x0400, 'Was static'], [0x0200, 'HTML'], [0x0100, 'Use outlines']]),
+                flags(v, [
+                    [0x80, 'Has text'],
+                    [0x40, 'Word wrap'],
+                    [0x20, 'Multiline'],
+                    [0x10, 'Password'],
+                    [0x08, 'Read only'],
+                    [0x04, 'Has text color'],
+                    [0x02, 'Has max length'],
+                    [0x01, 'Has font'],
+                    [0x8000, 'Has font class'],
+                    [0x4000, 'Auto size'],
+                    [0x2000, 'Has layout'],
+                    [0x1000, 'No select'],
+                    [0x0800, 'Border'],
+                    [0x0400, 'Was static'],
+                    [0x0200, 'HTML'],
+                    [0x0100, 'Use outlines'],
+                ])
             );
             if (f & 0x01) r.u16('Font ID');
             if (f & 0x8000) r.string('Font class');
@@ -334,7 +420,12 @@ export function readTag(code: number, r: SwfReader, nested: (r: SwfReader) => st
             if (code === 84) {
                 r.rect('Start edge bounds');
                 r.rect('End edge bounds');
-                r.u8('Flags', undefined, (v) => flags(v, [[2, 'Non-scaling strokes'], [1, 'Scaling strokes']]));
+                r.u8('Flags', undefined, (v) =>
+                    flags(v, [
+                        [2, 'Non-scaling strokes'],
+                        [1, 'Scaling strokes'],
+                    ])
+                );
             }
             r.u32('End edges offset');
             r.bytes('Shapes', undefined, 'Morph fill and line styles, then the start and end shape records.');
@@ -360,7 +451,11 @@ export function readTag(code: number, r: SwfReader, nested: (r: SwfReader) => st
             r.u16('Frame count');
             const w = r.u16('Width');
             const h = r.u16('Height');
-            r.u8('Flags', 'Deblocking (bits 1–3), smoothing (bit 0).', (v) => `Deblocking ${['from the video', 'off', 'level 1', 'level 2', 'level 3', 'level 4'][(v >> 1) & 7] ?? (v >> 1) & 7}, smoothing ${v & 1 ? 'on' : 'off'}`);
+            r.u8(
+                'Flags',
+                'Deblocking (bits 1–3), smoothing (bit 0).',
+                (v) => `Deblocking ${['from the video', 'off', 'level 1', 'level 2', 'level 3', 'level 4'][(v >> 1) & 7] ?? (v >> 1) & 7}, smoothing ${v & 1 ? 'on' : 'off'}`
+            );
             const codec = r.u8('Codec', undefined, (v) => VIDEO_CODECS[v] ?? String(v));
             return `#${id}, ${w} × ${h}, ${VIDEO_CODECS[codec] ?? 'unknown codec'}`;
         }
@@ -382,7 +477,15 @@ export function readTag(code: number, r: SwfReader, nested: (r: SwfReader) => st
             return `Tab index ${r.u16('Tab index')}`;
         case 69: {
             const f = r.u32('Flags', undefined, (v) =>
-                flags(v, [[0x40, 'Use direct blit'], [0x20, 'Use GPU'], [0x10, 'Has metadata'], [0x08, 'ActionScript 3'], [0x04, 'No cross-domain caching'], [0x02, 'Relative URLs'], [0x01, 'Use network']]),
+                flags(v, [
+                    [0x40, 'Use direct blit'],
+                    [0x20, 'Use GPU'],
+                    [0x10, 'Has metadata'],
+                    [0x08, 'ActionScript 3'],
+                    [0x04, 'No cross-domain caching'],
+                    [0x02, 'Relative URLs'],
+                    [0x01, 'Use network'],
+                ])
             );
             return f & 0x08 ? 'ActionScript 3' : 'ActionScript 1/2';
         }
@@ -397,12 +500,16 @@ export function readTag(code: number, r: SwfReader, nested: (r: SwfReader) => st
         case 73: {
             const id = r.u16('Font ID');
             r.u8('CSM table hint', undefined, (v) => ['Thin', 'Medium', 'Thick'][v >> 6] ?? String(v));
-            r.bytes('Zones', undefined, 'Each glyph\'s alignment zones.');
+            r.bytes('Zones', undefined, "Each glyph's alignment zones.");
             return `#${id}`;
         }
         case 74: {
             const id = r.u16('Text ID');
-            r.u8('Flags', 'Renderer (bits 6–7), grid fit (3–5).', (v) => `${['Normal', 'Advanced'][v >> 6] ?? 'Renderer ' + (v >> 6)}, grid fit ${['none', 'pixel', 'subpixel'][(v >> 3) & 7] ?? (v >> 3) & 7}`);
+            r.u8(
+                'Flags',
+                'Renderer (bits 6–7), grid fit (3–5).',
+                (v) => `${['Normal', 'Advanced'][v >> 6] ?? 'Renderer ' + (v >> 6)}, grid fit ${['none', 'pixel', 'subpixel'][(v >> 3) & 7] ?? (v >> 3) & 7}`
+            );
             r.f32('Thickness');
             r.f32('Sharpness');
             if (r.left) r.u8('Reserved');

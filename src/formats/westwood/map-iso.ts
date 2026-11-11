@@ -80,14 +80,29 @@ export interface IsoObject {
  */
 function readObjects(ini: Ini): IsoObject[] {
     const out: IsoObject[] = [];
-    const sections: [IsoObject['kind'], string][] = [['building', 'Structures'], ['unit', 'Units'], ['aircraft', 'Aircraft'], ['infantry', 'Infantry']];
+    const sections: [IsoObject['kind'], string][] = [
+        ['building', 'Structures'],
+        ['unit', 'Units'],
+        ['aircraft', 'Aircraft'],
+        ['infantry', 'Infantry'],
+    ];
     for (const [kind, section] of sections) {
         for (const [, value] of ini.entries(section)) {
             const v = value.split(',').map((x) => x.trim());
             const [rx, ry] = [Number(v[3]), Number(v[4])];
             if (!Number.isInteger(rx) || !Number.isInteger(ry)) continue;
             const upgrades = kind === 'building' ? v.slice(12, 15).map((u) => (/^none$/i.test(u) ? '' : u.toUpperCase())) : [];
-            out.push({ kind, house: v[0], type: (v[1] ?? '').toUpperCase(), rx, ry, facing: Number(kind === 'infantry' ? v[7] : v[5]) || 0, sub: kind === 'infantry' ? Number(v[5]) || 0 : 0, health: Number(v[2]) || 256, ...(upgrades.some(Boolean) ? { upgrades } : {}) });
+            out.push({
+                kind,
+                house: v[0],
+                type: (v[1] ?? '').toUpperCase(),
+                rx,
+                ry,
+                facing: Number(kind === 'infantry' ? v[7] : v[5]) || 0,
+                sub: kind === 'infantry' ? Number(v[5]) || 0 : 0,
+                health: Number(v[2]) || 256,
+                ...(upgrades.some(Boolean) ? { upgrades } : {}),
+            });
         }
     }
     return out;
@@ -99,7 +114,15 @@ const OVERLAY_CELLS = 512 * 512;
 function unpack(ini: Ini, section: string, size: number, decode: (src: Uint8Array, dest: Uint8Array) => number): Uint8Array | null {
     const s = ini.section(section);
     if (!s) return null;
-    const packed = Uint8Array.from(atob(s.entries.map((e) => e.value).join('').replace(/[^A-Za-z0-9+/]/g, '')), (c) => c.charCodeAt(0));
+    const packed = Uint8Array.from(
+        atob(
+            s.entries
+                .map((e) => e.value)
+                .join('')
+                .replace(/[^A-Za-z0-9+/]/g, '')
+        ),
+        (c) => c.charCodeAt(0)
+    );
     const out = new Uint8Array(size);
     let [at, d] = [0, 0];
     while (at + 4 <= packed.length && d < size) {
@@ -229,7 +252,10 @@ function readTile(data: Uint8Array): Tile | null {
             if (!(data[o + 36] & 1)) return { diamond };
             const [ew, eh, at] = [v.getUint32(o + 28, true), v.getUint32(o + 32, true), o + v.getUint32(o + 8, true)];
             if (!ew || !eh || at + ew * eh > data.length) return { diamond };
-            return { diamond, extra: { dx: v.getInt32(o + 20, true) - v.getInt32(o, true), dy: v.getInt32(o + 24, true) - v.getInt32(o + 4, true), width: ew, height: eh, pixels: data.subarray(at, at + ew * eh) } };
+            return {
+                diamond,
+                extra: { dx: v.getInt32(o + 20, true) - v.getInt32(o, true), dy: v.getInt32(o + 24, true) - v.getInt32(o + 4, true), width: ew, height: eh, pixels: data.subarray(at, at + ew * eh) },
+            };
         }),
     };
 }
@@ -240,7 +266,13 @@ const HEIGHT_HIGH = [176, 168, 128];
 const MARK: Record<string, [number, number, number]> = { ore: [216, 180, 40], gems: [64, 200, 220], wall: [235, 235, 235], tree: [30, 66, 26], building: [170, 96, 210], unit: [240, 70, 70] };
 
 /** Where in a cell infantry stand, in 1/256ths: middle, then the four quarters. */
-const SUB_CELLS = [[128, 128], [64, 64], [192, 64], [64, 192], [192, 192]];
+const SUB_CELLS = [
+    [128, 128],
+    [64, 64],
+    [192, 64],
+    [64, 192],
+    [192, 192],
+];
 
 /** TS's and RA2's [Colors] are hue, saturation and value, each 0–255. */
 function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
@@ -271,7 +303,7 @@ class Canvas {
         readonly top: number,
         fullWidth: number,
         fullHeight: number,
-        readonly step: number,
+        readonly step: number
     ) {
         this.width = Math.ceil(fullWidth / step);
         this.height = Math.ceil(fullHeight / step);
@@ -544,10 +576,17 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const ruleNumber = (type: string, key: string) => Number((rulesIni?.get(type, key) ?? '').replace(',', '.')) || 0;
     const lamps = map.objects
         .filter((o) => o.kind === 'building' && ruleNumber(o.type, 'LightVisibility') > 0)
-        .map((o) => ({ x: o.rx + 0.5, y: o.ry + 0.5, range: ruleNumber(o.type, 'LightVisibility') / 256, intensity: ruleNumber(o.type, 'LightIntensity'), tint: ['LightRedTint', 'LightGreenTint', 'LightBlueTint'].map((k) => ruleNumber(o.type, k)) }));
+        .map((o) => ({
+            x: o.rx + 0.5,
+            y: o.ry + 0.5,
+            range: ruleNumber(o.type, 'LightVisibility') / 256,
+            intensity: ruleNumber(o.type, 'LightIntensity'),
+            tint: ['LightRedTint', 'LightGreenTint', 'LightBlueTint'].map((k) => ruleNumber(o.type, k)),
+        }));
     const lights = new Map<string, [number, number, number]>();
     // Units, infantry and aircraft get a little more ([AudioVisual] ExtraUnitLight and the like).
-    const extraLight = (kind: string) => Number((rulesIni?.get('AudioVisual', kind === 'infantry' ? 'ExtraInfantryLight' : kind === 'aircraft' ? 'ExtraAircraftLight' : 'ExtraUnitLight') ?? '0').replace(',', '.')) || 0;
+    const extraLight = (kind: string) =>
+        Number((rulesIni?.get('AudioVisual', kind === 'infantry' ? 'ExtraInfantryLight' : kind === 'aircraft' ? 'ExtraAircraftLight' : 'ExtraUnitLight') ?? '0').replace(',', '.')) || 0;
     const lightAt = (rx: number, ry: number, extra = 0): [number, number, number] | null => {
         if (!real || !lighting) return null;
         const key = `${rx},${ry},${extra}`;
@@ -630,7 +669,10 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             }
         } else {
             const k = Math.min(c.level, 14) / 14;
-            flat.set(HEIGHT_LOW.map((lo, i) => Math.round(lo + (HEIGHT_HIGH[i] - lo) * k)), 3);
+            flat.set(
+                HEIGHT_LOW.map((lo, i) => Math.round(lo + (HEIGHT_HIGH[i] - lo) * k)),
+                3
+            );
             canvas.draw(diamond, tw, th, x, y, flat);
         }
     }
@@ -667,15 +709,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             const yesFlag = (key: string) => /^(yes|true|1)$/i.test(art?.get(img, key) ?? art?.get(name, key) ?? '');
             const extended = [theater.ext, ...THEATER_EXTENSIONS].map((e) => `${n}.${e}`);
             const lettered = n.length > 2 ? [theater.letter, ...THEATER_LETTERS].map((l) => `${n[0]}${l}${n.slice(2)}.shp`) : [];
-            const candidates = [
-                ...new Set([
-                    ...(yesFlag('Theater') ? extended : []),
-                    ...(/^[gncy]/.test(n) ? lettered : []),
-                    `${n}.shp`,
-                    ...extended,
-                    ...lettered,
-                ]),
-            ];
+            const candidates = [...new Set([...(yesFlag('Theater') ? extended : []), ...(/^[gncy]/.test(n) ? lettered : []), `${n}.shp`, ...extended, ...lettered])];
             let found: Companion | undefined;
             for (const f of candidates) {
                 found = find?.(f).find((c) => sniffShpTs(c.data));
@@ -729,8 +763,16 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     const tiberiumPalette = (name: string) => {
         const image = Number(name.match(/^TIB(\d)_/i)?.[1] ?? (/^(BTIB|GEM)/i.test(name) ? 2 : 1));
         if (!tiberiumPalettes.has(image)) {
-            const type = rulesIni?.entries('Tiberiums').map(([, v]) => v.trim()).find((t) => Number(rulesIni.get(t, 'Image')) === image);
-            const hsv = type ? rulesIni?.get('Colors', rulesIni.get(type, 'Color') ?? '')?.split(',').map(Number) : undefined;
+            const type = rulesIni
+                ?.entries('Tiberiums')
+                .map(([, v]) => v.trim())
+                .find((t) => Number(rulesIni.get(t, 'Image')) === image);
+            const hsv = type
+                ? rulesIni
+                      ?.get('Colors', rulesIni.get(type, 'Color') ?? '')
+                      ?.split(',')
+                      .map(Number)
+                : undefined;
             tiberiumPalettes.set(image, tw === 48 && hsv?.length === 3 && hsv[2] > 0 ? teamPalette(unitPalette, TS_REMAP, hsvToRgb(hsv[0], hsv[1], hsv[2])) : objPalette);
         }
         return tiberiumPalettes.get(image)!;
@@ -835,7 +877,13 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             if (id === 0xff) continue;
             const [rx, ry] = [i % 512, Math.floor(i / 512)];
             const name = overlayNames[id];
-            if (real && name) objects.push({ rx, ry, up: HIGH_BRIDGES.includes(id) ? BRIDGE_LEVELS : 0, draw: () => drawSprite(rx, ry, name, map.overlayData?.[i] ?? 0, overlayPalette(name), false, overlayLift(id, map.overlayData?.[i] ?? 0)) });
+            if (real && name)
+                objects.push({
+                    rx,
+                    ry,
+                    up: HIGH_BRIDGES.includes(id) ? BRIDGE_LEVELS : 0,
+                    draw: () => drawSprite(rx, ry, name, map.overlayData?.[i] ?? 0, overlayPalette(name), false, overlayLift(id, map.overlayData?.[i] ?? 0)),
+                });
             else {
                 const kind = name ? (isWall(name) ? 'wall' : overlayMark(name)) : null;
                 if (kind) objects.push({ rx, ry, draw: () => mark(rx, ry, MARK[kind]) });
@@ -849,12 +897,18 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
     // missions leave for a road). A map that has its sections already (gdi9c) keeps them.
     const isPost = (o: (typeof map.objects)[number]) => o.kind === 'building' && yes(rulesIni?.get(o.type, 'LaserFencePost'));
     const isSection = (o: (typeof map.objects)[number]) => o.kind === 'building' && yes(rulesIni?.get(o.type, 'LaserFence'));
-    const sectionType = rulesIni?.entries('BuildingTypes').map(([, v]) => v.trim()).find((t) => yes(rulesIni?.get(t, 'LaserFence')));
+    const sectionType = rulesIni
+        ?.entries('BuildingTypes')
+        .map(([, v]) => v.trim())
+        .find((t) => yes(rulesIni?.get(t, 'LaserFence')));
     const objectsHere = new Map<number, (typeof map.objects)[number]>();
     for (const o of map.objects) if (o.kind === 'building') objectsHere.set(o.ry * 1024 + o.rx, o);
     const sections: (typeof map.objects)[number][] = [];
     for (const post of sectionType ? map.objects.filter(isPost) : []) {
-        for (const [dx, dy] of [[1, 0], [0, 1]]) {
+        for (const [dx, dy] of [
+            [1, 0],
+            [0, 1],
+        ]) {
             let n = 1;
             while (n <= 5 && !objectsHere.has((post.ry + dy * n) * 1024 + post.rx + dx * n)) n++;
             const other = objectsHere.get((post.ry + dy * n) * 1024 + post.rx + dx * n);
@@ -883,147 +937,161 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             // first cell, as the TS/RA2 mission editor (EA's GPL source) draws them.
             const [fw, fh] = (art?.get(img, 'Foundation') ?? art?.get(o.type, 'Foundation') ?? '1x1').split(/x/i).map((n) => Number(n) || 1);
             const damaged = o.health <= 128;
-            objects.push({ rx: o.rx + fw - 1, ry: o.ry + fh - 1, draw: () => {
-                const [cx, cy] = point(o.rx, o.ry);
-                const palette = artPalette(img, o.house);
-                const bib = art?.get(img, 'BibShape');
-                const bibShp = bib ? spriteFor(bib.toUpperCase(), 'Building foundation sprite') : null;
-                if (bibShp) drawFrame(bibShp, 0, cx, cy, palette, false);
-                const shp = spriteFor(o.type, 'Building sprite');
-                // Its frames: whole, damaged (, rubble), then the same again as shadows.
-                // A laser fence section, powered: frames 0–3 run along rx, 4–7 along ry, and each set
-                // animates from its last (as OpenRA's TS sequences have it).
-                const section = yes(rulesIni?.get(o.type, 'LaserFence'));
-                const alongRy = fence.has((o.ry - 1) * 1024 + o.rx) || fence.has((o.ry + 1) * 1024 + o.rx);
-                const frame = section ? (alongRy ? 7 : 3) : firestorm.has(o.ry * 1024 + o.rx) ? firestormFrame(o.rx, o.ry) : damaged && shp && shp.frames.length >= 4 ? 1 : 0;
-                if (shp) drawFrame(shp, frame, cx, cy, palette, true);
-                // The mission editor's set: active, idle, special (a silo's fill, a repair depot's arm) and super
-                // (a superweapon's) animations. Production animations play while something's built or repaired (a
-                // construction yard's crane, a repair depot's flashing platform), so like the editor, not at rest.
-                const animKeys = ['ActiveAnim', 'IdleAnim', 'SpecialAnim', 'SuperAnim'].flatMap((k) => ['', 'Two', 'Three', 'Four'].map((n) => k + n)).filter((k) => !/^IdleAnim./.test(k));
-                for (const key of animKeys) {
-                    if (/^SuperAnim./.test(key) && IGNORED_SUPER_ANIMS.includes(img)) continue;
-                    const anim = (damaged && art?.get(img, `${key}Damaged`)) || art?.get(img, key);
-                    if (!anim) continue;
-                    const animShp = spriteFor(anim.toUpperCase(), 'Building animation sprite');
-                    const dx = Number(art?.get(img, `${key}X`) ?? 0);
-                    const dy = Number(art?.get(img, `${key}Y`) ?? 0);
-                    // Each animation shows its Start frame (0 unless set). That can differ from the building's own art,
-                    // and is still right: the hospital's (CAHOSP_A) cross loops yellow, orange, red, so it shows yellow
-                    // over a red cross. Left as is on purpose; it's not a palette bug.
-                    // An animation in the terrain palette says so; otherwise it's drawn like its building.
-                    const animPalette = yes(art?.get(anim, 'TerrainPalette')) ? artPalette(anim, o.house) : palette;
-                    // Special animations play on an event (a repair) from their Start, so like the mission editor they
-                    // show frame 0, at rest: the depot's three point into one file, its arm folding out and back.
-                    const start = key.startsWith('SpecialAnim') ? 0 : Number(art?.get(anim, 'Start') ?? 0) || 0;
-                    if (animShp) drawFrame(animShp, start, cx + dx, cy + dy, animPalette, false);
-                }
-                // Upgrades, placed by the building's PowerUpNLocXX/YY as the mission editor does, their art named by
-                // their own art section's Image (GAVULC → GACTWR_B). A gun (Turret=yes, a Component Tower's) turns to
-                // the building's facing among 32; the rest (a power plant's turbine) are animations, at their Start.
-                o.upgrades?.forEach((upgrade, slot) => {
-                    if (!upgrade) return;
-                    const upgradeImg = image(art?.get(image(upgrade), 'Image') ?? image(upgrade));
-                    const upgradeShp = spriteFor(upgradeImg, 'Upgrade sprite');
-                    if (!upgradeShp) return;
-                    const ux = cx + Number(art?.get(img, `PowerUp${slot + 1}LocXX`) ?? 0);
-                    const uy = cy + Number(art?.get(img, `PowerUp${slot + 1}LocYY`) ?? 0);
-                    const gun = yes(rulesIni?.get(upgrade, 'Turret'));
-                    const frame = gun ? facingFrame(o.facing, Math.min(32, upgradeShp.frames.length)) : Number(art?.get(upgradeImg, 'Start') ?? 0) || 0;
-                    drawFrame(upgradeShp, frame, ux, uy, palette, false);
-                });
-                // A defense's turret: a voxel model or a sprite of 32 facings, placed in pixels from the building's center.
-                const turret = /^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'Turret') ?? '') ? rulesIni?.get(o.type, 'TurretAnim') ?? art?.get(img, 'TurretAnim') : undefined;
-                if (!turret) return;
-                const [nx, ny] = TURRET_NUDGE[tw === 48 ? 'ts' : 'ra2'][o.type] ?? [0, 0];
-                const tx = cx + Number(rulesIni?.get(o.type, 'TurretAnimX') ?? 0) + nx;
-                const ty = cy + Number(rulesIni?.get(o.type, 'TurretAnimY') ?? 0) + ny;
-                if (/^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'TurretAnimIsVoxel') ?? '')) {
-                    // TurretAnimZAdjust lowers a voxel turret, in leptons (104 to a level, half a tile high): RA2's
-                    // Tech Outpost's -140 sets its turret on its tower rather than 20 pixels above it.
-                    const zAdjust = (Number(rulesIni?.get(o.type, 'TurretAnimZAdjust') ?? 0) || 0) * (th / 2 / 104);
-                    const key = `${turret}:${o.facing}:${o.house}`;
-                    if (!voxelPictures.has(key)) {
-                        const parts: VoxelPartInput[] = [];
-                        const name = turret.toLowerCase();
-                        const turretModel = model(name, 'Defense turret model');
-                        if (turretModel) parts.push({ ...turretModel, forward: 0 });
-                        // The barrel goes by the turret's name with "barl" for "tur": the Tick Tank's TTNKTUR, ttnkbarl.
-                        const barrel = name.endsWith('tur') ? `${name.slice(0, -3)}barl` : `${name}barl`;
-                        const barrelModel = barrelPart(barrel, model(barrel, 'Defense barrel model'));
-                        if (barrelModel) parts.push(barrelModel);
-                        voxelPictures.set(key, parts.length ? drawVoxels(parts, o.facing, tw, th, palette) : null);
+            objects.push({
+                rx: o.rx + fw - 1,
+                ry: o.ry + fh - 1,
+                draw: () => {
+                    const [cx, cy] = point(o.rx, o.ry);
+                    const palette = artPalette(img, o.house);
+                    const bib = art?.get(img, 'BibShape');
+                    const bibShp = bib ? spriteFor(bib.toUpperCase(), 'Building foundation sprite') : null;
+                    if (bibShp) drawFrame(bibShp, 0, cx, cy, palette, false);
+                    const shp = spriteFor(o.type, 'Building sprite');
+                    // Its frames: whole, damaged (, rubble), then the same again as shadows.
+                    // A laser fence section, powered: frames 0–3 run along rx, 4–7 along ry, and each set
+                    // animates from its last (as OpenRA's TS sequences have it).
+                    const section = yes(rulesIni?.get(o.type, 'LaserFence'));
+                    const alongRy = fence.has((o.ry - 1) * 1024 + o.rx) || fence.has((o.ry + 1) * 1024 + o.rx);
+                    const frame = section ? (alongRy ? 7 : 3) : firestorm.has(o.ry * 1024 + o.rx) ? firestormFrame(o.rx, o.ry) : damaged && shp && shp.frames.length >= 4 ? 1 : 0;
+                    if (shp) drawFrame(shp, frame, cx, cy, palette, true);
+                    // The mission editor's set: active, idle, special (a silo's fill, a repair depot's arm) and super
+                    // (a superweapon's) animations. Production animations play while something's built or repaired (a
+                    // construction yard's crane, a repair depot's flashing platform), so like the editor, not at rest.
+                    const animKeys = ['ActiveAnim', 'IdleAnim', 'SpecialAnim', 'SuperAnim'].flatMap((k) => ['', 'Two', 'Three', 'Four'].map((n) => k + n)).filter((k) => !/^IdleAnim./.test(k));
+                    for (const key of animKeys) {
+                        if (/^SuperAnim./.test(key) && IGNORED_SUPER_ANIMS.includes(img)) continue;
+                        const anim = (damaged && art?.get(img, `${key}Damaged`)) || art?.get(img, key);
+                        if (!anim) continue;
+                        const animShp = spriteFor(anim.toUpperCase(), 'Building animation sprite');
+                        const dx = Number(art?.get(img, `${key}X`) ?? 0);
+                        const dy = Number(art?.get(img, `${key}Y`) ?? 0);
+                        // Each animation shows its Start frame (0 unless set). That can differ from the building's own art,
+                        // and is still right: the hospital's (CAHOSP_A) cross loops yellow, orange, red, so it shows yellow
+                        // over a red cross. Left as is on purpose; it's not a palette bug.
+                        // An animation in the terrain palette says so; otherwise it's drawn like its building.
+                        const animPalette = yes(art?.get(anim, 'TerrainPalette')) ? artPalette(anim, o.house) : palette;
+                        // Special animations play on an event (a repair) from their Start, so like the mission editor they
+                        // show frame 0, at rest: the depot's three point into one file, its arm folding out and back.
+                        const start = key.startsWith('SpecialAnim') ? 0 : Number(art?.get(anim, 'Start') ?? 0) || 0;
+                        if (animShp) drawFrame(animShp, start, cx + dx, cy + dy, animPalette, false);
                     }
-                    const picture = voxelPictures.get(key);
-                    if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(tx - picture.originX), Math.round(ty - zAdjust - picture.originY));
-                } else {
-                    const turretShp = spriteFor(turret.toUpperCase(), 'Defense turret sprite');
-                    if (turretShp) drawFrame(turretShp, facingFrame(o.facing, 32), tx, ty, palette, false);
-                }
-            } });
+                    // Upgrades, placed by the building's PowerUpNLocXX/YY as the mission editor does, their art named by
+                    // their own art section's Image (GAVULC → GACTWR_B). A gun (Turret=yes, a Component Tower's) turns to
+                    // the building's facing among 32; the rest (a power plant's turbine) are animations, at their Start.
+                    o.upgrades?.forEach((upgrade, slot) => {
+                        if (!upgrade) return;
+                        const upgradeImg = image(art?.get(image(upgrade), 'Image') ?? image(upgrade));
+                        const upgradeShp = spriteFor(upgradeImg, 'Upgrade sprite');
+                        if (!upgradeShp) return;
+                        const ux = cx + Number(art?.get(img, `PowerUp${slot + 1}LocXX`) ?? 0);
+                        const uy = cy + Number(art?.get(img, `PowerUp${slot + 1}LocYY`) ?? 0);
+                        const gun = yes(rulesIni?.get(upgrade, 'Turret'));
+                        const frame = gun ? facingFrame(o.facing, Math.min(32, upgradeShp.frames.length)) : Number(art?.get(upgradeImg, 'Start') ?? 0) || 0;
+                        drawFrame(upgradeShp, frame, ux, uy, palette, false);
+                    });
+                    // A defense's turret: a voxel model or a sprite of 32 facings, placed in pixels from the building's center.
+                    const turret = /^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'Turret') ?? '') ? (rulesIni?.get(o.type, 'TurretAnim') ?? art?.get(img, 'TurretAnim')) : undefined;
+                    if (!turret) return;
+                    const [nx, ny] = TURRET_NUDGE[tw === 48 ? 'ts' : 'ra2'][o.type] ?? [0, 0];
+                    const tx = cx + Number(rulesIni?.get(o.type, 'TurretAnimX') ?? 0) + nx;
+                    const ty = cy + Number(rulesIni?.get(o.type, 'TurretAnimY') ?? 0) + ny;
+                    if (/^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'TurretAnimIsVoxel') ?? '')) {
+                        // TurretAnimZAdjust lowers a voxel turret, in leptons (104 to a level, half a tile high): RA2's
+                        // Tech Outpost's -140 sets its turret on its tower rather than 20 pixels above it.
+                        const zAdjust = (Number(rulesIni?.get(o.type, 'TurretAnimZAdjust') ?? 0) || 0) * (th / 2 / 104);
+                        const key = `${turret}:${o.facing}:${o.house}`;
+                        if (!voxelPictures.has(key)) {
+                            const parts: VoxelPartInput[] = [];
+                            const name = turret.toLowerCase();
+                            const turretModel = model(name, 'Defense turret model');
+                            if (turretModel) parts.push({ ...turretModel, forward: 0 });
+                            // The barrel goes by the turret's name with "barl" for "tur": the Tick Tank's TTNKTUR, ttnkbarl.
+                            const barrel = name.endsWith('tur') ? `${name.slice(0, -3)}barl` : `${name}barl`;
+                            const barrelModel = barrelPart(barrel, model(barrel, 'Defense barrel model'));
+                            if (barrelModel) parts.push(barrelModel);
+                            voxelPictures.set(key, parts.length ? drawVoxels(parts, o.facing, tw, th, palette) : null);
+                        }
+                        const picture = voxelPictures.get(key);
+                        if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(tx - picture.originX), Math.round(ty - zAdjust - picture.originY));
+                    } else {
+                        const turretShp = spriteFor(turret.toUpperCase(), 'Defense turret sprite');
+                        if (turretShp) drawFrame(turretShp, facingFrame(o.facing, 32), tx, ty, palette, false);
+                    }
+                },
+            });
             continue;
         }
         if (o.kind === 'infantry') {
             const [sx, sy] = SUB_CELLS[o.sub] ?? SUB_CELLS[0];
-            objects.push({ rx: o.rx, ry: o.ry, extra: extraLight(o.kind), draw: () => {
-                const shp = spriteFor(o.type, 'Infantry sprite');
-                if (!shp) return;
-                const [cx, cy] = point(o.rx + sx / 256, o.ry + sy / 256);
-                // Standing still, facing one of 8 ways, counterclockwise from north.
-                drawFrame(shp, facingFrame(o.facing, 8), cx, cy, artPalette(img, o.house), true);
-            } });
+            objects.push({
+                rx: o.rx,
+                ry: o.ry,
+                extra: extraLight(o.kind),
+                draw: () => {
+                    const shp = spriteFor(o.type, 'Infantry sprite');
+                    if (!shp) return;
+                    const [cx, cy] = point(o.rx + sx / 256, o.ry + sy / 256);
+                    // Standing still, facing one of 8 ways, counterclockwise from north.
+                    drawFrame(shp, facingFrame(o.facing, 8), cx, cy, artPalette(img, o.house), true);
+                },
+            });
             continue;
         }
         // Vehicles and aircraft: voxels when the art says so, with a turret and barrel if there are files for them.
-        objects.push({ rx: o.rx, ry: o.ry, extra: extraLight(o.kind), draw: () => {
-            const [cx, cy] = point(o.rx + 0.5, o.ry + 0.5);
-            const palette = teamPaletteFor(o.house, unitPalette);
-            const voxel = /^(yes|true|1)$/i.test(art?.get(img, 'Voxel') ?? rulesIni?.get(o.type, 'Voxel') ?? '');
-            // A turret and barrel only with Turret=yes, as in FinalSun: the Tick Tank's body has its turret
-            // built in, and its tur/barl models are for when it deploys.
-            const turreted = /^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'Turret') ?? '');
-            if (!voxel) {
-                const shp = spriteFor(o.type, 'Vehicle sprite');
-                if (!shp) return;
-                // A walker has WalkFrames for each of its 8 facings; an animation like the Visceroid's has one facing.
-                const half = shp.frames.length >> 1;
-                const walk = Number(art?.get(img, 'WalkFrames') ?? 0) || 1;
-                // Where the walks start (the mission editor's StartWalkFrame); the turret and standing frames follow them.
-                const start = Number(art?.get(img, 'StartWalkFrame') ?? 0) || 0;
-                const facings = Number(art?.get(img, 'Facings') ?? 0) || (half % 8 === 0 && half >= 8 * walk ? 8 : 1);
-                const dir = facingFrame(o.facing, facings, true);
-                // Standing still: a walker without a turret has a standing frame per facing after its walks (the
-                // Wolverine); otherwise it stands on the first frame of each walk.
-                const standing = !turreted && walk > 1 && half >= start + facings * (walk + 1);
-                drawFrame(shp, start + (standing ? facings * walk + dir : dir * walk), cx, cy, palette, true);
-                // The Titan's torso: 32 facings after its walks, and a voxel barrel on it.
-                if (!turreted || half < start + facings * walk + 32) return;
-                drawFrame(shp, start + facings * walk + facingFrame(o.facing, 32, true), cx, cy, palette, true);
-                const key = `${img}barl:${o.facing}:${o.house}`;
+        objects.push({
+            rx: o.rx,
+            ry: o.ry,
+            extra: extraLight(o.kind),
+            draw: () => {
+                const [cx, cy] = point(o.rx + 0.5, o.ry + 0.5);
+                const palette = teamPaletteFor(o.house, unitPalette);
+                const voxel = /^(yes|true|1)$/i.test(art?.get(img, 'Voxel') ?? rulesIni?.get(o.type, 'Voxel') ?? '');
+                // A turret and barrel only with Turret=yes, as in FinalSun: the Tick Tank's body has its turret
+                // built in, and its tur/barl models are for when it deploys.
+                const turreted = /^(yes|true|1)$/i.test(rulesIni?.get(o.type, 'Turret') ?? '');
+                if (!voxel) {
+                    const shp = spriteFor(o.type, 'Vehicle sprite');
+                    if (!shp) return;
+                    // A walker has WalkFrames for each of its 8 facings; an animation like the Visceroid's has one facing.
+                    const half = shp.frames.length >> 1;
+                    const walk = Number(art?.get(img, 'WalkFrames') ?? 0) || 1;
+                    // Where the walks start (the mission editor's StartWalkFrame); the turret and standing frames follow them.
+                    const start = Number(art?.get(img, 'StartWalkFrame') ?? 0) || 0;
+                    const facings = Number(art?.get(img, 'Facings') ?? 0) || (half % 8 === 0 && half >= 8 * walk ? 8 : 1);
+                    const dir = facingFrame(o.facing, facings, true);
+                    // Standing still: a walker without a turret has a standing frame per facing after its walks (the
+                    // Wolverine); otherwise it stands on the first frame of each walk.
+                    const standing = !turreted && walk > 1 && half >= start + facings * (walk + 1);
+                    drawFrame(shp, start + (standing ? facings * walk + dir : dir * walk), cx, cy, palette, true);
+                    // The Titan's torso: 32 facings after its walks, and a voxel barrel on it.
+                    if (!turreted || half < start + facings * walk + 32) return;
+                    drawFrame(shp, start + facings * walk + facingFrame(o.facing, 32, true), cx, cy, palette, true);
+                    const key = `${img}barl:${o.facing}:${o.house}`;
+                    if (!voxelPictures.has(key)) {
+                        const barrel = barrelPart(`${img.toLowerCase()}barl`, model(`${img.toLowerCase()}barl`, 'Barrel model'));
+                        voxelPictures.set(key, barrel ? drawVoxels([barrel], o.facing, tw, th, palette) : null);
+                    }
+                    const picture = voxelPictures.get(key);
+                    if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(cx - picture.originX), Math.round(cy - picture.originY));
+                    return;
+                }
+                const key = `${img}:${o.facing}:${o.house}`;
                 if (!voxelPictures.has(key)) {
-                    const barrel = barrelPart(`${img.toLowerCase()}barl`, model(`${img.toLowerCase()}barl`, 'Barrel model'));
-                    voxelPictures.set(key, barrel ? drawVoxels([barrel], o.facing, tw, th, palette) : null);
+                    const parts: VoxelPartInput[] = [];
+                    const body = model(img.toLowerCase(), 'Vehicle model');
+                    if (body) parts.push({ ...body, forward: 0 });
+                    // TurretOffset is in leptons, 256 to a cell.
+                    const offset = (Number(art?.get(img, 'TurretOffset') ?? 0) * VOXELS_PER_CELL) / 256;
+                    for (const part of turreted ? ['tur', 'barl'] : []) {
+                        const extra = model(`${img.toLowerCase()}${part}`, part === 'tur' ? 'Turret model' : 'Barrel model');
+                        if (extra) parts.push({ ...extra, forward: offset });
+                    }
+                    voxelPictures.set(key, parts.length ? drawVoxels(parts, o.facing, tw, th, palette) : null);
                 }
                 const picture = voxelPictures.get(key);
                 if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(cx - picture.originX), Math.round(cy - picture.originY));
-                return;
-            }
-            const key = `${img}:${o.facing}:${o.house}`;
-            if (!voxelPictures.has(key)) {
-                const parts: VoxelPartInput[] = [];
-                const body = model(img.toLowerCase(), 'Vehicle model');
-                if (body) parts.push({ ...body, forward: 0 });
-                // TurretOffset is in leptons, 256 to a cell.
-                const offset = (Number(art?.get(img, 'TurretOffset') ?? 0) * VOXELS_PER_CELL) / 256;
-                for (const part of turreted ? ['tur', 'barl'] : []) {
-                    const extra = model(`${img.toLowerCase()}${part}`, part === 'tur' ? 'Turret model' : 'Barrel model');
-                    if (extra) parts.push({ ...extra, forward: offset });
-                }
-                voxelPictures.set(key, parts.length ? drawVoxels(parts, o.facing, tw, th, palette) : null);
-            }
-            const picture = voxelPictures.get(key);
-            if (picture) canvas.picture(picture.rgba, picture.width, picture.height, Math.round(cx - picture.originX), Math.round(cy - picture.originY));
-        } });
+            },
+        });
     }
     objects.sort((a, b) => a.rx + a.ry + (a.up ?? 0) - (b.rx + b.ry + (b.up ?? 0)));
     canvas.ground = null;
@@ -1075,14 +1143,21 @@ function previewPicture(p: NonNullable<IsoMap['preview']>): Preview {
 }
 
 /** The previews and summary rows for a TS or RA2 map. */
-export function isoMapPreviews(ini: Ini, find: Finder | undefined, fileName: string | null, links: Links): { items: { title: string; preview: Preview }[]; summary: [string, string][]; warnings: string[]; wanted?: string } {
+export function isoMapPreviews(
+    ini: Ini,
+    find: Finder | undefined,
+    fileName: string | null,
+    links: Links
+): { items: { title: string; preview: Preview }[]; summary: [string, string][]; warnings: string[]; wanted?: string } {
     const map = readIsoMap(ini);
     const yuri = /\.yrm$/i.test(fileName ?? '') || /^(YR|MD)/i.test(ini.get('Basic', 'RequiredAddOn') ?? '') || ini.get('Basic', 'RequiredAddOn') === '1';
     const render = renderIsoMap(map, find, yuri, links);
     // Lit as in the game; the switch draws it again unlit, the art's own colors.
     const toggle = render.real ? { label: 'Lighting', off: () => renderIsoMap(map, find, yuri, new Links(), false).image.rgba } : undefined;
-    const items: { title: string; preview: Preview }[] = [{ title: render.real ? 'Map' : 'Map (height and objects; open the theater archives for tiles)', preview: { kind: 'picture', ...render.image, toggle } }];
-    if (map.preview) items.push({ title: 'The map\'s own preview', preview: previewPicture(map.preview) });
+    const items: { title: string; preview: Preview }[] = [
+        { title: render.real ? 'Map' : 'Map (height and objects; open the theater archives for tiles)', preview: { kind: 'picture', ...render.image, toggle } },
+    ];
+    if (map.preview) items.push({ title: "The map's own preview", preview: previewPicture(map.preview) });
     const levels = map.cells.map((c) => c.level);
     const warnings: string[] = [];
     return {

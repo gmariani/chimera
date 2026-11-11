@@ -19,8 +19,22 @@ const HEIGHT = 200;
 
 /** The EGA's 16 default colors, as 8-bit RGB (the rest of the 256 black). */
 const EGA = [
-    [0, 0, 0], [0, 0, 170], [0, 170, 0], [0, 170, 170], [170, 0, 0], [170, 0, 170], [170, 85, 0], [170, 170, 170],
-    [85, 85, 85], [85, 85, 255], [85, 255, 85], [85, 255, 255], [255, 85, 85], [255, 85, 255], [255, 255, 85], [255, 255, 255],
+    [0, 0, 0],
+    [0, 0, 170],
+    [0, 170, 0],
+    [0, 170, 170],
+    [170, 0, 0],
+    [170, 0, 170],
+    [170, 85, 0],
+    [170, 170, 170],
+    [85, 85, 85],
+    [85, 85, 255],
+    [85, 255, 85],
+    [85, 255, 255],
+    [255, 85, 85],
+    [255, 85, 255],
+    [255, 255, 85],
+    [255, 255, 255],
 ];
 function egaPalette(): Uint8Array {
     const out = new Uint8Array(768);
@@ -41,7 +55,7 @@ const parser: FormatParser = {
         let type = CMP_TYPES[typeByte];
         if (!type && typeByte === 5) {
             type = CMP_TYPES[4];
-            warnings.push('Type 5 isn\'t known to be used; DragonStrike reads any type it doesn\'t know as type 4 (8-bit RLE), so it\'s read that way here.');
+            warnings.push("Type 5 isn't known to be used; DragonStrike reads any type it doesn't know as type 4 (8-bit RLE), so it's read that way here.");
         }
         if (!type) throw new Error(`Type ${typeByte} isn't one CMP pictures use (1 to 4, and 6, are).`);
         if (data.length < type.header + 1) throw new Error('The file ends inside its header.');
@@ -55,11 +69,16 @@ const parser: FormatParser = {
         const size = type.bits === 8 ? WIDTH * HEIGHT : (WIDTH * HEIGHT) / 2;
         const decoded = new Uint8Array(size);
         const info: DecodeInfo = { read: data.length, ended: true, badRefs: 0 };
-        const written = type.method === 'rle' ? westwoodRle(data, decoded, type.littleEndian === true, type.header, info) : westwoodLzw(data, decoded, type.method === 'lzw12' ? 12 : 14, type.header, info);
+        const written =
+            type.method === 'rle' ? westwoodRle(data, decoded, type.littleEndian === true, type.header, info) : westwoodLzw(data, decoded, type.method === 'lzw12' ? 12 : 14, type.header, info);
         const method = METHOD[type.method];
         if (written < size) warnings.push(`The picture data decodes to ${bytesLabel(written)}, short of the ${bytesLabel(size)} a ${type.bits}-bit 320 × 200 picture takes; the rest is left black.`);
-        if (info.badRefs) warnings.push(`The ${method} data copies from outside what it's decoded so far ${info.badRefs.toLocaleString('en-US')} time${info.badRefs === 1 ? '' : 's'}: it's damaged, or made to trip up a decoder.`);
-        if (type.method !== 'rle' && !info.ended) warnings.push(written >= size ? `The ${method} data goes on past the end of the picture without its end marker.` : `The ${method} data has no end marker.`);
+        if (info.badRefs)
+            warnings.push(
+                `The ${method} data copies from outside what it's decoded so far ${info.badRefs.toLocaleString('en-US')} time${info.badRefs === 1 ? '' : 's'}: it's damaged, or made to trip up a decoder.`
+            );
+        if (type.method !== 'rle' && !info.ended)
+            warnings.push(written >= size ? `The ${method} data goes on past the end of the picture without its end marker.` : `The ${method} data has no end marker.`);
         // LZW pads to whole bytes with zeros, up to two of them; type 4's size leaves out one more byte.
         let end = info.read;
         if (type.method !== 'rle') while (end < data.length && end < info.read + 2 && data[end] === 0) end++;

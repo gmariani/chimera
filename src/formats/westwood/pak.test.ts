@@ -46,7 +46,7 @@ describe('Westwood PAK', () => {
         expect(r.fields[0].length + r.fields[1].length).toBe(data.length);
     });
 
-    it('takes the archive\'s end when version 1\'s end offset is garbage, and says so', () => {
+    it("takes the archive's end when version 1's end offset is garbage, and says so", () => {
         const r = parse(build(1, files, { end: 0x7fffffff }));
         expect(r.entries!.at(-1)!.data).toEqual(enc.encode('the end'));
         expect(r.warnings.join()).toMatch(/end offset \(2,147,483,647\) can't be where the last file ends/);
@@ -60,7 +60,7 @@ describe('Westwood PAK', () => {
         expect(r.checks[0].text).toMatch(/17 bytes after the end of the westwood pak archive/);
     });
 
-    it('isn\'t fooled by other files', async () => {
+    it("isn't fooled by other files", async () => {
         // Chrome's resource pack (.pak too): a version number, an encoding, counts, then a table.
         const chrome = Uint8Array.from([5, 0, 0, 0, 1, 0, 3, 0, 0, 0, ...new Array(40).fill(9)]);
         expect(pakLayout(chrome)).toBeNull();
@@ -83,7 +83,12 @@ describe('Westwood PAK', () => {
         expect(pakLayout(enc.encode('Just some text that happens to be here.'))).toBeNull();
 
         // A second, different file under a name already listed: the game never sees it.
-        const twice = parse(build(2, [['A.TXT', enc.encode('one')], ['A.TXT', enc.encode('two')]]));
+        const twice = parse(
+            build(2, [
+                ['A.TXT', enc.encode('one')],
+                ['A.TXT', enc.encode('two')],
+            ])
+        );
         expect(twice.warnings).toEqual([expect.stringMatching(/A\.TXT is listed 2 times .* The copies differ/)]);
         expect(() => parse(new Uint8Array(20))).toThrow(/isn't a Westwood PAK/);
     });

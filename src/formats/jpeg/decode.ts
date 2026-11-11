@@ -67,7 +67,8 @@ export function segmentsOf(data: Uint8Array): { segments: Segment[]; end: number
 
 /** Where each coefficient of the zigzag order goes in the 8×8 block. */
 export const ZIGZAG = new Uint8Array([
-    0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34, 27, 20, 13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51, 58, 59, 52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
+    0, 1, 8, 16, 9, 2, 3, 10, 17, 24, 32, 25, 18, 11, 4, 5, 12, 19, 26, 33, 40, 48, 41, 34, 27, 20, 13, 6, 7, 14, 21, 28, 35, 42, 49, 56, 57, 50, 43, 36, 29, 22, 15, 23, 30, 37, 44, 51, 58, 59, 52,
+    45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
 ]);
 
 /** A Huffman table as a lookup on the next 16 bits: the code's length and its symbol (0: no such code). */
@@ -94,7 +95,7 @@ class BitReader {
 
     constructor(
         private readonly data: Uint8Array,
-        public pos: number,
+        public pos: number
     ) {}
 
     private fill(): void {
@@ -200,7 +201,7 @@ export function decodeJpeg(data: Uint8Array, segments: Segment[], ycc?: boolean)
         const end = s.offset + s.length;
         switch (s.marker) {
             case 0xdb:
-                for (let at = p; at < end; ) {
+                for (let at = p; at < end;) {
                     const sixteen = data[at] >> 4;
                     const table = new Int32Array(64);
                     for (let i = 0; i < 64; i++) table[ZIGZAG[i]] = sixteen ? u16(at + 1 + i * 2) : data[at + 1 + i];
@@ -209,7 +210,7 @@ export function decodeJpeg(data: Uint8Array, segments: Segment[], ycc?: boolean)
                 }
                 break;
             case 0xc4:
-                for (let at = p; at + 17 <= end; ) {
+                for (let at = p; at + 17 <= end;) {
                     const counts = data.subarray(at + 1, at + 17);
                     const total = counts.reduce((a, b) => a + b, 0);
                     const table = huffmanTable(counts, data.subarray(at + 17, at + 17 + total));
@@ -228,17 +229,28 @@ export function decodeJpeg(data: Uint8Array, segments: Segment[], ycc?: boolean)
                 break;
             default: {
                 if (!isFrame(s.marker)) break;
-                if (frame) throw new Error('More than one frame (a hierarchical picture), which isn\'t drawn here.');
+                if (frame) throw new Error("More than one frame (a hierarchical picture), which isn't drawn here.");
                 if (!decodable(s.marker)) throw new Error(`${processOf(s.marker)} pictures aren't drawn here.`);
                 const precision = data[p];
                 const height = u16(p + 1);
                 const width = u16(p + 3);
-                if (!width || !height) throw new Error('The frame has no size (a later DNL marker gives the height), which isn\'t drawn here.');
+                if (!width || !height) throw new Error("The frame has no size (a later DNL marker gives the height), which isn't drawn here.");
                 checkPixels(width, height);
                 const components: Component[] = [];
                 for (let i = 0; i < data[p + 5]; i++) {
                     const c = p + 6 + i * 3;
-                    components.push({ id: data[c], h: data[c + 1] >> 4 || 1, v: data[c + 1] & 15 || 1, tq: data[c + 2], blocksAcross: 0, blocksDown: 0, stride: 0, rows: 0, coefficients: new Int16Array(0), pred: 0 });
+                    components.push({
+                        id: data[c],
+                        h: data[c + 1] >> 4 || 1,
+                        v: data[c + 1] & 15 || 1,
+                        tq: data[c + 2],
+                        blocksAcross: 0,
+                        blocksDown: 0,
+                        stride: 0,
+                        rows: 0,
+                        coefficients: new Int16Array(0),
+                        pred: 0,
+                    });
                 }
                 const maxH = maxOf(components.map((c) => c.h));
                 const maxV = maxOf(components.map((c) => c.v));
@@ -271,7 +283,7 @@ export function decodeJpeg(data: Uint8Array, segments: Segment[], ycc?: boolean)
             }
         }
     }
-    if (!frame) throw new Error('There\'s no frame header (SOF).');
+    if (!frame) throw new Error("There's no frame header (SOF).");
 
     const planes = frame.components.map((c) => samples(c, quant[c.tq] ?? new Int32Array(64).fill(1), frame!.precision));
     return { width: frame.width, height: frame.height, rgba: toRgba(frame, planes, adobeTransform, jfif, ycc) };
@@ -286,7 +298,7 @@ function decodeScan(
     ss: number,
     se: number,
     ah: number,
-    al: number,
+    al: number
 ): void {
     const r = new BitReader(data, offset);
     const progressive = frame.marker === 0xc2;
@@ -300,7 +312,7 @@ function decodeScan(
         const k = c.coefficients;
         c.pred += r.extend(r.huffman(c.dc!));
         k[at] = c.pred;
-        for (let i = 1; i < 64; ) {
+        for (let i = 1; i < 64;) {
             const rs = r.huffman(c.ac!);
             const s = rs & 15;
             if (s === 0) {
@@ -323,7 +335,7 @@ function decodeScan(
     const acFirst = (c: Component, at: number) => {
         if (eobrun > 0) return void eobrun--;
         const k = c.coefficients;
-        for (let i = ss; i <= se; ) {
+        for (let i = ss; i <= se;) {
             const rs = r.huffman(c.ac!);
             const s = rs & 15;
             const run = rs >> 4;
@@ -451,7 +463,13 @@ function taps(size: number, factor: number, planeSize: number): { a: Int32Array;
     return { a, b, w };
 }
 
-function toRgba(frame: { width: number; height: number; components: Component[]; maxH: number; maxV: number }, planes: { width: number; height: number; pixels: Uint8Array }[], adobeTransform: number | null, jfif: boolean, given?: boolean): Uint8Array {
+function toRgba(
+    frame: { width: number; height: number; components: Component[]; maxH: number; maxV: number },
+    planes: { width: number; height: number; pixels: Uint8Array }[],
+    adobeTransform: number | null,
+    jfif: boolean,
+    given?: boolean
+): Uint8Array {
     const { width, height } = frame;
     // Each component brought up to the picture's size.
     const full = planes.map((plane, i) => {

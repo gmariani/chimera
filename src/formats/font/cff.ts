@@ -61,7 +61,7 @@ export function readDict(data: Uint8Array, start: number, end: number): DictEntr
     const out: DictEntry[] = [];
     let operands: number[] = [];
     let entryStart = start;
-    for (let at = start; at < end; ) {
+    for (let at = start; at < end;) {
         const b = data[at];
         if (b <= 21) {
             const op = b === 12 ? `12 ${data[at + 1]}` : String(b);
@@ -121,7 +121,12 @@ export function readCff(data: Uint8Array, base: number): Cff {
             name: 'Header',
             offset: base,
             length: data[base + 2],
-            children: [field('Major version', base, 1, data[base]), field('Minor version', base + 1, 1, data[base + 1]), field('Header size', base + 2, 1, data[base + 2]), field('Offset size', base + 3, 1, data[base + 3], 'Of offsets to objects in the CFF.')],
+            children: [
+                field('Major version', base, 1, data[base]),
+                field('Minor version', base + 1, 1, data[base + 1]),
+                field('Header size', base + 2, 1, data[base + 2]),
+                field('Offset size', base + 3, 1, data[base + 3], 'Of offsets to objects in the CFF.'),
+            ],
         },
     ];
     const text = (from: number, to: number) => new TextDecoder('latin1').decode(data.subarray(from, to));
@@ -132,7 +137,12 @@ export function readCff(data: Uint8Array, base: number): Cff {
         value: `${index.items.length} item${index.items.length === 1 ? '' : 's'}`,
         children: [
             field('Count', index.offset, 2, index.items.length),
-            ...(index.items.length ? [field('Offset size', index.offset + 2, 1, data[index.offset + 2]), field('Offsets', index.offset + 3, (index.items.length + 1) * data[index.offset + 2], `${index.items.length + 1} offsets`)] : []),
+            ...(index.items.length
+                ? [
+                      field('Offset size', index.offset + 2, 1, data[index.offset + 2]),
+                      field('Offsets', index.offset + 3, (index.items.length + 1) * data[index.offset + 2], `${index.items.length + 1} offsets`),
+                  ]
+                : []),
             ...(describe && index.items.length <= 64 ? index.items.map((item, i) => field(`${i}`, item[0], item[1] - item[0], describe(i, item))) : []),
         ],
     });
@@ -142,7 +152,8 @@ export function readCff(data: Uint8Array, base: number): Cff {
     const topIndex = readIndex(data, names.end);
     const top = topIndex.items.length ? readDict(data, topIndex.items[0][0], topIndex.items[0][1]) : [];
     const stringIndex = readIndex(data, topIndex.end);
-    const string = (sid: number) => (sid < STANDARD_STRINGS_COUNT ? `(standard string ${sid})` : stringIndex.items[sid - STANDARD_STRINGS_COUNT] ? text(...stringIndex.items[sid - STANDARD_STRINGS_COUNT]) : `(string ${sid})`);
+    const string = (sid: number) =>
+        sid < STANDARD_STRINGS_COUNT ? `(standard string ${sid})` : stringIndex.items[sid - STANDARD_STRINGS_COUNT] ? text(...stringIndex.items[sid - STANDARD_STRINGS_COUNT]) : `(string ${sid})`;
     const showDict = (entries: DictEntry[]) => entries.map((e) => field(e.op, e.offset, e.length, STRING_OPS.has(e.op) ? string(e.operands[0]) : e.operands.join(' ')));
     fields.push({ ...indexField('Top DICT INDEX', topIndex), children: [...indexField('', topIndex).children, ...showDict(top)] });
     fields.push(indexField('String INDEX', stringIndex, (_, [a, b]) => text(a, b)));
@@ -250,14 +261,14 @@ function charstring(data: Uint8Array, item: [number, number], globals: Index, lo
 
     const run = (start: number, stop: number): boolean => {
         if (++depth > 10) throw new Error('Subroutines nest too deep.');
-        for (let at = start; at < stop; ) {
+        for (let at = start; at < stop;) {
             const b = data[at];
             if (b >= 32 || b === 28) {
-                if (b === 28) ((stack.push(((data[at + 1] << 24) | (data[at + 2] << 16)) >> 16)), (at += 3));
+                if (b === 28) (stack.push(((data[at + 1] << 24) | (data[at + 2] << 16)) >> 16), (at += 3));
                 else if (b <= 246) (stack.push(b - 139), at++);
-                else if (b <= 250) ((stack.push((b - 247) * 256 + data[at + 1] + 108)), (at += 2));
-                else if (b <= 254) ((stack.push(-(b - 251) * 256 - data[at + 1] - 108)), (at += 2));
-                else ((stack.push(((data[at + 1] << 24) | (data[at + 2] << 16) | (data[at + 3] << 8) | data[at + 4]) / 65536)), (at += 5));
+                else if (b <= 250) (stack.push((b - 247) * 256 + data[at + 1] + 108), (at += 2));
+                else if (b <= 254) (stack.push(-(b - 251) * 256 - data[at + 1] - 108), (at += 2));
+                else (stack.push(((data[at + 1] << 24) | (data[at + 2] << 16) | (data[at + 3] << 8) | data[at + 4]) / 65536), (at += 5));
                 continue;
             }
             at++;
@@ -298,7 +309,7 @@ function charstring(data: Uint8Array, item: [number, number], globals: Index, lo
                     break;
                 case 6: // hlineto
                 case 7: // vlineto
-                    for (let i = 0; i < stack.length; i++) ((i % 2 === 0) === (b === 6) ? lineTo(stack[i], 0) : lineTo(0, stack[i]));
+                    for (let i = 0; i < stack.length; i++) (i % 2 === 0) === (b === 6) ? lineTo(stack[i], 0) : lineTo(0, stack[i]);
                     stack.length = 0;
                     break;
                 case 8: // rrcurveto

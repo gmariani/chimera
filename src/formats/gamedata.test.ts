@@ -101,10 +101,16 @@ describe.skipIf(!roots.length)('game data', () => {
         if (!learned.has(root)) learned.set(root, namesFromText(distinct(mixFiles(root)).flatMap((p) => texts(new Uint8Array(readFileSync(p)), []))));
         return learned.get(root)!;
     };
-    it.each(archives.map(({ root, path }) => [join(basename(root), path.slice(root.length + 1)), root, path]))('%s', async (label, root, path) => {
-        const report: Report = { archives: 0, encrypted: 0, files: 0, named: 0, types: {}, misnamed: [], problems: [] };
-        await walk(basename(path), new Uint8Array(readFileSync(path)), namesFor(root), report);
-        console.log(`${label}: ${report.archives} archives (${report.encrypted} encrypted), ${report.named}/${report.files} named, ${JSON.stringify(report.types)}${report.misnamed.length ? `; named for a format they aren't: ${report.misnamed.join('; ')}` : ''}`);
-        expect(report.problems).toEqual([]);
-    }, 600_000);
+    it.each(archives.map(({ root, path }) => [join(basename(root), path.slice(root.length + 1)), root, path]))(
+        '%s',
+        async (label, root, path) => {
+            const report: Report = { archives: 0, encrypted: 0, files: 0, named: 0, types: {}, misnamed: [], problems: [] };
+            await walk(basename(path), new Uint8Array(readFileSync(path)), namesFor(root), report);
+            console.log(
+                `${label}: ${report.archives} archives (${report.encrypted} encrypted), ${report.named}/${report.files} named, ${JSON.stringify(report.types)}${report.misnamed.length ? `; named for a format they aren't: ${report.misnamed.join('; ')}` : ''}`
+            );
+            expect(report.problems).toEqual([]);
+        },
+        600_000
+    );
 });

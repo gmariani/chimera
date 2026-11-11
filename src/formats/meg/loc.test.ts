@@ -75,7 +75,12 @@ describe('LOC string tables', () => {
     });
 
     it('keeps repeated keys, as the credits have', () => {
-        const parsed = parse(build([['CENTER', 'One'], ['CENTER', 'Two']]));
+        const parsed = parse(
+            build([
+                ['CENTER', 'One'],
+                ['CENTER', 'Two'],
+            ])
+        );
         expect(parsed.summary).toContainEqual(['Strings', '2']);
         expect(parsed.summary).toContainEqual(['Different keys', '1']);
     });

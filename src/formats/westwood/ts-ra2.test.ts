@@ -104,7 +104,7 @@ describe('voxels', () => {
         expect([...views.frames[2].pixels]).toEqual([0, 4, 0]);
     });
 
-    it('reads an animation\'s matrices', () => {
+    it("reads an animation's matrices", () => {
         const data = bytes(24 + 16 + 48, (v, b) => {
             v.setUint32(16, 1, true);
             v.setUint32(20, 1, true);
@@ -146,7 +146,7 @@ describe('WAV', () => {
 });
 
 describe('CSF', () => {
-    it('flips each character\'s bits back', () => {
+    it("flips each character's bits back", () => {
         const name = 'GUI:OK';
         const text = [...'Ok'].map((c) => ~c.charCodeAt(0) & 0xffff);
         const data = bytes(24 + 12 + name.length + 8 + text.length * 2, (v, b) => {
@@ -270,7 +270,10 @@ describe('TS and RA2 maps', () => {
         // Two cells: (10, 5) at height 0, (11, 5) at height 3; packed as one LZO block of literals.
         const cells = new Uint8Array(22);
         const v = new DataView(cells.buffer);
-        [[10, 5, 0], [11, 5, 3]].forEach(([x, y, level], i) => {
+        [
+            [10, 5, 0],
+            [11, 5, 3],
+        ].forEach(([x, y, level], i) => {
             v.setUint16(i * 11, x, true);
             v.setUint16(i * 11 + 2, y, true);
             v.setInt32(i * 11 + 4, -1, true);
@@ -281,7 +284,10 @@ describe('TS and RA2 maps', () => {
         const text = `[Map]\nTheater=SNOW\nSize=0,0,10,10\n[IsoMapPack5]\n1=${btoa(String.fromCharCode(...block))}\n[Terrain]\n5010=TREE01\n`;
         const ini = new Ini(text);
         const map = readIsoMap(ini);
-        expect(map.cells.slice(0, 2).map((c) => [c.rx, c.ry, c.level])).toEqual([[10, 5, 0], [11, 5, 3]]);
+        expect(map.cells.slice(0, 2).map((c) => [c.rx, c.ry, c.level])).toEqual([
+            [10, 5, 0],
+            [11, 5, 3],
+        ]);
         // The rest of the map, which the pack leaves out, is clear ground at level 0.
         expect(map.cells.slice(2).every((c) => c.tile === 0xffff && c.level === 0)).toBe(true);
         expect(map.cells.some((c) => c.rx === 12 && c.ry === 5)).toBe(true);
@@ -374,7 +380,9 @@ describe('team colors', () => {
 
 describe('objects on TS and RA2 maps', () => {
     it('reads buildings, units and infantry by X and Y', () => {
-        const ini = new Ini('[Map]\nSize=0,0,10,10\n[Structures]\n0=GDI,GAPOWR,256,20,30,0,None\n[Units]\n0=Nod,BGGY,256,21,31,64,Guard\n[Infantry]\n0=GDI,E1,256,22,32,3,Guard,128\n[GDI]\nColor=Gold\n');
+        const ini = new Ini(
+            '[Map]\nSize=0,0,10,10\n[Structures]\n0=GDI,GAPOWR,256,20,30,0,None\n[Units]\n0=Nod,BGGY,256,21,31,64,Guard\n[Infantry]\n0=GDI,E1,256,22,32,3,Guard,128\n[GDI]\nColor=Gold\n'
+        );
         const map = readIsoMap(ini);
         expect(map.objects).toEqual([
             { kind: 'building', house: 'GDI', type: 'GAPOWR', rx: 20, ry: 30, facing: 0, sub: 0, health: 256 },

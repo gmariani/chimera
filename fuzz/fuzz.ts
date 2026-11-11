@@ -111,7 +111,10 @@ async function gatherSeeds(roots: string[]): Promise<Seed[]> {
         seeds.push({ name: basename(path), from: path, data: new Uint8Array(readFileSync(path)) });
     }
     const perFormat = new Map<string, number>();
-    for (const s of seeds) { const id = detect(s.data, s.name).id; perFormat.set(id, (perFormat.get(id) ?? 0) + 1); }
+    for (const s of seeds) {
+        const id = detect(s.data, s.name).id;
+        perFormat.set(id, (perFormat.get(id) ?? 0) + 1);
+    }
     const visit = async (name: string, from: string, data: Uint8Array, depth: number) => {
         let entries;
         try {

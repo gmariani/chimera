@@ -132,7 +132,8 @@ export async function inspect(data: Uint8Array, context: ParseContext, { as, sho
     const checks: Check[] = [];
     let title: string | null = null;
     // A size no real file has: the mark of one made to crash or exhaust a parser.
-    for (const [f, why] of stopped) checks.push({ level: 'danger', text: `Reading it as ${f.name} was stopped before it could run out of memory: ${why} Files made to break parsers ask for sizes like this.` });
+    for (const [f, why] of stopped)
+        checks.push({ level: 'danger', text: `Reading it as ${f.name} was stopped before it could run out of memory: ${why} Files made to break parsers ask for sizes like this.` });
     const extraFields: Parsed['fields'] = [];
     const extraEntries: Entry[] = [];
     const extraSummary: [string, string][] = [];
@@ -167,7 +168,8 @@ export async function inspect(data: Uint8Array, context: ParseContext, { as, sho
         if (format === RAW && sig?.runs && ext && !namedAs(sig, ext) && nameHolds) {
             checks.push({ level: BACKUPS.includes(ext) ? 'warning' : 'danger', text: `It's ${a(sig.name)}, named .${ext}.` });
         }
-        for (const f of readsAlso) checks.push({ level: 'info', text: `It also reads as ${f.name}, as its ${f === signed ? 'first bytes suggest' : 'name suggests'}; use Open as to see it that way.` });
+        for (const f of readsAlso)
+            checks.push({ level: 'info', text: `It also reads as ${f.name}, as its ${f === signed ? 'first bytes suggest' : 'name suggests'}; use Open as to see it that way.` });
         // A document or page that's text underneath, shown as text.
         if (format.id === 'text' && sig && !sig.format) {
             title = sig.name;
@@ -190,7 +192,8 @@ export async function inspect(data: Uint8Array, context: ParseContext, { as, sho
             title = sig.name;
             extraSummary.push(['Signature', `${sig.name}, ${quoted(data, sig.length)}`]);
             // Unless it's already been said, as a program under another name.
-            if (!sig.format && !(sig.runs && ext && !namedAs(sig, ext))) checks.push({ level: sig.runs && !ext ? 'warning' : 'info', text: `This is ${a(sig.name)}; there's no parser for it here, so it's shown as bytes.` });
+            if (!sig.format && !(sig.runs && ext && !namedAs(sig, ext)))
+                checks.push({ level: sig.runs && !ext ? 'warning' : 'info', text: `This is ${a(sig.name)}; there's no parser for it here, so it's shown as bytes.` });
         }
         const bits = entropy(data);
         if (!sig && bits > RANDOM) checks.push({ level: 'info', text: `The bytes look random (${bits.toFixed(2)} bits per byte, of 8): compressed or encrypted.` });
@@ -214,9 +217,19 @@ export async function inspect(data: Uint8Array, context: ParseContext, { as, sho
                 checks.push({ level: 'info', text: `There are ${bytesLabel(tail.length)} of zeros after the end of the ${format.name.toLowerCase()}.` });
             } else {
                 const inner = describe(tail);
-                if (!marked) extraFields.push({ name: 'After the end', offset: end, length: tail.length, value: `${bytesLabel(tail.length)}: ${inner.what}`, note: `Not part of the ${format.name.toLowerCase()}. Under Contents.` });
+                if (!marked)
+                    extraFields.push({
+                        name: 'After the end',
+                        offset: end,
+                        length: tail.length,
+                        value: `${bytesLabel(tail.length)}: ${inner.what}`,
+                        note: `Not part of the ${format.name.toLowerCase()}. Under Contents.`,
+                    });
                 extraEntries.push({ name: null, label: `after the end.${inner.ext}`, offset: end, size: tail.length, data: tail });
-                checks.push({ level: 'danger', text: `There are ${bytesLabel(tail.length)} after the end of the ${format.name.toLowerCase()} (at offset ${end}): ${inner.what}. Hiding data after a file's end is a common way to smuggle it; it's under Contents.` });
+                checks.push({
+                    level: 'danger',
+                    text: `There are ${bytesLabel(tail.length)} after the end of the ${format.name.toLowerCase()} (at offset ${end}): ${inner.what}. Hiding data after a file's end is a common way to smuggle it; it's under Contents.`,
+                });
             }
         }
     }

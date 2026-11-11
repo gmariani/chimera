@@ -86,7 +86,8 @@ export function readLayout(data: Uint8Array): MixLayout {
         const first = new Bytes(blowfish.decrypt(data.subarray(headerStart, headerStart + 8)));
         const count = first.u16(0);
         encryptedSize = Math.ceil((6 + count * INDEX_ENTRY_SIZE) / 8) * 8;
-        if (headerStart + encryptedSize > data.length) throw new MixError(`The decrypted header lists ${count} files, which would run past the end of the file. Either the file is cut short, or it isn't a MIX file.`);
+        if (headerStart + encryptedSize > data.length)
+            throw new MixError(`The decrypted header lists ${count} files, which would run past the end of the file. Either the file is cut short, or it isn't a MIX file.`);
         header = blowfish.decrypt(data.subarray(headerStart, headerStart + encryptedSize));
     } else {
         const count = bytes.u16(headerStart);
@@ -191,7 +192,9 @@ function flagNames(flags: number): string {
 }
 
 function toHex(bytes: Uint8Array): string {
-    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0'))
+        .join('')
+        .toUpperCase();
 }
 
 export function parseMix(data: Uint8Array, context: ParseContext): Parsed {
@@ -220,7 +223,7 @@ export function parseMix(data: Uint8Array, context: ParseContext): Parsed {
         const inflated = expectedEnd > data.length && entries.every((e) => e.data.length === e.size);
         warnings.push(
             `The header says the body is ${bytesLabel(mix.bodySize)}${mix.checksum ? ' plus a 20-byte checksum' : ''}, which would end the file at ${bytesLabel(expectedEnd)}, but the file is ${bytesLabel(data.length)}.` +
-                (inflated ? ' Every file is still whole, so the size may have been raised on purpose: some mods do that so XCC Mixer refuses the archive, which the games load anyway.' : ''),
+                (inflated ? ' Every file is still whole, so the size may have been raised on purpose: some mods do that so XCC Mixer refuses the archive, which the games load anyway.' : '')
         );
     }
 
@@ -260,7 +263,7 @@ export function parseMix(data: Uint8Array, context: ParseContext): Parsed {
     });
     // The games binary-search the index by ID, compared as signed numbers (every TS and RA2 archive is sorted that way too).
     if (mix.index.some((e, i) => i > 0 && (mix.index[i - 1].id | 0) > (e.id | 0))) {
-        warnings.push('The index isn\'t sorted by ID (as signed numbers), so the game\'s binary search may not find some files.');
+        warnings.push("The index isn't sorted by ID (as signed numbers), so the game's binary search may not find some files.");
     }
 
     // The structure tree.
@@ -282,14 +285,36 @@ export function parseMix(data: Uint8Array, context: ParseContext): Parsed {
     const headerFields: Field[] = [
         field('File count', hs, 2, mix.count, 'How many files are in the index.'),
         field('Body size', hs + 2, 4, bytesLabel(mix.bodySize), 'The size of everything after the index, not counting a checksum.'),
-        { name: `Index (${mix.count} entries)`, offset: hs + 6, length: mix.count * INDEX_ENTRY_SIZE, note: 'One 12-byte entry per file: ID, offset, size. The game finds a file by hashing its name and searching this list.', children: indexFields },
+        {
+            name: `Index (${mix.count} entries)`,
+            offset: hs + 6,
+            length: mix.count * INDEX_ENTRY_SIZE,
+            note: 'One 12-byte entry per file: ID, offset, size. The game finds a file by hashing its name and searching this list.',
+            children: indexFields,
+        },
     ];
 
     if (mix.layout === 'ra') {
-        fields.push(field('Flags', 0, 4, `0x${hex(mix.flags)} (${flagNames(mix.flags)})`, 'Red Alert and later. 0x00010000: a 20-byte SHA-1 checksum follows the body. 0x00020000: the header is encrypted. In Tiberian Dawn files this dword doesn\'t exist; the file count comes first.'));
+        fields.push(
+            field(
+                'Flags',
+                0,
+                4,
+                `0x${hex(mix.flags)} (${flagNames(mix.flags)})`,
+                "Red Alert and later. 0x00010000: a 20-byte SHA-1 checksum follows the body. 0x00020000: the header is encrypted. In Tiberian Dawn files this dword doesn't exist; the file count comes first."
+            )
+        );
     }
     if (mix.encrypted && mix.keySource && mix.key && mix.encryptedSize) {
-        fields.push(field('Key source', 4, KEY_SOURCE_SIZE, `${toHex(mix.keySource.subarray(0, 8))}…`, `80 bytes that become the Blowfish key: two 40-byte numbers, each run through RSA with Westwood's public key. Here the key works out to ${toHex(mix.key)}.`));
+        fields.push(
+            field(
+                'Key source',
+                4,
+                KEY_SOURCE_SIZE,
+                `${toHex(mix.keySource.subarray(0, 8))}…`,
+                `80 bytes that become the Blowfish key: two 40-byte numbers, each run through RSA with Westwood's public key. Here the key works out to ${toHex(mix.key)}.`
+            )
+        );
         const padding = mix.encryptedSize - 6 - mix.count * INDEX_ENTRY_SIZE;
         fields.push({
             name: 'Encrypted header',
@@ -310,14 +335,36 @@ export function parseMix(data: Uint8Array, context: ParseContext): Parsed {
         length: Math.min(mix.bodySize, data.length - mix.bodyStart),
         note: 'The files, stored back to back with no compression or encryption.',
         children: [
-            ...byOffset.filter(({ i }) => i < mix.index.length).map(({ e, i }) => ({ name: e.label, offset: e.offset, length: e.data.length, value: formatSize(e.size), note: `Index entry ${i + 1}.` })),
-            ...unlisted.map((r) => ({ name: hidden.includes(r) ? 'Unlisted data' : 'Padding', offset: mix.bodyStart + r.offset, length: r.length, value: formatSize(r.length), note: hidden.includes(r) ? 'No index entry covers these bytes, so the game never reads them. They are in the contents to open.' : 'No index entry covers these bytes: zeros, or fewer than 16 leftover bytes before a file that starts on a 16-byte boundary.' })),
+            ...byOffset
+                .filter(({ i }) => i < mix.index.length)
+                .map(({ e, i }) => ({ name: e.label, offset: e.offset, length: e.data.length, value: formatSize(e.size), note: `Index entry ${i + 1}.` })),
+            ...unlisted.map((r) => ({
+                name: hidden.includes(r) ? 'Unlisted data' : 'Padding',
+                offset: mix.bodyStart + r.offset,
+                length: r.length,
+                value: formatSize(r.length),
+                note: hidden.includes(r)
+                    ? 'No index entry covers these bytes, so the game never reads them. They are in the contents to open.'
+                    : 'No index entry covers these bytes: zeros, or fewer than 16 leftover bytes before a file that starts on a 16-byte boundary.',
+            })),
         ].sort((a, b) => a.offset - b.offset),
     });
     if (mix.checksum) {
         const at = mix.bodyStart + mix.bodySize;
-        const verdict = { matches: 'Matches the body.', differs: "Doesn't match the body.", unchecked: `Not checked: ${mix.bodySize > MAX_CHECKED_BODY ? `the body is over ${formatSize(MAX_CHECKED_BODY)}, too big to hash as it opens` : 'the file ends before it'}.` }[checksumState!];
-        fields.push(field('Checksum', at, CHECKSUM_SIZE, toHex(data.subarray(at, at + CHECKSUM_SIZE)), `A SHA-1 digest of the body. ${verdict} The games don't check it; it can be removed along with the flag.`));
+        const verdict = {
+            matches: 'Matches the body.',
+            differs: "Doesn't match the body.",
+            unchecked: `Not checked: ${mix.bodySize > MAX_CHECKED_BODY ? `the body is over ${formatSize(MAX_CHECKED_BODY)}, too big to hash as it opens` : 'the file ends before it'}.`,
+        }[checksumState!];
+        fields.push(
+            field(
+                'Checksum',
+                at,
+                CHECKSUM_SIZE,
+                toHex(data.subarray(at, at + CHECKSUM_SIZE)),
+                `A SHA-1 digest of the body. ${verdict} The games don't check it; it can be removed along with the flag.`
+            )
+        );
     }
 
     const overlays: Overlay[] = mix.encrypted ? [{ offset: hs, bytes: mix.header, label: 'decrypted' }] : [];
@@ -329,13 +376,24 @@ export function parseMix(data: Uint8Array, context: ParseContext): Parsed {
             ['Game', game],
             ['Layout', layoutLabel],
             ['Files', mix.count.toLocaleString('en-US')],
-            ...(hidden.length ? [['Unlisted data', `${formatSize(hidden.reduce((n, r) => n + r.length, 0))} in ${hidden.length} place${hidden.length === 1 ? '' : 's'} no entry points to`] as [string, string]] : []),
-            ...(padding.length ? [['Padding', `${bytesLabel(padding.reduce((n, r) => n + r.length, 0))} between files (zeros, or leftovers before a file on a 16-byte boundary)`] as [string, string]] : []),
+            ...(hidden.length
+                ? [['Unlisted data', `${formatSize(hidden.reduce((n, r) => n + r.length, 0))} in ${hidden.length} place${hidden.length === 1 ? '' : 's'} no entry points to`] as [string, string]]
+                : []),
+            ...(padding.length
+                ? [['Padding', `${bytesLabel(padding.reduce((n, r) => n + r.length, 0))} between files (zeros, or leftovers before a file on a 16-byte boundary)`] as [string, string]]
+                : []),
             ...(checksumState ? [['Checksum', { matches: 'SHA-1, matches', differs: "SHA-1, doesn't match", unchecked: 'SHA-1, not checked (too big)' }[checksumState]] as [string, string]] : []),
             ['Body', `${formatSize(mix.bodySize)}, starting at offset ${mix.bodyStart}`],
             ['Names', `${names.size} of ${mix.count} known${fromDatabase ? ` (${fromDatabase} from the archive's own name list)` : ''}`],
             ['File IDs', `${ID_SCHEMES[scheme].label} hashes`],
-            ...(copies.length ? [['Duplicates', `${copies.length} file${copies.length === 1 ? ' is' : 's are'} stored twice, as identical copies (${formatSize(copies.reduce((n, e) => n + e.size, 0))} wasted)`] as [string, string]] : []),
+            ...(copies.length
+                ? [
+                      [
+                          'Duplicates',
+                          `${copies.length} file${copies.length === 1 ? ' is' : 's are'} stored twice, as identical copies (${formatSize(copies.reduce((n, e) => n + e.size, 0))} wasted)`,
+                      ] as [string, string],
+                  ]
+                : []),
             ...(mix.key ? [['Blowfish key', toHex(mix.key)] as [string, string]] : []),
         ],
         fields,

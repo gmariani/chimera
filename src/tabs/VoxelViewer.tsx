@@ -40,16 +40,74 @@ function partMatrix(part: VoxelPart, frame: number): Mat4 {
 function normalMatrix(m: Mat4): Float32Array {
     const [a, b, c, d, e, f, g, h, i] = [m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]];
     const det = a * (e * i - f * h) - d * (b * i - c * h) + g * (b * f - c * e) || 1;
-    return Float32Array.of((e * i - f * h) / det, (g * f - d * i) / det, (d * h - g * e) / det, (c * h - b * i) / det, (a * i - g * c) / det, (g * b - a * h) / det, (b * f - e * c) / det, (d * c - a * f) / det, (a * e - d * b) / det);
+    return Float32Array.of(
+        (e * i - f * h) / det,
+        (g * f - d * i) / det,
+        (d * h - g * e) / det,
+        (c * h - b * i) / det,
+        (a * i - g * c) / det,
+        (g * b - a * h) / det,
+        (b * f - e * c) / det,
+        (d * c - a * f) / det,
+        (a * e - d * b) / det
+    );
 }
 
 const FACES: { normal: [number, number, number]; corners: [number, number, number][] }[] = [
-    { normal: [1, 0, 0], corners: [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]] },
-    { normal: [-1, 0, 0], corners: [[0, 1, 0], [0, 0, 0], [0, 0, 1], [0, 1, 1]] },
-    { normal: [0, 1, 0], corners: [[1, 1, 0], [0, 1, 0], [0, 1, 1], [1, 1, 1]] },
-    { normal: [0, -1, 0], corners: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]] },
-    { normal: [0, 0, 1], corners: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]] },
-    { normal: [0, 0, -1], corners: [[0, 1, 0], [1, 1, 0], [1, 0, 0], [0, 0, 0]] },
+    {
+        normal: [1, 0, 0],
+        corners: [
+            [1, 0, 0],
+            [1, 1, 0],
+            [1, 1, 1],
+            [1, 0, 1],
+        ],
+    },
+    {
+        normal: [-1, 0, 0],
+        corners: [
+            [0, 1, 0],
+            [0, 0, 0],
+            [0, 0, 1],
+            [0, 1, 1],
+        ],
+    },
+    {
+        normal: [0, 1, 0],
+        corners: [
+            [1, 1, 0],
+            [0, 1, 0],
+            [0, 1, 1],
+            [1, 1, 1],
+        ],
+    },
+    {
+        normal: [0, -1, 0],
+        corners: [
+            [0, 0, 0],
+            [1, 0, 0],
+            [1, 0, 1],
+            [0, 0, 1],
+        ],
+    },
+    {
+        normal: [0, 0, 1],
+        corners: [
+            [0, 0, 1],
+            [1, 0, 1],
+            [1, 1, 1],
+            [0, 1, 1],
+        ],
+    },
+    {
+        normal: [0, 0, -1],
+        corners: [
+            [0, 1, 0],
+            [1, 1, 0],
+            [1, 0, 0],
+            [0, 0, 0],
+        ],
+    },
 ];
 
 /** The faces of a part's voxels that nothing covers: position, normal and color index per vertex, two triangles a face. */
@@ -107,7 +165,10 @@ void main() {
 
 function compile(gl: WebGL2RenderingContext): WebGLProgram {
     const program = gl.createProgram()!;
-    for (const [type, source] of [[gl.VERTEX_SHADER, VERTEX], [gl.FRAGMENT_SHADER, FRAGMENT]] as const) {
+    for (const [type, source] of [
+        [gl.VERTEX_SHADER, VERTEX],
+        [gl.FRAGMENT_SHADER, FRAGMENT],
+    ] as const) {
         const shader = gl.createShader(type)!;
         gl.shaderSource(shader, source);
         gl.compileShader(shader);
@@ -168,7 +229,7 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
         const el = canvas.current;
         const gl = el?.getContext('webgl2', { antialias: true, preserveDrawingBuffer: true });
         if (!el || !gl) {
-            setError('This browser can\'t show 3D (no WebGL2).');
+            setError("This browser can't show 3D (no WebGL2).");
             return;
         }
         try {
@@ -314,16 +375,16 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
     };
 
     return (
-        <div className="cell-row cell-row--boxed">
-            <div className="cell cell--stage">
+        <div className='cell-row cell-row--boxed'>
+            <div className='cell cell--stage'>
                 {error ? (
-                    <div className="image-stage align-items-center" style={{ height: 'auto' }}>
+                    <div className='image-stage align-items-center' style={{ height: 'auto' }}>
                         <Muted>{error}</Muted>
                     </div>
                 ) : (
                     <canvas
                         ref={canvas}
-                        className="voxel-canvas"
+                        className='voxel-canvas'
                         onPointerDown={(e) => {
                             dragging.current = { x: e.clientX, y: e.clientY };
                             e.currentTarget.setPointerCapture(e.pointerId);
@@ -339,18 +400,18 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
                         onDoubleClick={() => setCamera(GAME_VIEW)}
                     />
                 )}
-                <div className="small mt-2">
+                <div className='small mt-2'>
                     <Muted>Drag to turn, scroll to zoom, double-click to go back to the game's view.</Muted>
                 </div>
             </div>
-            <div className="cell cell--side">
-                <Form.Group className="mb-3">
-                    <Form.Label className="small text-body-secondary mb-1">View</Form.Label>
-                    <div className="d-flex flex-wrap gap-2">
-                        <Button size="sm" variant="outline-light" onClick={() => setCamera(GAME_VIEW)}>
+            <div className='cell cell--side'>
+                <Form.Group className='mb-3'>
+                    <Form.Label className='small text-body-secondary mb-1'>View</Form.Label>
+                    <div className='d-flex flex-wrap gap-2'>
+                        <Button size='sm' variant='outline-light' onClick={() => setCamera(GAME_VIEW)}>
                             Game view
                         </Button>
-                        <ButtonGroup size="sm">
+                        <ButtonGroup size='sm'>
                             <Button variant={perspective ? 'outline-light' : 'primary'} onClick={() => setPerspective(false)}>
                                 Flat
                             </Button>
@@ -358,21 +419,21 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
                                 Perspective
                             </Button>
                         </ButtonGroup>
-                        <Button size="sm" variant={spin ? 'primary' : 'outline-light'} onClick={() => setSpin((s) => !s)}>
-                            <i className="bi bi-arrow-repeat me-1" /> Spin
+                        <Button size='sm' variant={spin ? 'primary' : 'outline-light'} onClick={() => setSpin((s) => !s)}>
+                            <i className='bi bi-arrow-repeat me-1' /> Spin
                         </Button>
                     </div>
                 </Form.Group>
 
                 {frameCount > 1 && (
-                    <Form.Group className="mb-3">
-                        <Form.Label className="small text-body-secondary mb-1">Animation</Form.Label>
-                        <div className="d-flex align-items-center gap-2">
-                            <Button size="sm" variant="outline-light" onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
+                    <Form.Group className='mb-3'>
+                        <Form.Label className='small text-body-secondary mb-1'>Animation</Form.Label>
+                        <div className='d-flex align-items-center gap-2'>
+                            <Button size='sm' variant='outline-light' onClick={() => setPlaying((p) => !p)} aria-label={playing ? 'Pause' : 'Play'}>
                                 <i className={`bi ${playing ? 'bi-pause-fill' : 'bi-play-fill'}`} />
                             </Button>
-                            <Form.Range min={0} max={frameCount - 1} value={frame} onChange={(e) => setFrame(Number(e.target.value))} aria-label="Frame" />
-                            <span className="text-nowrap small">
+                            <Form.Range min={0} max={frameCount - 1} value={frame} onChange={(e) => setFrame(Number(e.target.value))} aria-label='Frame' />
+                            <span className='text-nowrap small'>
                                 {frame + 1} / {frameCount}
                             </span>
                         </div>
@@ -380,12 +441,12 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
                 )}
 
                 {parts.length > 1 && (
-                    <Form.Group className="mb-3">
-                        <Form.Label className="small text-body-secondary mb-1">Parts</Form.Label>
+                    <Form.Group className='mb-3'>
+                        <Form.Label className='small text-body-secondary mb-1'>Parts</Form.Label>
                         {parts.map((p, i) => (
                             <Form.Check
                                 key={i}
-                                type="switch"
+                                type='switch'
                                 id={`part-${i}`}
                                 label={p.name}
                                 checked={!hidden.has(i)}
@@ -404,19 +465,19 @@ export function VoxelViewer({ parts, frameCount, ownPalette, remap, fileName }: 
 
                 {remap && <TeamColorSelect team={team.team} onChange={team.setTeam} range={remap} />}
 
-                <Form.Group className="mb-3">
-                    <Form.Label className="small text-body-secondary mb-1">Palette</Form.Label>
-                    {ownPalette && <Form.Check type="switch" id="voxel-own-palette" label="Use the palette in this file" checked={useOwn} onChange={(e) => setUseOwn(e.target.checked)} className="mb-2" />}
-                    {!(ownPalette && useOwn) && (
-                        <PaletteSelect />
+                <Form.Group className='mb-3'>
+                    <Form.Label className='small text-body-secondary mb-1'>Palette</Form.Label>
+                    {ownPalette && (
+                        <Form.Check type='switch' id='voxel-own-palette' label='Use the palette in this file' checked={useOwn} onChange={(e) => setUseOwn(e.target.checked)} className='mb-2' />
                     )}
-                    <div className="small mt-1">
+                    {!(ownPalette && useOwn) && <PaletteSelect />}
+                    <div className='small mt-1'>
                         <Muted>The games use the unit palette (unittem.pal, in local.mix).</Muted>
                     </div>
                 </Form.Group>
 
-                <Button size="sm" variant="outline-light" onClick={savePng}>
-                    <i className="bi bi-image me-1" /> Save this view as PNG
+                <Button size='sm' variant='outline-light' onClick={savePng}>
+                    <i className='bi bi-image me-1' /> Save this view as PNG
                 </Button>
             </div>
         </div>

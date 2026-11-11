@@ -33,7 +33,7 @@ const describe = (tiff: Tiff, ifd: Ifd) => {
 const parser: FormatParser = {
     parse(data) {
         const magic = data[0] === 0x49 ? data[2] | (data[3] << 8) : (data[2] << 8) | data[3];
-        if (magic === 43) throw new Error('BigTIFF (64-bit offsets) isn\'t read yet.');
+        if (magic === 43) throw new Error("BigTIFF (64-bit offsets) isn't read yet.");
         if ((data[0] !== 0x49 && data[0] !== 0x4d) || data[0] !== data[1] || magic !== 42) throw new Error('No TIFF header (II or MM, then 42).');
         const tiff = readTiff(data, 0, data.length, 'file');
         const warnings = [...tiff.warnings];
@@ -50,7 +50,13 @@ const parser: FormatParser = {
                 const total = counts.reduce((a, b) => a + b, 0);
                 const start = minOf(offsets);
                 const end = maxOf(offsets.map((at, k) => at + (counts[k] ?? 0)));
-                fields.push({ name: `${ifd.name} data`, offset: start, length: end - start, value: `${offsets.length} ${kind.toLowerCase()}${offsets.length === 1 ? '' : 's'}, ${bytesLabel(total)}`, children });
+                fields.push({
+                    name: `${ifd.name} data`,
+                    offset: start,
+                    length: end - start,
+                    value: `${offsets.length} ${kind.toLowerCase()}${offsets.length === 1 ? '' : 's'}, ${bytesLabel(total)}`,
+                    children,
+                });
                 if (offsets.length > MAX_CHUNKS) warnings.push(`${ifd.name} has ${offsets.length} ${kind.toLowerCase()}s; the first ${MAX_CHUNKS} are listed.`);
             }
             // A JPEG of its own (old-style JPEG, or a camera's preview).

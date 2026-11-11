@@ -6,7 +6,7 @@ import bink, { ready } from './bink';
 
 const samples = join(__dirname, '../../../samples/westwood');
 
-describe.skipIf(!existsSync(join(samples, 'GDI13.BK2')))('Bink 2 (the Remastered Collection\'s movies)', () => {
+describe.skipIf(!existsSync(join(samples, 'GDI13.BK2')))("Bink 2 (the Remastered Collection's movies)", () => {
     const open = async (name: string) => {
         await ready();
         const data = new Uint8Array(readFileSync(join(samples, name)));
@@ -14,16 +14,23 @@ describe.skipIf(!existsSync(join(samples, 'GDI13.BK2')))('Bink 2 (the Remastered
         return bink.parse(data, { name, names: [] });
     };
 
-    it('reads the container, with revision j\'s extra header field', async () => {
+    it("reads the container, with revision j's extra header field", async () => {
         const parsed = await open('GDI01_INTRO_02.BK2');
         expect(parsed.title).toBe('Bink 2 video');
-        expect(parsed.summary).toEqual(expect.arrayContaining([['Version', 'j'], ['Size', '704 × 396'], ['Frames', '311 at 30 per second (10.4 s), 1 keyframe'], ['Sound', '48000 Hz stereo, DCT']]));
+        expect(parsed.summary).toEqual(
+            expect.arrayContaining([
+                ['Version', 'j'],
+                ['Size', '704 × 396'],
+                ['Frames', '311 at 30 per second (10.4 s), 1 keyframe'],
+                ['Sound', '48000 Hz stereo, DCT'],
+            ])
+        );
         expect(parsed.fields.map((f) => f.name).slice(0, 5)).toEqual(['Header', 'Unknown', 'Track 0 largest decoded size', 'Track 0 format', 'Track 0 ID']);
     });
 
-    it('plays the sound, and says why there\'s no picture', async () => {
+    it("plays the sound, and says why there's no picture", async () => {
         const parsed = await open('GDI01_INTRO_02.BK2');
-        expect(parsed.warnings).toEqual(['Bink 2 video can\'t be shown: RAD never published the format and FFmpeg has no decoder for it. The sound plays.']);
+        expect(parsed.warnings).toEqual(["Bink 2 video can't be shown: RAD never published the format and FFmpeg has no decoder for it. The sound plays."]);
         if (parsed.preview?.kind !== 'audio') throw new Error('expected the sound');
         // 48 kHz stereo; FFmpeg's command-line decode of it has the same 998,400 samples.
         expect([parsed.preview.sampleRate, parsed.preview.channels]).toEqual([48000, 2]);

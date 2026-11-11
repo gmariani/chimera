@@ -76,7 +76,7 @@ describe('the parsing engine', () => {
         expect(Object.keys(refs[2])).toEqual(['key']);
     });
 
-    it('stops a read that hangs, says so, and won\'t read it that way again', async () => {
+    it("stops a read that hangs, says so, and won't read it that way again", async () => {
         const log: FromPage[] = [];
         const engine = new Engine(local(log, 'inspect'), 200);
         const added = await engine.add('a.gif', gif(1), 'added');

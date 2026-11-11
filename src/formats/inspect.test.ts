@@ -40,7 +40,10 @@ describe('checks every file gets', () => {
 
     it('calls out a file that starts like a GIF and is named one, but is something else', async () => {
         // Nothing is assumed about what it really is: only that it isn't what it claims.
-        const fake = concat(enc.encode('GIF'), new Uint8Array(4000).map((_, i) => 0x41 + ((i * 7) % 26)));
+        const fake = concat(
+            enc.encode('GIF'),
+            new Uint8Array(4000).map((_, i) => 0x41 + ((i * 7) % 26))
+        );
         const r = await open(fake, 'invoice.gif');
         expect(r.format.id).not.toBe('gif');
         expect(r.checks[0].level).toBe('danger');
@@ -81,7 +84,7 @@ describe('checks every file gets', () => {
         expect(levels((await open(concat(GIF, new Uint8Array(64)), 'pad.gif')).checks)).toEqual(['info']);
     });
 
-    it('says why a file can\'t be opened as the format asked for, and shows its bytes', async () => {
+    it("says why a file can't be opened as the format asked for, and shows its bytes", async () => {
         const r = await open(enc.encode('not a picture at all'), 'x.bin', 'png');
         expect(r.format.id).toBe('raw');
         expect(r.checks[0].text).toMatch(/can't be read as Picture \(PNG\)/);
@@ -113,19 +116,23 @@ function sampleFiles(dir: string): string[] {
 
 describe.skipIf(!existsSync(SAMPLES))('samples, real and disguised', () => {
     const files = existsSync(SAMPLES) ? sampleFiles(SAMPLES) : [];
-    it.each(files.map((p) => [relative(SAMPLES, p), p]))('%s', async (label, path) => {
-        const data = new Uint8Array(readFileSync(path));
-        const name = path.split('/').at(-1)!;
-        const real = await open(data, name);
-        const dangers = real.checks.filter((c) => c.level === 'danger');
-        // The malware's "pictures" must be called out; everything else must not be.
-        if (DISGUISED.test(label)) expect(dangers.length, label).toBeGreaterThan(0);
-        else if (!MISNAMED.includes(label)) expect(dangers).toEqual([]);
-        if (real.format.id === 'raw' || real.format.id === 'text' || data.length < 64) return;
+    it.each(files.map((p) => [relative(SAMPLES, p), p]))(
+        '%s',
+        async (label, path) => {
+            const data = new Uint8Array(readFileSync(path));
+            const name = path.split('/').at(-1)!;
+            const real = await open(data, name);
+            const dangers = real.checks.filter((c) => c.level === 'danger');
+            // The malware's "pictures" must be called out; everything else must not be.
+            if (DISGUISED.test(label)) expect(dangers.length, label).toBeGreaterThan(0);
+            else if (!MISNAMED.includes(label)) expect(dangers).toEqual([]);
+            if (real.format.id === 'raw' || real.format.id === 'text' || data.length < 64) return;
 
-        const fake = await open(concat(data.subarray(0, 16), base64(data.subarray(16))), name);
-        // Caught: called out, or not taken for the real thing (its parser refused it), or taken for it but with something to say.
-        const caught = fake.checks.some((c) => c.level === 'danger') || fake.format.id !== real.format.id || fake.parsed.warnings.length > 0;
-        expect(caught, `${label} disguised read as ${fake.format.id}: ${JSON.stringify(fake.checks)}`).toBe(true);
-    }, 60_000);
+            const fake = await open(concat(data.subarray(0, 16), base64(data.subarray(16))), name);
+            // Caught: called out, or not taken for the real thing (its parser refused it), or taken for it but with something to say.
+            const caught = fake.checks.some((c) => c.level === 'danger') || fake.format.id !== real.format.id || fake.parsed.warnings.length > 0;
+            expect(caught, `${label} disguised read as ${fake.format.id}: ${JSON.stringify(fake.checks)}`).toBe(true);
+        },
+        60_000
+    );
 });

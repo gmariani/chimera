@@ -38,7 +38,7 @@ export function lzw(data: Uint8Array, bits: 12 | 14): Uint8Array {
 /** Westwood RLE: runs as long repeats (big-endian counts, or little), the rest as copies of up to 127. */
 export function rle(p: Uint8Array, littleEndian = false): number[] {
     const out: number[] = [];
-    for (let i = 0; i < p.length; ) {
+    for (let i = 0; i < p.length;) {
         let run = 1;
         while (i + run < p.length && p[i + run] === p[i] && run < 0xffff) run++;
         if (run > 3) {

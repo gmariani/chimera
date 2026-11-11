@@ -31,7 +31,7 @@ const parser: FormatParser = {
         for (let y = 0; y < height; y++) {
             if (s >= data.length) short = true;
             // Runs can carry on from one plane into the next.
-            for (let x = 0; x < row.length && s < data.length; ) {
+            for (let x = 0; x < row.length && s < data.length;) {
                 const v = data[s++];
                 if ((v & 0xc0) === 0xc0) {
                     const value = data[s++];
@@ -50,17 +50,13 @@ const parser: FormatParser = {
         const paletteAt = data.length - 769;
         const paletteBlock = paletteAt >= s && data[paletteAt] === 0x0c;
         const hasPalette = !trueColor && paletteBlock;
-        if (!trueColor && !hasPalette) warnings.push('There\'s no palette at the end of the file.');
+        if (!trueColor && !hasPalette) warnings.push("There's no palette at the end of the file.");
         // TS writes the palette marker after a 24-bit picture, with nothing after it.
         const loneMarker = trueColor && !paletteBlock && s === data.length - 1 && data[s] === 0x0c;
 
         return {
             title: 'Picture (PCX)',
-            summary: [
-                ['Size', `${width} × ${height}`],
-                ['Colors', trueColor ? '24-bit' : '256'],
-                ...(trueColor ? [] : [['Palette', hasPalette ? 'Included' : 'Missing'] as [string, string]]),
-            ],
+            summary: [['Size', `${width} × ${height}`], ['Colors', trueColor ? '24-bit' : '256'], ...(trueColor ? [] : [['Palette', hasPalette ? 'Included' : 'Missing'] as [string, string]])],
             fields: [
                 {
                     name: 'Header',
@@ -87,7 +83,15 @@ const parser: FormatParser = {
                 },
                 field('Picture data', 128, s - 128, bytesLabel(s - 128), trueColor ? 'Run-length encoded, row by row; each row a red, green and blue plane.' : 'Run-length encoded, row by row.'),
                 ...(paletteBlock
-                    ? [{ name: trueColor ? 'Palette (unused)' : 'Palette', offset: paletteAt, length: 769, note: trueColor ? 'A 24-bit picture has no use for one, but some programs (TS\'s) write it anyway.' : undefined, children: [field('Marker', paletteAt, 1, '0x0C'), field('Colors', paletteAt + 1, 768, '256 colors, 8-bit')] }]
+                    ? [
+                          {
+                              name: trueColor ? 'Palette (unused)' : 'Palette',
+                              offset: paletteAt,
+                              length: 769,
+                              note: trueColor ? "A 24-bit picture has no use for one, but some programs (TS's) write it anyway." : undefined,
+                              children: [field('Marker', paletteAt, 1, '0x0C'), field('Colors', paletteAt + 1, 768, '256 colors, 8-bit')],
+                          },
+                      ]
                     : []),
                 ...(loneMarker ? [field('Palette marker', s, 1, '0x0C', 'With no palette after it; a 24-bit picture needs none.')] : []),
             ],

@@ -62,7 +62,13 @@ const parser: FormatParser = {
                 offset: 0,
                 length: 10 + size,
                 value: `v2.${data[3]}`,
-                children: [field('Identifier', 0, 3, 'ID3'), field('Version', 3, 2, `2.${data[3]}.${data[4]}`), field('Flags', 5, 1, data[5]), field('Size', 6, 4, bytesLabel(size), 'Seven bits in each byte.'), field('Frames', 10, size, bytesLabel(size))],
+                children: [
+                    field('Identifier', 0, 3, 'ID3'),
+                    field('Version', 3, 2, `2.${data[3]}.${data[4]}`),
+                    field('Flags', 5, 1, data[5]),
+                    field('Size', 6, 4, bytesLabel(size), 'Seven bits in each byte.'),
+                    field('Frames', 10, size, bytesLabel(size)),
+                ],
             });
             at = 10 + size;
         }
@@ -94,8 +100,26 @@ const parser: FormatParser = {
         fields.push({ name: 'Frames', offset: start, length: at - start, value: `${count} frames`, children: frames });
         if (count > MAX_FRAMES) warnings.push(`The first ${MAX_FRAMES} of ${count} frames are listed.`);
         if (end < data.length) {
-            const text = (o: number, n: number) => new TextDecoder('latin1').decode(data.subarray(end + o, end + o + n)).replace(/\0.*$/, '').trim();
-            fields.push({ name: 'ID3v1 tag', offset: end, length: 128, value: text(3, 30), children: [field('Identifier', end, 3, 'TAG'), field('Title', end + 3, 30, text(3, 30)), field('Artist', end + 33, 30, text(33, 30)), field('Album', end + 63, 30, text(63, 30)), field('Year', end + 93, 4, text(93, 4)), field('Comment', end + 97, 30, text(97, 30)), field('Genre', end + 127, 1, data[end + 127])] });
+            const text = (o: number, n: number) =>
+                new TextDecoder('latin1')
+                    .decode(data.subarray(end + o, end + o + n))
+                    .replace(/\0.*$/, '')
+                    .trim();
+            fields.push({
+                name: 'ID3v1 tag',
+                offset: end,
+                length: 128,
+                value: text(3, 30),
+                children: [
+                    field('Identifier', end, 3, 'TAG'),
+                    field('Title', end + 3, 30, text(3, 30)),
+                    field('Artist', end + 33, 30, text(33, 30)),
+                    field('Album', end + 63, 30, text(63, 30)),
+                    field('Year', end + 93, 4, text(93, 4)),
+                    field('Comment', end + 97, 30, text(97, 30)),
+                    field('Genre', end + 127, 1, data[end + 127]),
+                ],
+            });
         }
         const seconds = samples / first.rate;
         return {

@@ -83,9 +83,14 @@ const parser: FormatParser = {
                     name: 'Info',
                     offset: info,
                     length: 6,
-                    children: [field('Unknown', info, 3), field('Last character', info + 3, 1, b.u8(info + 3)), field('Largest height', info + 4, 1, maxHeight), field('Largest width', info + 5, 1, maxWidth)],
+                    children: [
+                        field('Unknown', info, 3),
+                        field('Last character', info + 3, 1, b.u8(info + 3)),
+                        field('Largest height', info + 4, 1, maxHeight),
+                        field('Largest width', info + 5, 1, maxWidth),
+                    ],
                 },
-                field('Offsets', offsetBlock, count * 2, `${count} characters`, eightBit ? 'Where each character\'s pixels start, from the data block.' : 'Where each character\'s pixels start.'),
+                field('Offsets', offsetBlock, count * 2, `${count} characters`, eightBit ? "Where each character's pixels start, from the data block." : "Where each character's pixels start."),
                 field('Widths', widthBlock, count, undefined, 'One byte per character, in pixels.'),
                 field('Heights', heightBlock, count * 2, undefined, 'Two bytes per character: blank rows above it, then its height.'),
                 // TD and RA put the heights after the pixels; TS puts them before.

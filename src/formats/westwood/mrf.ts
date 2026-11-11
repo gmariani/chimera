@@ -23,7 +23,7 @@ const PURPOSES: Record<string, string> = {
     WHITE: 'Translucent white',
     SHADOW: 'Shadows',
     UNITS: 'Unit shadows',
-    CLOCK: 'The sidebar\'s build clock',
+    CLOCK: "The sidebar's build clock",
 };
 const THEATERS: Record<string, string> = { T: 'Temperate', D: 'Desert', W: 'Winter', J: 'Jungle' };
 
@@ -63,7 +63,13 @@ const parser: FormatParser = {
             const users = blends.map((_, t) => identity.filter((c) => selector[c] === t));
             summary.push(['Kind', 'Translucency: colors that let the one behind show through'], ['Translucent colors', String(identity.filter((c) => selector[c] !== 0xff).length)]);
             fields = [
-                { name: 'Which table each color uses', offset: 0, length: 256, note: '0xFF: none, the color is drawn as it is.', children: identity.map((i) => field(`Color ${i}`, i, 1, selector[i] === 0xff ? 'None' : `Table ${selector[i] + 1}`)) },
+                {
+                    name: 'Which table each color uses',
+                    offset: 0,
+                    length: 256,
+                    note: '0xFF: none, the color is drawn as it is.',
+                    children: identity.map((i) => field(`Color ${i}`, i, 1, selector[i] === 0xff ? 'None' : `Table ${selector[i] + 1}`)),
+                },
                 ...blends.map((t, i) => ({
                     name: `Table ${i + 1}`,
                     offset: (i + 1) * 256,
@@ -78,7 +84,7 @@ const parser: FormatParser = {
 
         return {
             title: 'Color remap tables (MRF)',
-            summary: [...summary, ['Tables', String(count)], ['Preview', 'The palette, then each table applied to it; pick the theater\'s palette']],
+            summary: [...summary, ['Tables', String(count)], ['Preview', "The palette, then each table applied to it; pick the theater's palette"]],
             fields,
             preview: { kind: 'images', frames },
             warnings,

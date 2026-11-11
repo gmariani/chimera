@@ -41,11 +41,11 @@ The README's "Adding a format" section has the full list. Two smaller boundaries
 ## Code conventions
 
 - **TypeScript, strict.** `npm run typecheck` must pass.
-- **Named exports.** The one exception is a format's parser: it's the module's default export, because the registry in `src/formats/index.ts` loads it on demand as `m.default`.
-- **No barrel files.** Import from the module that defines the thing. `src/engine/index.ts` isn't a barrel: it creates the app's single engine and re-exports the client types that go with it.
+- **Named exports.** The one exception is a format's parser: it's the module's default export, because the registry in `src/formats/index.ts` loads it on demand as `m.default`. Oxlint enforces this (`import/no-default-export`, off only under `src/formats/`).
+- **No barrel files.** Import from the module that defines the thing. `src/engine/index.ts` isn't a barrel: it creates the app's single engine and re-exports the client types that go with it. Oxlint enforces this too (`oxc/no-barrel-file`).
 - **Readers don't render.** A reader turns bytes into `fields`, `entries` and `preview` data (`src/core/types.ts`). The UI stays generic and knows no formats.
 - **Ask before adding a dependency.** Decoders are written here (inflate, PNG, LCW, LZW), and that's deliberate: they can be made strict, and they can report what they found wrong.
-- **Formatting:** match the file you're in. Most files use 4-space indents and single quotes, but some use double quotes. Don't reformat a whole file, and don't run a formatter over files you didn't otherwise change.
+- **Formatting is Prettier's** (`.prettierrc.json`, the same settings as the owner's other projects except a 200-character line). Run `npm run format` before you finish; don't format by hand against it.
 - **Comments explain the format, not the code.** Each reader starts with a short description of the format, the games or programs that use it, and a link to the spec it follows. Quirks get a comment saying where they come from (a game's own code, real files, a reference decoder).
 - **The look** is an industrial blueprint: deep blue ground, thin pale lines, a faint drafting grid, square corners, one chartreuse accent for focus and selection. Pages are built from frames and sections with numbered section bars. See the top of `src/styles.css`, and keep new UI in that style.
 
@@ -63,7 +63,7 @@ Tests should prove a reader is right and stays right, not restate its code.
 
 Nothing is finished until it's checked. Run what applies, and say what you ran and what it showed:
 
-1. `npm run typecheck`. There's no linter yet; the type check is the gate.
+1. `npm run typecheck`, `npm run lint` (Oxlint) and `npm run format:check` (Prettier).
 2. `npm test`.
 3. When a sniffer or the registry changed, run the game data and compare the count of each format in every archive with the code from before the change (`git stash`). A sniffer that suddenly claims other files fails silently: they just open as the wrong thing. Run vitest with `--silent=false --reporter=verbose` to see the counts.
 4. When a reader or decoder changed, run `npm run fuzz`. Point it at game data when the format comes from there. It should report no findings.

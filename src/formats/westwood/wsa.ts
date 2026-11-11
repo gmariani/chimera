@@ -19,7 +19,7 @@ const SLACK = 37;
 const parser: FormatParser = {
     parse(data) {
         const layout = wsaLayout(data);
-        if (!layout) throw new Error('This isn\'t a WSA: its frame offsets don\'t run from the end of the header to the end of the file.');
+        if (!layout) throw new Error("This isn't a WSA: its frame offsets don't run from the end of the header to the end of the file.");
         const { version, frames: count, width, height, x, y, largest, palette: hasPalette, table, tableEnd, offsets, loops } = layout;
         const h = WSA_HEADERS[version];
         const b = new Bytes(data);
@@ -52,15 +52,33 @@ const parser: FormatParser = {
             }
             const size = apply(i, start, end);
             frames.push({ width, height, pixels: screen.slice() });
-            dataFields.push(field(`Frame ${i + 1}`, start, end - start, bytesLabel(end - start), `LCW, then a format 40 delta of ${bytesLabel(size)} against ${i ? `frame ${i}` : offsets[0] ? 'a blank screen' : 'the screen'}.`));
+            dataFields.push(
+                field(
+                    `Frame ${i + 1}`,
+                    start,
+                    end - start,
+                    bytesLabel(end - start),
+                    `LCW, then a format 40 delta of ${bytesLabel(size)} against ${i ? `frame ${i}` : offsets[0] ? 'a blank screen' : 'the screen'}.`
+                )
+            );
         }
         if (loops) {
             const size = apply(count, offsets[count], offsets[count + 1]);
-            dataFields.push(field('Loop frame', offsets[count], offsets[count + 1] - offsets[count], bytesLabel(offsets[count + 1] - offsets[count]), `Takes the last frame back to the first (a delta of ${bytesLabel(size)}).`));
+            dataFields.push(
+                field(
+                    'Loop frame',
+                    offsets[count],
+                    offsets[count + 1] - offsets[count],
+                    bytesLabel(offsets[count + 1] - offsets[count]),
+                    `Takes the last frame back to the first (a delta of ${bytesLabel(size)}).`
+                )
+            );
             if (offsets[0] !== 0 && !screen.every((v, i) => v === frames[0].pixels[i])) {
                 const loopData = data.subarray(offsets[count], offsets[count + 1]);
                 const copy = loopData.length === offsets[1] - offsets[0] && loopData.every((v, i) => v === data[offsets[0] + i]);
-                warnings.push(`The loop frame doesn't lead back to the first frame${copy ? ': it\'s a copy of the first frame\'s data, not a delta from the last, so looping XORs the picture a second time' : ''}.`);
+                warnings.push(
+                    `The loop frame doesn't lead back to the first frame${copy ? ": it's a copy of the first frame's data, not a delta from the last, so looping XORs the picture a second time" : ''}.`
+                );
             }
         }
 
@@ -72,13 +90,18 @@ const parser: FormatParser = {
             return (plural ? text.replace(/frame (\d)/g, '$1').replace(/^/, 'frames ') : text).replace(/^./, (c) => c.toUpperCase());
         };
         const one = (names: string[]) => names.length === 1;
-        if (tooBig.length) warnings.push(`${list(tooBig)} decompress${one(tooBig) ? 'es' : ''} to more than the ${bytesLabel(room)} the header has the game set aside (${bytesLabel(largest)} + ${SLACK}): the game would write past its buffer.`);
+        if (tooBig.length)
+            warnings.push(
+                `${list(tooBig)} decompress${one(tooBig) ? 'es' : ''} to more than the ${bytesLabel(room)} the header has the game set aside (${bytesLabel(largest)} + ${SLACK}): the game would write past its buffer.`
+            );
         if (overrun.length) warnings.push(`${list(overrun)} reach${one(overrun) ? 'es' : ''} past the ${width} × ${height} frame: the game would draw outside it.`);
 
         const headerFields: Field[] = [field('Frame count', 0, 2, count)];
         if (h.x >= 0) headerFields.push(field('X', h.x, 2, x, 'Where on screen it plays.'), field('Y', h.y, 2, y));
         headerFields.push(field('Width', h.width, 2, width), field('Height', h.height, 2, height));
-        headerFields.push(field('Largest delta', h.delta, 2, bytesLabel(largest), `The game sets aside this plus ${SLACK} bytes to decompress a frame into. The largest here is ${bytesLabel(biggest)}.`));
+        headerFields.push(
+            field('Largest delta', h.delta, 2, bytesLabel(largest), `The game sets aside this plus ${SLACK} bytes to decompress a frame into. The largest here is ${bytesLabel(biggest)}.`)
+        );
         if (h.flags >= 0) headerFields.push(field('Flags', h.flags, 2, b.u16(h.flags), '1: a palette follows the offsets.'));
 
         return {
@@ -103,8 +126,8 @@ const parser: FormatParser = {
                             table + i * 4,
                             4,
                             b.u32(table + i * 4),
-                            offsets[i] === 0 ? (i === 0 ? 'No first frame.' : 'Unused.') : undefined,
-                        ),
+                            offsets[i] === 0 ? (i === 0 ? 'No first frame.' : 'Unused.') : undefined
+                        )
                     ),
                 },
                 ...(hasPalette ? [field('Palette', paletteAt, 768, '256 colors, 6-bit')] : []),

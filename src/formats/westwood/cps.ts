@@ -64,7 +64,10 @@ const parser: FormatParser = {
             warnings.push(`The header says the file is ${bytesLabel(fileSize + 2)}, but it's ${bytesLabel(data.length)}.`);
         }
         const expected = amiga ? [40000, 40064] : [PC_SIZE];
-        if (!packed && !expected.includes(size)) warnings.push(`The decoded size is ${bytesLabel(size)}; ${amiga ? 'Amiga' : 'PC'} pictures are ${expected.map((n) => n.toLocaleString('en-US')).join(' or ')} bytes. It's read as ${Math.floor(size / 320)} rows.`);
+        if (!packed && !expected.includes(size))
+            warnings.push(
+                `The decoded size is ${bytesLabel(size)}; ${amiga ? 'Amiga' : 'PC'} pictures are ${expected.map((n) => n.toLocaleString('en-US')).join(' or ')} bytes. It's read as ${Math.floor(size / 320)} rows.`
+            );
         if (amiga ? paletteSize % 64 !== 0 || paletteSize > 256 : paletteSize !== 0 && paletteSize !== 768) {
             warnings.push(`The palette is ${bytesLabel(paletteSize)}; ${amiga ? 'Amiga palettes are 64 bytes each, up to four' : 'PC palettes are 768 bytes, or none'}.`);
         }
@@ -92,10 +95,17 @@ const parser: FormatParser = {
                 written = lcw(data, decoded, start, info);
         }
         const method = CPS_COMPRESSION[compression];
-        if (written < size) warnings.push(`The ${packed ? 'packed' : 'picture'} data ${compression ? 'decodes' : 'comes'} to ${bytesLabel(written)}, short of the ${bytesLabel(size)} the header gives; ${packed ? 'only that much is there' : 'the rest is left black'}.`);
-        if (info.badRefs) warnings.push(`The ${method} data copies from outside what it's decoded so far ${info.badRefs.toLocaleString('en-US')} time${info.badRefs === 1 ? '' : 's'}: it's damaged, or made to trip up a decoder.`);
+        if (written < size)
+            warnings.push(
+                `The ${packed ? 'packed' : 'picture'} data ${compression ? 'decodes' : 'comes'} to ${bytesLabel(written)}, short of the ${bytesLabel(size)} the header gives; ${packed ? 'only that much is there' : 'the rest is left black'}.`
+            );
+        if (info.badRefs)
+            warnings.push(
+                `The ${method} data copies from outside what it's decoded so far ${info.badRefs.toLocaleString('en-US')} time${info.badRefs === 1 ? '' : 's'}: it's damaged, or made to trip up a decoder.`
+            );
         // LZW and LCW end on a marker; reaching the picture's size first means there was more than it holds.
-        if ((compression === 1 || compression === 2 || compression === 4) && !info.ended && written >= size) warnings.push(`The ${method} data goes on past the end of the ${packed ? 'packed file' : 'picture'} (${bytesLabel(size)}) without its end marker.`);
+        if ((compression === 1 || compression === 2 || compression === 4) && !info.ended && written >= size)
+            warnings.push(`The ${method} data goes on past the end of the ${packed ? 'packed file' : 'picture'} (${bytesLabel(size)}) without its end marker.`);
         else if ((compression === 1 || compression === 2) && !info.ended) warnings.push(`The ${method} data has no end marker.`);
         // What follows the data. LZW pads to whole bytes, with zeros: up to two of them.
         let end = info.read;
@@ -104,7 +114,13 @@ const parser: FormatParser = {
         const headerFields: Field[] = [
             field('File size', 0, 2, bytesLabel(fileSize), 'Not counting these two bytes.'),
             field('Compression', 2, 2, compression, `${method}. 0: none, 1: LZW 12-bit, 2: LZW 14-bit, 3: RLE, 4: LCW.`),
-            field('Decoded size', 4, 4, bytesLabel(size), packed ? 'Not a picture\'s size: a file packed this way.' : amiga ? '40,000: five bit planes of 320 × 200; 40,064 with a palette after them.' : '320 × 200, a byte a pixel.'),
+            field(
+                'Decoded size',
+                4,
+                4,
+                bytesLabel(size),
+                packed ? "Not a picture's size: a file packed this way." : amiga ? '40,000: five bit planes of 320 × 200; 40,064 with a palette after them.' : '320 × 200, a byte a pixel.'
+            ),
             field('Palette size', 8, 2, paletteSize),
         ];
 
@@ -122,7 +138,7 @@ const parser: FormatParser = {
                 ],
                 fields: [
                     { name: 'Header', offset: 0, length: 10, children: headerFields },
-                    ...(paletteSize ? [field('Palette', 10, paletteSize, 'Never used: what\'s packed isn\'t a picture.')] : []),
+                    ...(paletteSize ? [field('Palette', 10, paletteSize, "Never used: what's packed isn't a picture.")] : []),
                     field('Packed data', start, end - start, bytesLabel(end - start), `${method}, to ${bytesLabel(written)}.`),
                 ],
                 entries: [{ name, label: name, offset: start, size: written, data: inner, meta: { Packed: bytesLabel(end - start) } }],
@@ -152,7 +168,9 @@ const parser: FormatParser = {
 
         const paletteFields: Field[] = amiga
             ? palettes.slice(0, paletteSize / 64).map((_, i) => field(`Palette ${i + 1}`, 10 + i * 64, 64, '32 colors, 12-bit'))
-            : paletteSize ? [field('Palette', 10, paletteSize, paletteSize === 768 ? '256 colors, 6-bit' : bytesLabel(paletteSize))] : [];
+            : paletteSize
+              ? [field('Palette', 10, paletteSize, paletteSize === 768 ? '256 colors, 6-bit' : bytesLabel(paletteSize))]
+              : [];
 
         return {
             title: 'Picture (CPS)',

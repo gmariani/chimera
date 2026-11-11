@@ -56,7 +56,7 @@ const parser: FormatParser = {
             title: 'Chronal vortex frame (RA)',
             summary: [
                 ['Size', `${VORTEX_SIZE} × ${VORTEX_SIZE} pixels`],
-                ...(stage ? [['Frame', `${frame! % 16 + 1} of 16, ${stage}`] as [string, string]] : []),
+                ...(stage ? [['Frame', `${(frame! % 16) + 1} of 16, ${stage}`] as [string, string]] : []),
                 ['Preview', 'A test grid pulled through the vortex, then its shading'],
             ],
             fields,

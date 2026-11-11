@@ -32,7 +32,7 @@ const parser: FormatParser = {
                 field('File length', 4, 4, bytesLabel(declared), 'Of the whole file, uncompressed.'),
             ],
         };
-        if (signature === 'ZWS') throw new Error('LZMA-compressed SWFs (ZWS) aren\'t read yet.');
+        if (signature === 'ZWS') throw new Error("LZMA-compressed SWFs (ZWS) aren't read yet.");
 
         // The movie as an uncompressed SWF: the file itself, or the header with the rest inflated.
         let swf = data;
@@ -72,7 +72,9 @@ const parser: FormatParser = {
                 const packed = swf[at] | (swf[at + 1] << 8);
                 const code = packed >> 6;
                 let length = packed & 0x3f;
-                const tagFields: Field[] = [field('Code and length', at, 2, `${code}, ${length === 0x3f ? 'long' : bytesLabel(length)}`, 'Code (high 10 bits), length (low 6; 63: a 32-bit length follows).')];
+                const tagFields: Field[] = [
+                    field('Code and length', at, 2, `${code}, ${length === 0x3f ? 'long' : bytesLabel(length)}`, 'Code (high 10 bits), length (low 6; 63: a 32-bit length follows).'),
+                ];
                 at += 2;
                 if (length === 0x3f) {
                     length = swf[at] | (swf[at + 1] << 8) | (swf[at + 2] << 16) | (swf[at + 3] << 24);
@@ -133,7 +135,10 @@ const parser: FormatParser = {
             signature === 'CWS'
                 ? [header, field('Compressed movie', 8, data.length - 8, bytesLabel(data.length - 8), 'zlib. Open "uncompressed.swf" under Contents to see its tags byte by byte.')]
                 : [header, movieHeader, ...tags, ...(end < swf.length ? [field('After the End tag', end, swf.length - end, bytesLabel(swf.length - end))] : [])];
-        const entries: Entry[] = [...(signature === 'CWS' ? [{ name: null, label: 'uncompressed', offset: 8, size: swf.length, data: swf, meta: { Note: 'The movie, inflated' } }] : []), ...assets.entries];
+        const entries: Entry[] = [
+            ...(signature === 'CWS' ? [{ name: null, label: 'uncompressed', offset: 8, size: swf.length, data: swf, meta: { Note: 'The movie, inflated' } }] : []),
+            ...assets.entries,
+        ];
 
         const items: { title: string; preview: Preview }[] = assets.texts.map((t) => ({ title: t.title, preview: { kind: 'text', text: t.text } }));
         const total = [...counts.values()].reduce((a, b) => a + b, 0);
@@ -152,7 +157,7 @@ const parser: FormatParser = {
                 ['Sounds', `${count([14])}${count([18, 45]) ? ` and ${count([18, 45])} stream${count([18, 45]) === 1 ? '' : 's'}` : ''}`],
                 ['Fonts', String(count([10, 48, 75, 91]))],
                 ...(count([24, 58, 64]) ? [['Protection', [counts.get(24) && 'Protected from import', count([58, 64]) && 'Debugging enabled'].filter(Boolean).join(', ')] as [string, string]] : []),
-                ...([253, 255, 264, 1002, 1022].some((c) => counts.has(c)) ? [['Obfuscated', 'Yes: it has an obfuscator\'s tags'] as [string, string]] : []),
+                ...([253, 255, 264, 1002, 1022].some((c) => counts.has(c)) ? [['Obfuscated', "Yes: it has an obfuscator's tags"] as [string, string]] : []),
             ],
             fields,
             entries: entries.length ? entries : undefined,

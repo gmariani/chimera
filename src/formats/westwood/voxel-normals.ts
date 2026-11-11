@@ -69,10 +69,12 @@ export function normalTable(normalClass: number): Float32Array {
         let at = 1;
         for (let t = 0; t < bytes[0]; t++) {
             const [cls, count] = [bytes[at], bytes[at + 1]];
-            tables.set(cls, Float32Array.from({ length: count * 3 }, (_, i) => view.getFloat32(at + 2 + i * 4, true)));
+            tables.set(
+                cls,
+                Float32Array.from({ length: count * 3 }, (_, i) => view.getFloat32(at + 2 + i * 4, true))
+            );
             at += 2 + count * 12;
         }
     }
     return tables.get(normalClass) ?? new Float32Array();
 }
-

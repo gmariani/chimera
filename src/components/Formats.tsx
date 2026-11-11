@@ -25,20 +25,26 @@ export function FormatsCarousel() {
     // Twice over, so the strip loops without a seam; about four seconds a format.
     const chips = (copy: number) =>
         formats.map((f) => (
-            <li key={`${copy}-${f.name}`} className="format-chip" aria-hidden={copy > 0 || undefined}>
-                {f.name} <span className="opacity-75">.{f.extensions.slice(0, 2).join(', .')}</span>
+            <li key={`${copy}-${f.name}`} className='format-chip' aria-hidden={copy > 0 || undefined}>
+                {f.name} <span className='opacity-75'>.{f.extensions.slice(0, 2).join(', .')}</span>
             </li>
         ));
     return (
         <>
-            <SectionBar index="02" title="Formats">
+            <SectionBar index='02' title='Formats'>
                 {formats.length} formats ·{' '}
-                <Button variant="link" size="sm" className="p-0 section-link" onClick={() => setOpen(true)}>
+                <Button variant='link' size='sm' className='p-0 section-link' onClick={() => setOpen(true)}>
                     See all
                 </Button>
             </SectionBar>
-            <div className="format-carousel" role="button" tabIndex={0} aria-label={`The ${formats.length} formats it reads; open the full list`} onClick={() => setOpen(true)} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setOpen(true))}>
-                <ul className="format-track small text-body-secondary" style={{ animationDuration: `${formats.length * 4}s` }}>
+            <div
+                className='format-carousel'
+                role='button'
+                tabIndex={0}
+                aria-label={`The ${formats.length} formats it reads; open the full list`}
+                onClick={() => setOpen(true)}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setOpen(true))}>
+                <ul className='format-track small text-body-secondary' style={{ animationDuration: `${formats.length * 4}s` }}>
                     {chips(0)}
                     {chips(1)}
                 </ul>
@@ -54,13 +60,13 @@ function FormatsModal({ show, onHide }: { show: boolean; onHide: () => void }) {
     const needle = filter.trim().toLowerCase().replace(/^\./, '');
     const shown = needle ? formats.filter((f) => f.name.toLowerCase().includes(needle) || f.extensions.some((e) => e.includes(needle))) : formats;
     return (
-        <Modal show={show} onHide={onHide} size="lg" scrollable centered>
+        <Modal show={show} onHide={onHide} size='lg' scrollable centered>
             <Modal.Header closeButton>
-                <Modal.Title className="h5">Formats it reads</Modal.Title>
+                <Modal.Title className='h5'>Formats it reads</Modal.Title>
             </Modal.Header>
             <Modal.Body>
-                <Form.Control type="search" placeholder="Filter by name or extension" value={filter} onChange={(e) => setFilter(e.target.value)} className="mb-3" autoFocus />
-                <Table size="sm" hover className="small mb-2">
+                <Form.Control type='search' placeholder='Filter by name or extension' value={filter} onChange={(e) => setFilter(e.target.value)} className='mb-3' autoFocus />
+                <Table size='sm' hover className='small mb-2'>
                     <thead>
                         <tr>
                             <th>Format</th>
@@ -71,19 +77,19 @@ function FormatsModal({ show, onHide }: { show: boolean; onHide: () => void }) {
                         {shown.map((f) => (
                             <tr key={f.name}>
                                 <td>{f.name}</td>
-                                <td className="text-body-secondary">.{f.extensions.join(', .')}</td>
+                                <td className='text-body-secondary'>.{f.extensions.join(', .')}</td>
                             </tr>
                         ))}
                         {!shown.length && (
                             <tr>
-                                <td colSpan={2} className="text-body-secondary">
+                                <td colSpan={2} className='text-body-secondary'>
                                     None by that name. It will still open, in the hex view.
                                 </td>
                             </tr>
                         )}
                     </tbody>
                 </Table>
-                <p className="small text-body-secondary mb-0">Files are recognized by their contents, so the extension doesn't have to match. Anything it doesn't recognize opens in the hex view.</p>
+                <p className='small text-body-secondary mb-0'>Files are recognized by their contents, so the extension doesn't have to match. Anything it doesn't recognize opens in the hex view.</p>
             </Modal.Body>
         </Modal>
     );

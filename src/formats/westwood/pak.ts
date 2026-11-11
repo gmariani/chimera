@@ -112,10 +112,13 @@ const GAMES = { 1: 'Eye of the Beholder', 2: 'Dune II, Legend of Kyrandia', 3: '
 const parser: FormatParser = {
     parse(data) {
         const layout = pakLayout(data);
-        if (!layout) throw new Error('This isn\'t a Westwood PAK: its offsets and names don\'t make a list of files that fits the archive.');
+        if (!layout) throw new Error("This isn't a Westwood PAK: its offsets and names don't make a list of files that fits the archive.");
         const { version, headerEnd, header, files, end, badEnd } = layout;
         const warnings: string[] = [];
-        if (badEnd !== null) warnings.push(`The end offset (${badEnd.toLocaleString('en-US')}) can't be where the last file ends, so the archive's own end is used. Eye of the Beholder's archives often have this: the game kept its own table of sizes.`);
+        if (badEnd !== null)
+            warnings.push(
+                `The end offset (${badEnd.toLocaleString('en-US')}) can't be where the last file ends, so the archive's own end is used. Eye of the Beholder's archives often have this: the game kept its own table of sizes.`
+            );
 
         const entries: Entry[] = files.map((f, i) => {
             const next = i + 1 < files.length ? files[i + 1].offset : end;
@@ -128,7 +131,9 @@ const parser: FormatParser = {
         for (const [, same] of byName) {
             if (same.length < 2) continue;
             const identical = same.every((e) => e.size === same[0].size && e.data.every((v, i) => v === same[0].data[i]));
-            warnings.push(`${same[0].name} is listed ${same.length} times (at ${same.map((e) => e.offset.toLocaleString('en-US')).join(', ')}); the game only finds the first. ${identical ? 'The copies are identical.' : 'The copies differ, so the later ones are never used.'}`);
+            warnings.push(
+                `${same[0].name} is listed ${same.length} times (at ${same.map((e) => e.offset.toLocaleString('en-US')).join(', ')}); the game only finds the first. ${identical ? 'The copies are identical.' : 'The copies differ, so the later ones are never used.'}`
+            );
         }
         const empty = entries.filter((e) => e.size === 0).length;
         if (empty) warnings.push(`${empty} file${empty === 1 ? ' is' : 's are'} empty (0 bytes).`);
@@ -141,7 +146,10 @@ const parser: FormatParser = {
                 offset: e.at,
                 length: e.length,
                 value: isEnd ? `the last file ends at ${e.offset.toLocaleString('en-US')}` : e.name,
-                children: [field('Offset', e.at, 4, e.offset, isEnd ? 'Where the last file ends.' : 'Where the file starts.'), field('Name', e.at + 4, e.length - 4, isEnd ? '(empty)' : JSON.stringify(e.name), 'NUL-terminated.')],
+                children: [
+                    field('Offset', e.at, 4, e.offset, isEnd ? 'Where the last file ends.' : 'Where the file starts.'),
+                    field('Name', e.at + 4, e.length - 4, isEnd ? '(empty)' : JSON.stringify(e.name), 'NUL-terminated.'),
+                ],
             };
         });
 

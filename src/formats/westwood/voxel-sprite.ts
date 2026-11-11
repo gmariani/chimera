@@ -63,7 +63,10 @@ export function drawVoxels(parts: VoxelPartInput[], facing: number, tw: number, 
     const rgba = new Uint8Array(width * height * 4);
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
-            let r = 0, g = 0, b = 0, n = 0;
+            let r = 0,
+                g = 0,
+                b = 0,
+                n = 0;
             for (let dy = 0; dy < s; dy++) {
                 const by = y * s + dy - padY;
                 if (by < 0 || by >= big.height) continue;

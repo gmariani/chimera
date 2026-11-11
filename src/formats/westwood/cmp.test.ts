@@ -58,14 +58,14 @@ describe('CMP', () => {
         if (type <= 2) expect(r.preview?.kind === 'images' && [...r.preview.palette!.subarray(27, 30)]).toEqual([85, 85, 255]);
     });
 
-    it('takes type 4\'s size one byte short, as the format\'s notes have it', () => {
+    it("takes type 4's size one byte short, as the format's notes have it", () => {
         const data = build(4, [...rle(p), 0], { extra: 1 });
         expect(detect(data, null).id).toBe('cmp');
         expect(parse(data).warnings).toEqual([]);
         expect(parse(data).end).toBe(data.length);
     });
 
-    it('says what doesn\'t fit the format', async () => {
+    it("says what doesn't fit the format", async () => {
         // Type 5: read as type 4, as DragonStrike does.
         const five = build(5, rle(p));
         expect(detect(five, null).id).not.toBe('cmp');
@@ -87,15 +87,19 @@ describe('CMP', () => {
     });
 });
 
-describe('Lands of Lore\'s .cmp: CPS-style packed files', () => {
+describe("Lands of Lore's .cmp: CPS-style packed files", () => {
     const packedCps = (compression: number, inner: Uint8Array, body: ArrayLike<number> = inner) => {
         const rest = [...u16(compression), ...u32(inner.length), 0, 0, ...Array.from(body)];
         return Uint8Array.from([...u16(rest.length), ...rest]);
     };
 
-    it('unpacks what\'s inside as a file of its own', () => {
+    it("unpacks what's inside as a file of its own", () => {
         const inner = new TextEncoder().encode('[Basic]\nName=Test\n'.repeat(20));
-        for (const [compression, body] of [[0, inner], [1, lzw(inner, 12)], [2, lzw(inner, 14)]] as const) {
+        for (const [compression, body] of [
+            [0, inner],
+            [1, lzw(inner, 12)],
+            [2, lzw(inner, 14)],
+        ] as const) {
             const data = packedCps(compression, inner, body);
             expect(detect(data, 'x.cmp').id).toBe('cps');
             const r = cps.parse(data, { name: 'thing.cmp', names: [] });

@@ -33,7 +33,7 @@ const parser: FormatParser = {
             title: 'Voxel lighting tables (VPL)',
             summary: [
                 ['Lighting levels', String(sections)],
-                ['Owner\'s colors', `${start}–${end}`],
+                ["Owner's colors", `${start}–${end}`],
                 ['Preview', 'Each level applied to the palette, darkest first'],
             ],
             fields: [
@@ -42,7 +42,7 @@ const parser: FormatParser = {
                     offset: 0,
                     length: 16,
                     children: [
-                        field('Remap start', 0, 4, start, 'The colors that take the owner\'s color.'),
+                        field('Remap start', 0, 4, start, "The colors that take the owner's color."),
                         field('Remap end', 4, 4, end),
                         field('Levels', 8, 4, sections),
                         field('Unused', 12, 4, undefined, 'Leftover memory.'),

@@ -32,7 +32,7 @@ function layout(data: Uint8Array, view: DataView): Layout {
     const u32 = (at: number) => view.getUint32(at, true);
     const sig = u32(0);
     if ((sig === 0xffffffff || sig === 0x8fffffff) && u32(4) === VERSION_FLOAT) {
-        if (sig === 0x8fffffff) throw new Error('This MEG\'s tables are encrypted, which isn\'t read here.');
+        if (sig === 0x8fffffff) throw new Error("This MEG's tables are encrypted, which isn't read here.");
         // Version 3 gives the name table's size: the names from byte 24 must fill exactly that.
         const [names, size] = [u32(12), u32(20)];
         let at = 24;
@@ -53,7 +53,12 @@ const parser: FormatParser = {
         if (l.names > 1_000_000 || l.files > 1_000_000) throw new Error('The name or file count is far too big for a MEG.');
 
         const headerFields: Field[] = [];
-        if (l.version > 1) headerFields.push(field('Signature', 0, 4, 'FF FF FF FF'), field('Version', 4, 4, '0.99 (as a float)', 'The same in versions 2 and 3.'), field('Data start', 8, 4, l.dataStart!, 'Where the first file\'s data is.'));
+        if (l.version > 1)
+            headerFields.push(
+                field('Signature', 0, 4, 'FF FF FF FF'),
+                field('Version', 4, 4, '0.99 (as a float)', 'The same in versions 2 and 3.'),
+                field('Data start', 8, 4, l.dataStart!, "Where the first file's data is.")
+            );
         const counts = l.version === 1 ? 0 : 12;
         headerFields.push(field('Name count', counts, 4, l.names), field('File count', counts + 4, 4, l.files));
         if (l.version === 3) headerFields.push(field('Name table size', 20, 4, bytesLabel(l.namesSize!)));
@@ -66,7 +71,8 @@ const parser: FormatParser = {
             const length = u16(at);
             const name = new TextDecoder('latin1').decode(data.subarray(at + 2, at + 2 + length));
             names.push(name);
-            if (nameFields.length < 5000) nameFields.push({ name: `${i}`, offset: at, length: 2 + length, value: name, children: [field('Length', at, 2, length), field('Name', at + 2, length, name)] });
+            if (nameFields.length < 5000)
+                nameFields.push({ name: `${i}`, offset: at, length: 2 + length, value: name, children: [field('Length', at, 2, length), field('Name', at + 2, length, name)] });
             at += 2 + length;
         }
         const namesEnd = at;
@@ -81,13 +87,27 @@ const parser: FormatParser = {
                 warnings.push('The file records run past the end of the file.');
                 break;
             }
-            const [flags, crc, index, size, start, nameIndex] = l.version === 3 ? [u16(r), u32(r + 2), u32(r + 6), u32(r + 10), u32(r + 14), u16(r + 18)] : [0, u32(r), u32(r + 4), u32(r + 8), u32(r + 12), u32(r + 16)];
+            const [flags, crc, index, size, start, nameIndex] =
+                l.version === 3 ? [u16(r), u32(r + 2), u32(r + 6), u32(r + 10), u32(r + 14), u16(r + 18)] : [0, u32(r), u32(r + 4), u32(r + 8), u32(r + 12), u32(r + 16)];
             const path = names[nameIndex] ?? `file ${i}`;
             if (flags & 1) encrypted++;
             const children: Field[] =
                 l.version === 3
-                    ? [field('Flags', r, 2, flags & 1 ? '1 (encrypted)' : flags), field('CRC', r + 2, 4, hex(crc), 'CRC-32 of the upper-case name: the records are sorted by it, to find a file fast.'), field('Index', r + 6, 4, index), field('Size', r + 10, 4, bytesLabel(size)), field('Start', r + 14, 4, start), field('Name index', r + 18, 2, nameIndex)]
-                    : [field('CRC', r, 4, hex(crc), 'CRC-32 of the upper-case name: the records are sorted by it, to find a file fast.'), field('Index', r + 4, 4, index), field('Size', r + 8, 4, bytesLabel(size)), field('Start', r + 12, 4, start), field('Name index', r + 16, 4, nameIndex)];
+                    ? [
+                          field('Flags', r, 2, flags & 1 ? '1 (encrypted)' : flags),
+                          field('CRC', r + 2, 4, hex(crc), 'CRC-32 of the upper-case name: the records are sorted by it, to find a file fast.'),
+                          field('Index', r + 6, 4, index),
+                          field('Size', r + 10, 4, bytesLabel(size)),
+                          field('Start', r + 14, 4, start),
+                          field('Name index', r + 18, 2, nameIndex),
+                      ]
+                    : [
+                          field('CRC', r, 4, hex(crc), 'CRC-32 of the upper-case name: the records are sorted by it, to find a file fast.'),
+                          field('Index', r + 4, 4, index),
+                          field('Size', r + 8, 4, bytesLabel(size)),
+                          field('Start', r + 12, 4, start),
+                          field('Name index', r + 16, 4, nameIndex),
+                      ];
             if (recordFields.length < 5000) recordFields.push({ name: path.split('\\').pop()!, offset: r, length: 20, value: bytesLabel(size), children });
             if (start + size > data.length) {
                 warnings.push(`${path} runs past the end of the archive.`);

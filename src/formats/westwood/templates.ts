@@ -84,7 +84,10 @@ export const THEATER_EXTENSIONS: Record<'td' | 'ra', Record<string, string>> = {
 /** Every tile set file name: each template in each theater it belongs to. */
 export function templateFileNames(): string[] {
     const names: string[] = [];
-    for (const [game, templates] of [['td', TD_TEMPLATES], ['ra', RA_TEMPLATES]] as const) {
+    for (const [game, templates] of [
+        ['td', TD_TEMPLATES],
+        ['ra', RA_TEMPLATES],
+    ] as const) {
         for (const t of templates) for (const letter of t.theaters) names.push(`${t.name.toLowerCase()}.${THEATER_EXTENSIONS[game][letter]}`);
     }
     return names;

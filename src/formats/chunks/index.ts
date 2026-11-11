@@ -249,7 +249,9 @@ function chunkFields(data: Uint8Array, top: Chunk[]): { fields: Field[]; capped:
             const name = `Chunk ${chunk.id}`;
             if (chunk.children) {
                 const widget = asWidget(data, chunk);
-                const value = widget ? `${typeLabel(widget.type)}: ${ownStrings(data, widget.contents).name ?? '(no name)'}` : `${chunk.children.length} chunk${chunk.children.length === 1 ? '' : 's'}`;
+                const value = widget
+                    ? `${typeLabel(widget.type)}: ${ownStrings(data, widget.contents).name ?? '(no name)'}`
+                    : `${chunk.children.length} chunk${chunk.children.length === 1 ? '' : 's'}`;
                 out.push({ name, offset: chunk.offset, length: chunk.length, value, children: build(chunk.children) });
                 continue;
             }

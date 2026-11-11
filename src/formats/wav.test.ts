@@ -7,18 +7,24 @@ describe('Microsoft ADPCM', () => {
     // A 30 ms stereo tone (440 Hz left, 660 Hz right, 8 kHz), encoded by FFmpeg with 64-byte blocks.
     const file = fromHex(
         [
-        '52494646b401000057415645666d74203200000002000200401f0000803e00004000040020003400070000010000000200ff00000000c0004000f0000000cc0130ff880118ff6661637404000000f000',
-        '00004c4953541a000000494e464f495346540e0000004c61766636302e31362e3130300064617461400100000000100010006b05ed07000000007777777cf8fddecfd1d3d4e402223f6d3b4d3e2e2103',
-        'f5d3b3c2dfdddbec0e1e316234443321201efbddbddeb0e3e5e3f31200003b01c801dbf77d0bacf37f0f4c4c3d3e200205d3c3b2d0dedcdcfc1e205243354332201ffcecddaedfd2c4e4f302214f3c5c',
-        '3c3e2f1104e3d4a2d1dfcdeb00008801930233f05df24af04cf81f3133543333322f0cecdcaddfc1d3e4e502114f3e5d3b3e3e2112e4d4b2c2cfeedcfcfd1f205235433332201dfcdbbeced000008401',
-        '130201f44bfb4cf857f4e4f312204e5c3c3c3f2f12f3e5c3b1d1ceeddb0d0e2f3264343332212efdeacdceb0d1e3e5f302114f3c5c3d3e3f1103f5c400001f01cf028100fb0fe405810dbfdeedfcfd2f',
-        '315345333321201deaddaedfc0d3e4e40311305d3c5b2e2f9600000000000000000000000000000000000000',
-    ].join(''),
+            '52494646b401000057415645666d74203200000002000200401f0000803e00004000040020003400070000010000000200ff00000000c0004000f0000000cc0130ff880118ff6661637404000000f000',
+            '00004c4953541a000000494e464f495346540e0000004c61766636302e31362e3130300064617461400100000000100010006b05ed07000000007777777cf8fddecfd1d3d4e402223f6d3b4d3e2e2103',
+            'f5d3b3c2dfdddbec0e1e316234443321201efbddbddeb0e3e5e3f31200003b01c801dbf77d0bacf37f0f4c4c3d3e200205d3c3b2d0dedcdcfc1e205243354332201ffcecddaedfd2c4e4f302214f3c5c',
+            '3c3e2f1104e3d4a2d1dfcdeb00008801930233f05df24af04cf81f3133543333322f0cecdcaddfc1d3e4e502114f3e5d3b3e3e2112e4d4b2c2cfeedcfcfd1f205235433332201dfcdbbeced000008401',
+            '130201f44bfb4cf857f4e4f312204e5c3c3c3f2f12f3e5c3b1d1ceeddb0d0e2f3264343332212efdeacdceb0d1e3e5f302114f3c5c3d3e3f1103f5c400001f01cf028100fb0fe405810dbfdeedfcfd2f',
+            '315345333321201deaddaedfc0d3e4e40311305d3c5b2e2f9600000000000000000000000000000000000000',
+        ].join('')
     );
 
     it('decodes as FFmpeg does, sample for sample', () => {
         const parsed = wav.parse(file, { name: null, names: [] });
-        expect(parsed.summary).toEqual(expect.arrayContaining([['Format', 'Microsoft ADPCM'], ['Channels', 'Stereo'], ['Sample rate', '8000 Hz']]));
+        expect(parsed.summary).toEqual(
+            expect.arrayContaining([
+                ['Format', 'Microsoft ADPCM'],
+                ['Channels', 'Stereo'],
+                ['Sample rate', '8000 Hz'],
+            ])
+        );
         if (parsed.preview?.kind !== 'audio') throw new Error('expected audio');
         const w = parsed.preview.wav;
         const samples = new Int16Array(w.buffer.slice(w.byteOffset + 44, w.byteOffset + w.length));

@@ -47,7 +47,7 @@ export function lzw(data: Uint8Array, minCodeSize: number, out: Uint8Array): { w
     const suffix = new Uint8Array(4096);
     const first = new Uint8Array(4096);
     const stack = new Uint8Array(4097);
-    for (let i = 0; i < clear; i++) (suffix[i] = i), (first[i] = i);
+    for (let i = 0; i < clear; i++) ((suffix[i] = i), (first[i] = i));
 
     let size = minCodeSize + 1;
     let next = end + 1;
@@ -145,7 +145,7 @@ class Screen {
     constructor(
         private readonly width: number,
         private readonly height: number,
-        private readonly frames: Frame[],
+        private readonly frames: Frame[]
     ) {
         this.rgba = new Uint8Array(width * height * 4);
     }
@@ -235,8 +235,14 @@ const parser: FormatParser = {
                 children: [
                     field('Width', 6, 2, width),
                     field('Height', 8, 2, height),
-                    field('Flags', 10, 1, `${packed}`, `Global color table: ${hasGlobal ? `yes, ${globalSize / 3} colors${packed & 8 ? ', sorted by importance' : ''}` : 'no'}. Source had ${((packed >> 4) & 7) + 1} bits per channel.`),
-                    field('Background color', 11, 1, background, "An index into the global color table. Browsers ignore it and start from transparent."),
+                    field(
+                        'Flags',
+                        10,
+                        1,
+                        `${packed}`,
+                        `Global color table: ${hasGlobal ? `yes, ${globalSize / 3} colors${packed & 8 ? ', sorted by importance' : ''}` : 'no'}. Source had ${((packed >> 4) & 7) + 1} bits per channel.`
+                    ),
+                    field('Background color', 11, 1, background, 'An index into the global color table. Browsers ignore it and start from transparent.'),
                     field('Pixel aspect', 12, 1, aspect ? `${((aspect + 15) / 64).toFixed(3)}` : '0 (square)'),
                 ],
             },
@@ -302,7 +308,13 @@ const parser: FormatParser = {
                             children: [
                                 field('Introducer', start, 2, '21 F9'),
                                 field('Size', start + 2, 1, data[start + 2]),
-                                field('Flags', start + 3, 1, flags, `After this frame: ${DISPOSAL[disposal] ?? `${disposal} (unknown)`}.${flags & 2 ? ' Waits for input.' : ''}${flags & 1 ? ' Has a transparent color.' : ''}`),
+                                field(
+                                    'Flags',
+                                    start + 3,
+                                    1,
+                                    flags,
+                                    `After this frame: ${DISPOSAL[disposal] ?? `${disposal} (unknown)`}.${flags & 2 ? ' Waits for input.' : ''}${flags & 1 ? ' Has a transparent color.' : ''}`
+                                ),
                                 field('Delay', start + 4, 2, `${delay} hundredths of a second`, delay < 2 ? 'Under 2: browsers show it for 10.' : undefined),
                                 field('Transparent color', start + 6, 1, bytes[3], flags & 1 ? undefined : 'Not used: the flag is off.'),
                             ],
@@ -317,9 +329,26 @@ const parser: FormatParser = {
                     // The loop count is its own sub-block after the 11-byte name: 1, then a 16-bit count.
                     const loopAt = start + 3 + data[start + 2];
                     if (netscape && data[loopAt] === 3 && data[loopAt + 1] === 1) loops = data[loopAt + 2] | (data[loopAt + 3] << 8);
-                    if (list) blockFields.push(field('Application extension', start, at - start, id, netscape && loops !== null ? (loops === 0 ? 'Loops forever.' : `Loop count ${loops}.`) : id.startsWith('XMP') ? 'XMP metadata.' : undefined));
+                    if (list)
+                        blockFields.push(
+                            field(
+                                'Application extension',
+                                start,
+                                at - start,
+                                id,
+                                netscape && loops !== null ? (loops === 0 ? 'Loops forever.' : `Loop count ${loops}.`) : id.startsWith('XMP') ? 'XMP metadata.' : undefined
+                            )
+                        );
                 } else if (list) {
-                    blockFields.push(field(label === 0x01 ? 'Plain text' : `Extension ${label.toString(16).toUpperCase()}`, start, at - start, bytesLabel(bytes.length), label === 0x01 ? 'Text drawn over the picture; browsers ignore it.' : undefined));
+                    blockFields.push(
+                        field(
+                            label === 0x01 ? 'Plain text' : `Extension ${label.toString(16).toUpperCase()}`,
+                            start,
+                            at - start,
+                            bytesLabel(bytes.length),
+                            label === 0x01 ? 'Text drawn over the picture; browsers ignore it.' : undefined
+                        )
+                    );
                 }
                 continue;
             }
@@ -341,7 +370,20 @@ const parser: FormatParser = {
                 const colors = hasLocal ? data.subarray(colorsAt, colorsAt + localSize) : globalColors;
                 if (minCodeSize < 1 || minCodeSize > 11) warnings.push(`Frame ${frames.length + 1} has an LZW code size of ${minCodeSize}, which isn't allowed.`);
                 else if (!colors.length) warnings.push(`Frame ${frames.length + 1} has no color table to draw it with.`);
-                else frames.push({ left, top, width: w, height: h, interlaced: (flags & 0x40) !== 0, colors, minCodeSize, data: body.bytes, transparent: pending?.transparent ?? null, disposal: pending?.disposal ?? 0, delay: pending?.delay ?? 0 });
+                else
+                    frames.push({
+                        left,
+                        top,
+                        width: w,
+                        height: h,
+                        interlaced: (flags & 0x40) !== 0,
+                        colors,
+                        minCodeSize,
+                        data: body.bytes,
+                        transparent: pending?.transparent ?? null,
+                        disposal: pending?.disposal ?? 0,
+                        delay: pending?.delay ?? 0,
+                    });
                 pending = null;
                 if (blockFields.length < MAX_FRAME_FIELDS * 2)
                     blockFields.push({
@@ -355,7 +397,13 @@ const parser: FormatParser = {
                             field('Top', start + 3, 2, top),
                             field('Width', start + 5, 2, w),
                             field('Height', start + 7, 2, h),
-                            field('Flags', start + 9, 1, flags, `Local color table: ${hasLocal ? `yes, ${localSize / 3} colors` : 'no, uses the global one'}. ${flags & 0x40 ? 'Interlaced.' : 'Not interlaced.'}`),
+                            field(
+                                'Flags',
+                                start + 9,
+                                1,
+                                flags,
+                                `Local color table: ${hasLocal ? `yes, ${localSize / 3} colors` : 'no, uses the global one'}. ${flags & 0x40 ? 'Interlaced.' : 'Not interlaced.'}`
+                            ),
                             ...(hasLocal ? [field('Local color table', colorsAt, localSize, `${localSize / 3} colors`)] : []),
                             field('LZW code size', minAt, 1, minCodeSize),
                             field('Pixel data', minAt + 1, at - minAt - 1, `${bytesLabel(body.bytes.length)} in ${body.count} sub-block${body.count === 1 ? '' : 's'}`),
@@ -415,7 +463,14 @@ const parser: FormatParser = {
                     },
                 };
             }
-            if (comments.length) preview = { kind: 'stack', items: [{ title: frames.length === 1 ? 'Picture' : 'Animation', preview }, { title: 'Comments', preview: { kind: 'text', text: comments.join('\n\n') } }] };
+            if (comments.length)
+                preview = {
+                    kind: 'stack',
+                    items: [
+                        { title: frames.length === 1 ? 'Picture' : 'Animation', preview },
+                        { title: 'Comments', preview: { kind: 'text', text: comments.join('\n\n') } },
+                    ],
+                };
 
             // Check every frame decodes, so damage shows up as the file opens rather than partway through playing (unless that's too much work to do up front).
             const work = frames.reduce((n, f) => n + width * height + f.width * f.height, 0);
@@ -430,7 +485,19 @@ const parser: FormatParser = {
             summary: [
                 ['Size', `${width} × ${height}`],
                 ['Frames', String(frames.length)],
-                ...(frames.length > 1 ? ([['Length', `${seconds.toFixed(2)} s`], ['Loops', loops === null ? 'No loop count (most browsers play it once)' : loops === 0 ? 'Forever' : `Loop count ${loops} (players differ on whether that counts the first time through)`]] as [string, string][]) : []),
+                ...(frames.length > 1
+                    ? ([
+                          ['Length', `${seconds.toFixed(2)} s`],
+                          [
+                              'Loops',
+                              loops === null
+                                  ? 'No loop count (most browsers play it once)'
+                                  : loops === 0
+                                    ? 'Forever'
+                                    : `Loop count ${loops} (players differ on whether that counts the first time through)`,
+                          ],
+                      ] as [string, string][])
+                    : []),
                 ['Colors', hasGlobal ? `${globalSize / 3} in the global table${frames.some((f) => f.colors !== globalColors) ? ', and local tables' : ''}` : 'Local tables only'],
                 ...(frames.some((f) => f.transparent !== null) ? ([['Transparency', 'Yes']] as [string, string][]) : []),
                 ...(interlaced ? ([['Interlaced', interlaced === frames.length ? 'Yes' : `${interlaced} of ${frames.length} frames`]] as [string, string][]) : []),

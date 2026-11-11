@@ -9,7 +9,7 @@ import { crc32 } from '../../core/crc32';
 export function classicId(name: string): number {
     const text = name.toUpperCase();
     let id = 0;
-    for (let i = 0; i < text.length; ) {
+    for (let i = 0; i < text.length;) {
         let a = 0;
         for (let j = 0; j < 4; j++, i++) {
             a >>>= 8;

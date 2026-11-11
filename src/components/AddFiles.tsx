@@ -22,12 +22,12 @@ export function AddFilesButton({ label = 'Add files…', variant = 'outline-ligh
     };
 
     return (
-        <span className="d-inline-flex align-items-center gap-2">
-            <Button size="sm" variant={variant} disabled={busy} onClick={() => input.current?.click()}>
-                {busy ? <Spinner animation="border" size="sm" className="me-1" /> : <i className="bi bi-plus-lg me-1" />} {label}
+        <span className='d-inline-flex align-items-center gap-2'>
+            <Button size='sm' variant={variant} disabled={busy} onClick={() => input.current?.click()}>
+                {busy ? <Spinner animation='border' size='sm' className='me-1' /> : <i className='bi bi-plus-lg me-1' />} {label}
             </Button>
-            {result && <span className="small text-body-secondary">{result}</span>}
-            <input ref={input} type="file" multiple hidden onChange={(e) => void load(e.target.files).finally(() => (e.target.value = ''))} />
+            {result && <span className='small text-body-secondary'>{result}</span>}
+            <input ref={input} type='file' multiple hidden onChange={(e) => void load(e.target.files).finally(() => (e.target.value = ''))} />
         </span>
     );
 }

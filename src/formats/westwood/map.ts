@@ -104,8 +104,31 @@ function kindOf(template: Template | undefined): number {
 
 /** RA overlays by ID (OverlayType in DEFINES.H), as INI names, which are also their sprites' names. */
 const RA_OVERLAYS = [
-    'SBAG', 'CYCL', 'BRIK', 'BARB', 'WOOD', 'GOLD01', 'GOLD02', 'GOLD03', 'GOLD04', 'GEM01', 'GEM02', 'GEM03', 'GEM04',
-    'V12', 'V13', 'V14', 'V15', 'V16', 'V17', 'V18', 'FPLS', 'WCRATE', 'SCRATE', 'FENC', 'WWCRATE',
+    'SBAG',
+    'CYCL',
+    'BRIK',
+    'BARB',
+    'WOOD',
+    'GOLD01',
+    'GOLD02',
+    'GOLD03',
+    'GOLD04',
+    'GEM01',
+    'GEM02',
+    'GEM03',
+    'GEM04',
+    'V12',
+    'V13',
+    'V14',
+    'V15',
+    'V16',
+    'V17',
+    'V18',
+    'FPLS',
+    'WCRATE',
+    'SCRATE',
+    'FENC',
+    'WWCRATE',
 ];
 
 const WALLS = new Set(['SBAG', 'CYCL', 'BRIK', 'BARB', 'WOOD', 'FENC']);
@@ -175,13 +198,26 @@ export interface MapObject {
  */
 function readObjects(ini: Ini, size: number): MapObject[] {
     const out: MapObject[] = [];
-    const sections: [MapObject['kind'], string][] = [['building', 'STRUCTURES'], ['unit', 'UNITS'], ['ship', 'SHIPS'], ['infantry', 'INFANTRY']];
+    const sections: [MapObject['kind'], string][] = [
+        ['building', 'STRUCTURES'],
+        ['unit', 'UNITS'],
+        ['ship', 'SHIPS'],
+        ['infantry', 'INFANTRY'],
+    ];
     for (const [kind, section] of sections) {
         for (const [, value] of ini.entries(section)) {
             const v = value.split(',').map((x) => x.trim());
             const cell = Number(v[3]);
             if (!Number.isInteger(cell) || cell < 0 || cell >= size * size) continue;
-            out.push({ kind, house: v[0].toUpperCase(), type: (v[1] ?? '').toUpperCase(), cell, facing: Number(kind === 'infantry' ? v[6] : v[4]) || 0, sub: kind === 'infantry' ? Number(v[4]) || 0 : 0, health: Number(v[2]) || 256 });
+            out.push({
+                kind,
+                house: v[0].toUpperCase(),
+                type: (v[1] ?? '').toUpperCase(),
+                cell,
+                facing: Number(kind === 'infantry' ? v[6] : v[4]) || 0,
+                sub: kind === 'infantry' ? Number(v[4]) || 0 : 0,
+                health: Number(v[2]) || 256,
+            });
         }
     }
     for (const [, value] of ini.entries('SMUDGE')) {
@@ -194,9 +230,27 @@ function readObjects(ini: Ini, size: number): MapObject[] {
 
 /** Each side's color, as the games give them by default (GDI and Spain keep the art's own gold). */
 const HOUSE_COLORS: Record<string, string | null> = {
-    GOODGUY: null, BADGUY: 'Red', NEUTRAL: null, SPECIAL: null, JP: null,
-    MULTI1: 'Teal', MULTI2: 'Light blue', MULTI3: 'Red', MULTI4: 'Green', MULTI5: 'Orange', MULTI6: 'Blue', MULTI7: 'Gray', MULTI8: 'Brown',
-    SPAIN: null, GREECE: 'Light blue', USSR: 'Red', ENGLAND: 'Green', UKRAINE: 'Orange', GERMANY: 'Gray', FRANCE: 'Blue', TURKEY: 'Brown',
+    GOODGUY: null,
+    BADGUY: 'Red',
+    NEUTRAL: null,
+    SPECIAL: null,
+    JP: null,
+    MULTI1: 'Teal',
+    MULTI2: 'Light blue',
+    MULTI3: 'Red',
+    MULTI4: 'Green',
+    MULTI5: 'Orange',
+    MULTI6: 'Blue',
+    MULTI7: 'Gray',
+    MULTI8: 'Brown',
+    SPAIN: null,
+    GREECE: 'Light blue',
+    USSR: 'Red',
+    ENGLAND: 'Green',
+    UKRAINE: 'Orange',
+    GERMANY: 'Gray',
+    FRANCE: 'Blue',
+    TURKEY: 'Brown',
 };
 /** In RA, GoodGuy is the Allies' light blue. */
 const RA_HOUSE_COLORS: Record<string, string | null> = { ...HOUSE_COLORS, GOODGUY: 'Light blue' };
@@ -206,7 +260,13 @@ const bodyFrame = (facing: number) => (32 - (((facing + 4) >> 3) & 31)) % 32;
 /** Infantry stand in 8 directions (INFANTRY.CPP, HumanShape). */
 const HUMAN_SHAPE = [0, 0, 7, 7, 7, 7, 6, 6, 6, 6, 5, 5, 5, 5, 5, 4, 4, 4, 3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 1, 1, 0];
 /** Where in a cell infantry stand, in 1/256ths: middle, then the four quarters (CONST.CPP, StoppingCoordAbs). */
-const SUB_CELLS = [[128, 128], [64, 64], [192, 64], [64, 192], [192, 192]];
+const SUB_CELLS = [
+    [128, 128],
+    [64, 64],
+    [192, 64],
+    [64, 192],
+    [192, 192],
+];
 /** Defenses that turn: their frames are the 32 facings (then the same again, damaged). */
 const TURRET_BUILDINGS = new Set(['GUN', 'AGUN', 'SAM']);
 /** Half strength or less: the game shows the damaged frames, the second half of the building's. */
@@ -303,7 +363,11 @@ function startCells(ini: Ini, size: number): [number, number][] {
 
 export function raMission(ini: Ini): Mission {
     const cells = RA_SIZE * RA_SIZE;
-    const joined = (name: string) => ini.section(name)!.entries.map((e) => e.value).join('');
+    const joined = (name: string) =>
+        ini
+            .section(name)!
+            .entries.map((e) => e.value)
+            .join('');
     const raw = unpackSection(joined('MapPack'), cells * 3);
     const templates = new Uint16Array(cells);
     for (let i = 0; i < cells; i++) templates[i] = raw[i * 2] | (raw[i * 2 + 1] << 8);
@@ -394,9 +458,7 @@ const DIGITS = [
     ['###', '#.#', '###', '#.#', '###'],
 ];
 
-export type TileRender =
-    | { status: 'drawn'; image: IndexedImage; palette?: Uint8Array; wanted?: string }
-    | { status: 'needs'; wanted: string };
+export type TileRender = { status: 'drawn'; image: IndexedImage; palette?: Uint8Array; wanted?: string } | { status: 'needs'; wanted: string };
 
 const GAME_NAMES = { td: 'Tiberian Dawn', ra: 'Red Alert' };
 
@@ -428,17 +490,27 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
         return tileSets.get(id)!;
     };
     const clear = tileSet(0);
-    if (!clear) return { status: 'needs', wanted: `Open ${archive} from ${GAME_NAMES[m.game]} as well to draw this map with the game's own tiles${m.game === 'ra' ? ` (it's inside MAIN.MIX, so opening MAIN.MIX does it)` : ''}.` };
+    if (!clear)
+        return {
+            status: 'needs',
+            wanted: `Open ${archive} from ${GAME_NAMES[m.game]} as well to draw this map with the game's own tiles${m.game === 'ra' ? ` (it's inside MAIN.MIX, so opening MAIN.MIX does it)` : ''}.`,
+        };
     // Without the theater's palette the map is still drawn, in whichever palette the app has picked.
     // Both games have a TEMPERAT.PAL; one from an archive holding the other game's tiles is the wrong one.
-    const otherGame = new Set(find(`clear1.${theater.ext}`).filter((c) => readTileSet(c.data)?.layout.game !== m.game).map((c) => c.source));
+    const otherGame = new Set(
+        find(`clear1.${theater.ext}`)
+            .filter((c) => readTileSet(c.data)?.layout.game !== m.game)
+            .map((c) => c.source)
+    );
     const pal = find(`${theater.root}.pal`)
         .filter((c) => c.data.length === 768 && !otherGame.has(c.source))
         .sort((a, b) => Number(b.source === source) - Number(a.source === source))[0];
     const palette = pal ? expandPalette(pal.data) : undefined;
     if (pal) links.use(`${theater.root}.pal`, pal, 'Palette');
     else links.miss(`${theater.root}.pal`, `Palette (in ${m.game === 'ra' ? 'REDALERT.MIX' : archive})`);
-    const wanted = pal ? undefined : `The colors need ${theater.root.toUpperCase()}.PAL, which is in ${m.game === 'ra' ? 'REDALERT.MIX' : archive}. Open that as well, or pick the palette beside the map.`;
+    const wanted = pal
+        ? undefined
+        : `The colors need ${theater.root.toUpperCase()}.PAL, which is in ${m.game === 'ra' ? 'REDALERT.MIX' : archive}. Open that as well, or pick the palette beside the map.`;
     const shade = palette ? shadeTable(palette) : identityTable;
 
     const width = area.width * TILE;
@@ -555,10 +627,13 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
     const unseenInfantry = new Set<string>();
     for (const [cell, name] of terrain) {
         const [x, y] = [cell % size, Math.floor(cell / size)];
-        standing.push({ y: y * 256, draw: () => {
-            const image = sprite(name, true)?.frames[0];
-            if (image) blit(image.pixels, image.width, image.height, (x - area.x) * TILE, (y - area.y) * TILE, true);
-        } });
+        standing.push({
+            y: y * 256,
+            draw: () => {
+                const image = sprite(name, true)?.frames[0];
+                if (image) blit(image.pixels, image.width, image.height, (x - area.x) * TILE, (y - area.y) * TILE, true);
+            },
+        });
     }
     for (const o of m.objects) {
         if (o.kind === 'smudge') continue;
@@ -566,39 +641,50 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
         if (!inArea(x, y)) continue;
         const remap = remapFor(o.house);
         if (o.kind === 'building') {
-            standing.push({ y: y * 256, draw: () => {
-                const shp = spriteFrom(art(o.type), [theater.ext, 'shp'], `Building sprite (in ${conquer}, or the theater's)`);
-                if (!shp) unseen.add(o.type);
-                const damaged = o.health <= DAMAGED;
-                const frame = !shp ? 0 : TURRET_BUILDINGS.has(o.type) ? bodyFrame(o.facing) + (damaged && shp.frames.length >= 64 ? 32 : 0) : damaged ? shp.frames.length >> 1 : 0;
-                const image = shp?.frames[frame];
-                if (image) blit(image.pixels, image.width, image.height, (x - area.x) * TILE, (y - area.y) * TILE, true, remap);
-                // A war factory's own sprite is only its floor and walls: the roof and door are drawn over it. (Red Alert's fake one uses the same art.)
-                if (art(o.type) === 'WEAP') {
-                    const top = spriteFrom('WEAP2', ['shp'], `War factory roof and door (in ${conquer})`);
-                    const roof = top?.frames[damaged ? top.frames.length >> 1 : 0];
-                    if (roof) blit(roof.pixels, roof.width, roof.height, (x - area.x) * TILE, (y - area.y) * TILE, true, remap);
-                }
-            } });
+            standing.push({
+                y: y * 256,
+                draw: () => {
+                    const shp = spriteFrom(art(o.type), [theater.ext, 'shp'], `Building sprite (in ${conquer}, or the theater's)`);
+                    if (!shp) unseen.add(o.type);
+                    const damaged = o.health <= DAMAGED;
+                    const frame = !shp ? 0 : TURRET_BUILDINGS.has(o.type) ? bodyFrame(o.facing) + (damaged && shp.frames.length >= 64 ? 32 : 0) : damaged ? shp.frames.length >> 1 : 0;
+                    const image = shp?.frames[frame];
+                    if (image) blit(image.pixels, image.width, image.height, (x - area.x) * TILE, (y - area.y) * TILE, true, remap);
+                    // A war factory's own sprite is only its floor and walls: the roof and door are drawn over it. (Red Alert's fake one uses the same art.)
+                    if (art(o.type) === 'WEAP') {
+                        const top = spriteFrom('WEAP2', ['shp'], `War factory roof and door (in ${conquer})`);
+                        const roof = top?.frames[damaged ? top.frames.length >> 1 : 0];
+                        if (roof) blit(roof.pixels, roof.width, roof.height, (x - area.x) * TILE, (y - area.y) * TILE, true, remap);
+                    }
+                },
+            });
             continue;
         }
-        const [sx, sy] = o.kind === 'infantry' ? SUB_CELLS[o.sub] ?? SUB_CELLS[0] : SUB_CELLS[0];
-        standing.push({ y: y * 256 + sy, draw: () => {
-            const shp = spriteFrom(art(o.type), ['shp'], o.kind === 'infantry' ? `Infantry sprite (in ${infantryIn})` : `Unit sprite (in ${conquer})`);
-            if (!shp) {
-                (o.kind === 'infantry' ? unseenInfantry : unseen).add(o.type);
-                return;
-            }
-            const dir32 = ((o.facing + 4) >> 3) & 31;
-            const frames = o.kind === 'infantry' ? [HUMAN_SHAPE[dir32]] : shp.frames.length >= 32 ? [bodyFrame(o.facing), ...(TURRETED.has(o.type) ? [32 + bodyFrame(o.facing)] : [])] : [Math.floor((bodyFrame(o.facing) * shp.frames.length) / 32)];
-            for (const f of frames) {
-                const image = shp.frames[f];
-                if (!image) continue;
-                const px = (x - area.x) * TILE + Math.round((sx * TILE) / 256) - (image.width >> 1);
-                const py = (y - area.y) * TILE + Math.round((sy * TILE) / 256) - (image.height >> 1);
-                blit(image.pixels, image.width, image.height, px, py, true, remap);
-            }
-        } });
+        const [sx, sy] = o.kind === 'infantry' ? (SUB_CELLS[o.sub] ?? SUB_CELLS[0]) : SUB_CELLS[0];
+        standing.push({
+            y: y * 256 + sy,
+            draw: () => {
+                const shp = spriteFrom(art(o.type), ['shp'], o.kind === 'infantry' ? `Infantry sprite (in ${infantryIn})` : `Unit sprite (in ${conquer})`);
+                if (!shp) {
+                    (o.kind === 'infantry' ? unseenInfantry : unseen).add(o.type);
+                    return;
+                }
+                const dir32 = ((o.facing + 4) >> 3) & 31;
+                const frames =
+                    o.kind === 'infantry'
+                        ? [HUMAN_SHAPE[dir32]]
+                        : shp.frames.length >= 32
+                          ? [bodyFrame(o.facing), ...(TURRETED.has(o.type) ? [32 + bodyFrame(o.facing)] : [])]
+                          : [Math.floor((bodyFrame(o.facing) * shp.frames.length) / 32)];
+                for (const f of frames) {
+                    const image = shp.frames[f];
+                    if (!image) continue;
+                    const px = (x - area.x) * TILE + Math.round((sx * TILE) / 256) - (image.width >> 1);
+                    const py = (y - area.y) * TILE + Math.round((sy * TILE) / 256) - (image.height >> 1);
+                    blit(image.pixels, image.width, image.height, px, py, true, remap);
+                }
+            },
+        });
     }
     for (const o of standing.sort((a, b) => a.y - b.y)) o.draw();
 
@@ -622,10 +708,12 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
                 }
             }
             const [gx0, gy0] = [(side - 3 * scale) / 2, (side - 5 * scale) / 2];
-            DIGITS[n].forEach((row, gy) => [...row].forEach((c, gx) => {
-                if (c !== '#') return;
-                for (let k = 0; k < scale * scale; k++) badge[(gy0 + gy * scale + Math.floor(k / scale)) * side + gx0 + gx * scale + (k % scale)] = light;
-            }));
+            DIGITS[n].forEach((row, gy) =>
+                [...row].forEach((c, gx) => {
+                    if (c !== '#') return;
+                    for (let k = 0; k < scale * scale; k++) badge[(gy0 + gy * scale + Math.floor(k / scale)) * side + gx0 + gx * scale + (k % scale)] = light;
+                })
+            );
             // Only the disc: the corners outside it (0) leave the map showing.
             for (let j = 0; j < side; j++) {
                 for (let i = 0; i < side; i++) {
@@ -648,7 +736,11 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
 }
 
 /** A mission's map as previews (real tiles when they're available, and terrain kinds), with summary rows. */
-export function missionPreviews(m: Mission, find: Finder | undefined, links: Links): { items: { title: string; preview: Preview }[]; summary: [string, string][]; warnings: string[]; wanted?: string } {
+export function missionPreviews(
+    m: Mission,
+    find: Finder | undefined,
+    links: Links
+): { items: { title: string; preview: Preview }[]; summary: [string, string][]; warnings: string[]; wanted?: string } {
     const { image, counts, unknown } = renderMap(m);
     const summary: [string, string][] = [['Map', `${m.size} × ${m.size} cells${m.area ? `, playable ${m.area.width} × ${m.area.height} at ${m.area.x}, ${m.area.y} (shown)` : ''}`]];
     if (m.theater) summary.push(['Theater', m.theater]);
@@ -660,10 +752,16 @@ export function missionPreviews(m: Mission, find: Finder | undefined, links: Lin
     const tiles = find ? renderTiles(m, find, links) : null;
     if (tiles?.status !== 'drawn') return { items: [{ title: 'Terrain kinds', preview: kinds }], summary, warnings, wanted: tiles?.wanted };
     // The start positions can be turned off: the map is drawn again without them.
-    const toggle = isMultiplayer(m) && m.starts.length ? { label: 'Start positions', off: () => {
-        const plain = renderTiles(m, find!, new Links(), { starts: false });
-        return plain.status === 'drawn' ? [plain.image] : [tiles.image];
-    } } : undefined;
+    const toggle =
+        isMultiplayer(m) && m.starts.length
+            ? {
+                  label: 'Start positions',
+                  off: () => {
+                      const plain = renderTiles(m, find!, new Links(), { starts: false });
+                      return plain.status === 'drawn' ? [plain.image] : [tiles.image];
+                  },
+              }
+            : undefined;
     return {
         wanted: tiles.wanted,
         items: [

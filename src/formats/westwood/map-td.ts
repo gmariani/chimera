@@ -42,7 +42,7 @@ const parser: FormatParser = {
             preview: map.items.length === 1 ? map.items[0].preview : { kind: 'stack', items: map.items },
             wanted: companion
                 ? map.wanted
-                : `${iniName ? iniName.toUpperCase() : 'The mission\'s INI'} says which part of the map is playable, its theater, and where the Tiberium and trees are. Open the archive it's in to see them here.`,
+                : `${iniName ? iniName.toUpperCase() : "The mission's INI"} says which part of the map is playable, its theater, and where the Tiberium and trees are. Open the archive it's in to see them here.`,
             links: links.list,
             warnings: map.warnings,
         };

@@ -94,7 +94,7 @@ export function PaletteSelect() {
         else groups.push([group, [p]]);
     }
     return (
-        <Form.Select size="sm" value={current.id} onChange={(e) => select(e.target.value)}>
+        <Form.Select size='sm' value={current.id} onChange={(e) => select(e.target.value)}>
             {groups.map(([group, list]) => (
                 <optgroup key={group} label={group}>
                     {list.map((p) => (
