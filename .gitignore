@@ -15,7 +15,6 @@ format-counts.local.json
 /MIX Samples
 *.mix
 *.MIX
-/dune2k
 /wasm/bink/build
 /SWF Samples
 
