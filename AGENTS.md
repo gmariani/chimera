@@ -66,7 +66,7 @@ Nothing is finished until it's checked. Run what applies, and say what you ran a
 
 1. `npm run typecheck`, `npm run lint` (Oxlint) and `npm run format:check` (Prettier).
 2. `npm test`.
-3. When a sniffer or the registry changed, run the game data and compare the count of each format in every archive with the code from before the change (`git stash`). A sniffer that suddenly claims other files fails silently: they just open as the wrong thing. Run vitest with `--silent=false --reporter=verbose` to see the counts.
+3. When a sniffer or the registry changed, compare the count of each format in every archive with the code from before the change: `npm run test:formats:save` before changing anything, then `npm run test:formats` after (about 30 s; any difference fails, listed). A sniffer that suddenly claims other files fails silently: they just open as the wrong thing. Without a baseline from before, save one from the code before the change (`git stash`, save, `git stash pop`). When a difference is meant (a new format taking files that were unrecognized), say so, and save the new counts. `npm run test:game-data` (about 8 minutes) reads every one of those files in full: run it when a reader changed, and before a commit.
 4. When a reader changed, fuzz it: `npm run fuzz -- --format <id>` (the IDs in `src/formats/index.ts`; several, comma-separated) takes seconds, and its broken versions still go through everything the app does. Add a game folder when the format comes from there and has no generated sample. It should report no findings. The full `npm run fuzz` (about a minute and a half) is for before a commit, and for changes to what every format shares: a sniffer, the decoders in `compression.ts` or `dib.ts`, or the checks in `inspect.ts` and `identify.ts`.
 5. Check new behavior on real files where they exist, not only on files a test builds. Say plainly when no real files were available.
 
@@ -74,7 +74,7 @@ Report what didn't pass, with the output. Don't round "mostly works" up to "work
 
 ## Data and safety
 
-- **Game files are never committed or copied into the repo.** They belong to EA, and freeware isn't permission to republish. They're read where they're installed: `npm run test:setup` says where each game is (saved to the gitignored `game-data.local.json`), and `npm run test:game-data` runs every file of the installed games through the readers. Only `samples/generated/` is committed from `samples/`.
+- **Game files are never committed or copied into the repo.** They belong to EA, and freeware isn't permission to republish. They're read where they're installed: `npm run test:setup` says where each game is (saved to the gitignored `game-data.local.json`), `npm run test:game-data` runs every file of the installed games through the readers, and `npm run test:formats` compares which format each is taken for with a saved baseline (the gitignored `format-counts.local.json`). Only `samples/generated/` is committed from `samples/`.
 - **Never run memory-heavy work uncapped.** The fuzzer caps each worker's memory (1.5 GB, no swap, via systemd) and time (10 s). An uncapped run once took down the editor.
 - **Temporary scripts and output go in a scratch directory,** not the repo. A throwaway test inside `src/` gets deleted as soon as it's run.
 - **Don't commit.** The owner reviews and commits changes.
@@ -87,7 +87,7 @@ Report what didn't pass, with the output. Don't round "mostly works" up to "work
 - `src/core/`: bytes, limits, shared decoders and types.
 - `src/engine/`: the parsing worker and the page's side of it.
 - `src/components/`, `src/tabs/`, `src/lib/`: the UI.
-- `src/testing/`: where the installed games are (`game-data.ts`), and the sample generator (`samples.ts`).
+- `src/testing/`: where the installed games are (`game-data.ts`), the walk through their archives that `test:game-data` and `test:formats` share (`game-archives.ts`), and the sample generator (`samples.ts`).
 - `scripts/`: `npm run test:setup` and `npm run samples`.
 - `fuzz/`: the fuzzer.
 

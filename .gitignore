@@ -7,6 +7,8 @@ npm-debug.log
 
 # Game files used for manual testing, and where the tests find installed games (npm run test:setup)
 game-data.local.json
+# The counts npm run test:formats compares against: of the games installed here.
+format-counts.local.json
 /samples/*
 # ...except the samples made from scratch (npm run samples), which are ours to commit.
 !/samples/generated/

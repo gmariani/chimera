@@ -141,7 +141,12 @@ npm run test:setup -- dune2=/path/to/DUNE2        # or say it outright
 # Every MIX in the installed games, every archive nested in those, and every file inside them:
 npm run test:game-data
 CHIMERA_GAME_DATA=/path/to/CnCRemastered/Data/CNCDATA npx vitest run src/formats/gamedata.test.ts   # or other folders
-# Several at once, separated by ":" (";" on Windows).
+# Several at once, separated by ":" (";" on Windows). That reads every file in full (about 8 minutes).
+
+# Only which format each of those files is taken for, archive by archive, against saved counts (about 30 s):
+npm run test:formats:save   # the counts now become the baseline (before changing a sniffer, or to accept a change)
+npm run test:formats        # the counts now against the baseline: any difference fails, listed
+# (The baseline is format-counts.local.json, which isn't committed.)
 
 # Sample files made from scratch, ours to commit: a small valid file of each format that can be made
 # without the original tools (src/testing/samples.ts). After changing the generator:
