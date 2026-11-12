@@ -7,6 +7,7 @@ import { sniffMix, sniffXccDatabase } from './mix/sniff';
 import { sniffOgg } from './ogg/sniff';
 import { sniffIco } from './ico-sniff';
 import { sniffNe } from './ne-sniff';
+import { sniffMz } from './mz-sniff';
 import { sniffPif } from './pif-sniff';
 import { sniffAil } from './ail-sniff';
 import { sniffMidi } from './midi/midi-sniff';
@@ -123,6 +124,8 @@ export const FORMATS: FormatDescriptor[] = [
         byNameAlone: false,
         load: parserOf(() => import('./ne')),
     },
+    // A plain DOS program: the MZ header and nothing newer where 0x3C points (Windows and OS/2 programs start with an MZ header too).
+    { id: 'mz', name: 'DOS program (MZ)', extensions: ['exe', 'com', 'ovl'], sniff: sniffMz, byNameAlone: false, load: parserOf(() => import('./mz')) },
     { id: 'voc', name: 'Sound (VOC)', extensions: ['voc'], sniff: sniffVoc, load: parserOf(() => import('./voc')) },
     { id: 'ogg', name: 'Sound or video (Ogg)', extensions: ['ogg', 'oga', 'ogv', 'ogx', 'opus', 'spx'], sniff: sniffOgg, load: parserOf(() => import('./ogg')) },
     { id: 'pcx', name: 'Picture (PCX)', extensions: ['pcx'], sniff: sniffPcx, load: parserOf(() => import('./pcx')) },

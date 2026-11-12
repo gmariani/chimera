@@ -40,6 +40,7 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `mentat.eng` | Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does | 224 bytes |
 | `music.adl` | Westwood AdLib music, as Dune II’s: a conductor starting two voices, one looping as Westwood’s tools do | 1,177 bytes |
 | `driver.adv` | Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF | 150 bytes |
+| `program.exe` | DOS program linked as Borland’s TLINK does with overlays: relocations, the segment table, one overlay with a fixup | 262 bytes |
 | `program.pif` | Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections | 545 bytes |
 | `strings-dune2.eng` | Dune II string table, compressed as the game does | 291 bytes |
 | `strings-dos.ger` | C&C-style string table, plain, with accented letters in DOS characters | 42 bytes |

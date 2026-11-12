@@ -115,7 +115,7 @@ export function signature(data: Uint8Array): Signature | null {
         if (ne) return ne;
         if (pe + 4 <= data.length && (ascii(data, pe, 'LE') || ascii(data, pe, 'LX')))
             return { name: `${ascii(data, pe, 'LE') ? 'Windows driver or OS/2' : 'OS/2'} program (${ascii(data, pe, 'LE') ? 'LE' : 'LX'})`, ext: 'exe', exts: PROGRAMS, length: 2, runs: true };
-        return { name: 'DOS or Windows program (MZ)', ext: 'exe', exts: PROGRAMS, length: 2, runs: true };
+        return { name: 'DOS program (MZ)', ext: 'exe', exts: PROGRAMS, format: 'mz', length: 2, runs: true };
     }
     if (bytes(data, 0, [0x7f, 0x45, 0x4c, 0x46])) return { name: 'Linux or Unix program (ELF)', ext: 'elf', length: 4, runs: true };
     if (

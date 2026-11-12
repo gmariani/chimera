@@ -673,6 +673,72 @@ export function mentat(): Uint8Array {
 }
 
 /**
+ * A DOS program as Borland's TLINK lays one out with overlays, as Dune II's is: an 80-byte header with TLINK's mark and two
+ * relocations (at 0x3E, where TLINK puts them), then a 160-byte image in segments of 16 bytes each:
+ *
+ * - 0x0000, code: sets DS to the data segment, calls the overlay through its stub, prints the message, and exits;
+ * - 0x0002, data: the message, ending in "$" as DOS prints it;
+ * - 0x0004, the overlay's stub: INT 3Fh, where the overlay's code is, and one entry point;
+ * - 0x0007, data: TLINK's table of the segments, with the stack's (0x000A, in the memory DOS adds).
+ *
+ * After the image, the overlays: the FBOV header, then the overlay's code (loading the data segment into AX, through a
+ * fixup naming segment entry 1) and its fixup. `fixup` changes the fixup's offset; the checksum is set to match.
+ */
+export function dosProgram({ fixup = 1 }: { fixup?: number } = {}): Uint8Array {
+    const pad = (b: number[], n: number) => [...b, ...Array<number>(n - b.length).fill(0)];
+    const code = pad([0xb8, ...u16(2), 0x8e, 0xd8, 0x9a, ...u16(0x20), ...u16(4), 0xb4, 0x09, 0xba, ...u16(0), 0xcd, 0x21, 0xb8, ...u16(0x4c00), 0xcd, 0x21], 32);
+    const message = pad(text('Hello from Chimera.$'), 32);
+    const overlay = [0xb8, ...u16(1 << 3), 0xcb];
+    const stub = pad([0xcd, 0x3f, ...u16(0), ...u32(0), ...u16(overlay.length), ...u16(2), ...u16(1), ...u16(0), ...Array<number>(16).fill(0), 0xcd, 0x3f, ...u16(0), 0], 48);
+    const table = pad(
+        [
+            [0, 22, 1],
+            [2, 20, 4],
+            [4, 37, 3],
+            [7, 40, 4],
+            [10, 0x100, 4],
+        ].flatMap(([s, size, flags]) => [...u16(s), ...u16(size), ...u16(flags), ...u16(0)]),
+        48
+    );
+    const image = [...code, ...message, ...stub, ...table];
+    const headerSize = 80;
+    const end = headerSize + image.length;
+    const header = pad(
+        [
+            ...text('MZ'),
+            ...u16(end % 512),
+            ...u16(Math.ceil(end / 512)),
+            ...u16(2),
+            ...u16(headerSize / 16),
+            ...u16(0x10),
+            ...u16(0xffff),
+            ...u16(10),
+            ...u16(0x100),
+            ...u16(0),
+            ...u16(0),
+            ...u16(0),
+            ...u16(0x3e),
+            ...u16(0),
+            ...u16(1),
+            0xfb,
+            0x50,
+            ...text('jr'),
+            ...Array<number>(0x3e - 0x22).fill(0),
+            ...u32(1),
+            ...u16(8),
+            ...u16(0),
+        ],
+        headerSize
+    );
+    const data = bytes(header, image, text('FBOV'), u32(overlay.length + 2), u32(headerSize + 112), u32(5), overlay, u16(fixup));
+    // The checksum: what makes the file's words add up to 0xFFFF.
+    let sum = 0;
+    for (let i = 0; i < data.length; i += 2) sum = (sum + data[i] + (data[i + 1] ?? 0) * 256) & 0xffff;
+    data.set(u16((0xffff - sum) & 0xffff), 0x12);
+    return data;
+}
+
+/**
  * A program information file, as Windows 3's PIF Editor wrote one: the 0x171-byte basic section (title, memory, program,
  * folder, parameters, screen), then the section headers, each a 16-character name, the next header's offset, and its
  * data's offset and length: "MICROSOFT PIFEX" (pointing back at the basic section), then the enhanced-mode and
@@ -808,6 +874,7 @@ export function samples(): Sample[] {
         { name: 'mentat.eng', format: 'mentat', about: 'Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does', data: mentat() },
         { name: 'music.adl', format: 'adl', about: 'Westwood AdLib music, as Dune II’s: a conductor starting two voices, one looping as Westwood’s tools do', data: adlMusic() },
         { name: 'driver.adv', format: 'ail', about: 'Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF', data: ailDriver() },
+        { name: 'program.exe', format: 'mz', about: 'DOS program linked as Borland’s TLINK does with overlays: relocations, the segment table, one overlay with a fixup', data: dosProgram() },
         { name: 'program.pif', format: 'pif', about: 'Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections', data: pif() },
         { name: 'strings-dune2.eng', format: 'strings', about: 'Dune II string table, compressed as the game does', data: stringTable(true) },
         { name: 'strings-dos.ger', format: 'strings', about: 'C&C-style string table, plain, with accented letters in DOS characters', data: stringTable(false) },
