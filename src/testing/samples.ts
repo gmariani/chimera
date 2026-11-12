@@ -673,6 +673,14 @@ export function mentat(): Uint8Array {
 }
 
 /**
+ * Dune II's credits (CREDITS.ENG), as 1.07's: a title, a role with two names (the first sharing its row, after 0x05), a
+ * centered line with no style byte, the small print, blank rows, and the NUL that ends them. `extra` goes before the NUL.
+ */
+export function duneCredits(extra = ''): Uint8Array {
+    return bytes(text(`\x02CHIMERA\r\r\x03Samples By:\x05\x04Chimera\r\x04Its Tests\r\r\rAnd you\r\r\x01(c) 2026 Chimera sample, not the game's.\r\r${extra}`), [0]);
+}
+
+/**
  * A DOS program as Borland's TLINK lays one out with overlays, as Dune II's is: an 80-byte header with TLINK's mark and two
  * relocations (at 0x3E, where TLINK puts them), then a 160-byte image in segments of 16 bytes each:
  *
@@ -871,6 +879,7 @@ export function samples(): Sample[] {
         { name: 'music.mid', format: 'midi', about: 'Standard MIDI file, two tracks: a tempo change halfway, a named melody written with running status', data: standardMidi() },
         { name: 'music.xmi', format: 'xmi', about: 'XMIDI music, two sequences: a phrase with an instrument from the bank, and a chord with a branch point', data: xmidiMusic() },
         { name: 'team.emc', format: 'emc', about: 'Dune II script for the computer’s teams, in the game’s own style: a subroutine, a loop, a call to it', data: emcScript() },
+        { name: 'credits.eng', format: 'dune2-credits', about: 'Dune II credits, as 1.07’s: a title, a role and its names, a centered line, the small print', data: duneCredits() },
         { name: 'mentat.eng', format: 'mentat', about: 'Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does', data: mentat() },
         { name: 'music.adl', format: 'adl', about: 'Westwood AdLib music, as Dune II’s: a conductor starting two voices, one looping as Westwood’s tools do', data: adlMusic() },
         { name: 'driver.adv', format: 'ail', about: 'Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF', data: ailDriver() },

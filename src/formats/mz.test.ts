@@ -89,6 +89,12 @@ describe('DOS programs (MZ)', () => {
         expect(parse(dosProgram().subarray(0, 200)).warnings).toEqual(['The header says the program runs to 240, but the file ends at 200: the last 40 bytes would be whatever was in memory.']);
         expect(parse(changed({ 0x0c: 8 })).warnings).toEqual(['It asks for at least 256 bytes more memory, but at most 128 bytes.']);
         expect(parse(changed({ 0x16: 0x20 })).warnings).toEqual(['It starts running at 0020:0000, 512 bytes in, past the end of its image (160 bytes): it would run whatever is in memory there.']);
+        // Segments wrap at 1 MB: FFF0:0100, where packers start, is the image's first byte; FFF0:0000 is in the PSP before it.
+        expect(parse(changed({ 0x16: 0xfff0, 0x14: 0x100 })).warnings).toEqual([]);
+        expect(summary(parse(changed({ 0x16: 0xfff0, 0x14: 0x100 })), 'Starts at')).toBe('FFF0:0100, at 80 in the file');
+        expect(parse(changed({ 0x16: 0xfff0 })).warnings).toEqual([
+            'It starts running at FFF0:0000, 256 bytes before its image, in the PSP, the 256 bytes DOS puts there: it would run whatever is in memory there.',
+        ]);
         expect(parse(changed({ 0x44: 0x40 })).warnings).toEqual(["Relocation 2 points past the end of the program's image: DOS would change memory beyond it."]);
         expect(parse(changed({ 0x18: 0x4c })).warnings).toContain("The relocations run past the header, into the program's image: DOS would load them as part of the program.");
         // The overlays.
@@ -112,6 +118,40 @@ describe('DOS programs (MZ)', () => {
         expect(r.checks.map((c) => c.text).join()).toMatch(/There are 32 bytes after the end of the dos program/);
     });
 
+    /** The sample's program (without its overlays) and a one-file ZIP after it, its offsets counting from the file or the ZIP. */
+    const selfExtracting = (relative: boolean, cut = 0) => {
+        const name = new TextEncoder().encode('README.TXT');
+        const body = new TextEncoder().encode('Unpacked by the program.');
+        const zipAt = FBOV;
+        const local = [...[0x50, 0x4b, 3, 4], ...new Array(14).fill(0), ...le32(body.length), ...le32(body.length), ...le16(name.length), 0, 0, ...name, ...body];
+        const base = relative ? zipAt : 0;
+        const central = [...[0x50, 0x4b, 1, 2], ...new Array(16).fill(0), ...le32(body.length), ...le32(body.length), ...le16(name.length), ...new Array(12).fill(0), ...le32(zipAt - base), ...name];
+        const directory = zipAt + local.length - base;
+        const end = [...[0x50, 0x4b, 5, 6], 0, 0, 0, 0, 1, 0, 1, 0, ...le32(central.length + cut), ...le32(directory), 0, 0];
+        return Uint8Array.from([...dosProgram().subarray(0, FBOV), ...local, ...central, ...end]);
+    };
+    const le16 = (v: number) => [v & 0xff, v >> 8];
+    const le32 = (v: number) => [...le16(v & 0xffff), ...le16(v >>> 16)];
+
+    it('knows a self-extracting archive: a whole ZIP after the program', async () => {
+        for (const relative of [false, true]) {
+            const r = await inspect(selfExtracting(relative), { name: 'UNPACK.EXE', names: [] });
+            expect(r.format.id).toBe('mz');
+            expect(r.checks).toEqual([]);
+            expect(r.parsed.warnings).toEqual([]);
+            expect(r.parsed.title).toBe('DOS program (MZ), a self-extracting ZIP');
+            expect(summary(r.parsed, 'Unpacks')).toBe('README.TXT, from the ZIP after it');
+            const zip = find(r.parsed.fields, 'ZIP archive')!;
+            expect(zip.children?.map((f) => f.name)).toEqual(['Files', 'Central directory', 'End record']);
+            expect(zip.offset + zip.length).toBe(selfExtracting(relative).length);
+            expect(r.parsed.entries?.map((e) => e.label)).toEqual(['UNPACK.zip']);
+        }
+        // A ZIP whose directory doesn't end where its end record starts isn't whole: the usual checks call it out.
+        const broken = await inspect(selfExtracting(false, 1), { name: 'UNPACK.EXE', names: [] });
+        expect(broken.parsed.title).toBe('DOS program (MZ)');
+        expect(broken.checks.map((c) => c.level)).toContain('danger');
+    });
+
     it('refuses what isn’t one', () => {
         expect(() => parse(new Uint8Array(10))).toThrow(/shorter than the 28 bytes/);
         expect(() => parse(changed({ 0: 0x5858 }))).toThrow(/doesn’t start with "MZ"/);
@@ -126,6 +166,19 @@ describe('DOS programs (MZ)', () => {
         expect(() => parse(changed({ 6: 1000 }))).toThrow(/1,000 relocations are said to be at 62, running past the end of the file/);
         // Early DOS took "ZM" too.
         expect(parse(changed({ 0: 0x4d5a })).fields[0].children?.[0].note).toBe('Reversed: early DOS took either.');
+    });
+
+    // Dune II's 1.07 patch, if it's beside the game: PKZIP's self-extractor, packed with PKLITE.
+    const PATCH = gameFile('dune2', 'DUNE2_107.EXE') ?? '';
+    it.skipIf(!PATCH)('reads Dune II’s 1.07 patch, a self-extracting ZIP', async () => {
+        const r = await inspect(new Uint8Array(readFileSync(PATCH)), { name: 'DUNE2_107.EXE', names: [] });
+        expect(r.format.id).toBe('mz');
+        expect(r.parsed.warnings).toEqual([]);
+        expect(r.checks).toEqual([]);
+        expect(summary(r.parsed, 'Packed with')).toBe('PKLITE 1.20');
+        // It starts at FFF0:0100: the image's first byte, as packers do.
+        expect(summary(r.parsed, 'Starts at')).toBe('FFF0:0100, at 96 in the file');
+        expect(summary(r.parsed, 'Unpacks')).toBe('PATCH.EXE, PATCH.RTP, from the ZIP after it');
     });
 
     // Dune II's, from wherever it's installed (npm run test:setup).

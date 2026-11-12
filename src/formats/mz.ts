@@ -20,7 +20,9 @@ import { mzLayout } from './mz-sniff';
  * Borland's overlay manager (VROOMM, "FBOV") keeps code there that it loads
  * when it's called, so a program bigger than DOS's memory still runs (Dune II
  * does). Its stand-ins in the image, the stubs, say where each piece is. TLINK
- * writes a table of every segment for it, which says what each is.
+ * writes a table of every segment for it, which says what each is. A
+ * self-extracting archive keeps a ZIP there, which its program unpacks (Dune
+ * II's 1.07 patch is one).
  *
  * The header follows Microsoft's MS-DOS Programmer's Reference (and Ralf
  * Brown's notes on INT 21h function 4Bh). The overlays follow Borland's
@@ -63,6 +65,32 @@ function maker(data: Uint8Array, room: number): { name: string; packed: boolean;
     return null;
 }
 
+/**
+ * A whole ZIP archive starting right where the image ends: a self-extracting archive (PKZIP's ZIP2EXE, and others), whose
+ * program unpacks the ZIP from its own file. Whole means its end record is the file's last bytes, and its central
+ * directory ends where that record starts; the offsets in it count from the start of the file (as ZIP2EXE writes them)
+ * or of the ZIP. Its files' names come from the central directory.
+ */
+function appendedZip(data: Uint8Array, from: number) {
+    const b = new Bytes(data);
+    if (b.ascii(from, 4) !== 'PK\x03\x04') return null;
+    for (let e = data.length - 22; e >= Math.max(from, data.length - 22 - 0xffff); e--) {
+        if (b.ascii(e, 4) !== 'PK\x05\x06' || e + 22 + b.u16(e + 20) !== data.length) continue;
+        const count = b.u16(e + 10);
+        const size = b.u32(e + 12);
+        const offset = b.u32(e + 16);
+        const base = offset + size === e ? 0 : from + offset + size === e ? from : -1;
+        if (base < 0 || (count && b.ascii(base + offset, 4) !== 'PK\x01\x02')) return null;
+        const names: string[] = [];
+        for (let p = base + offset, i = 0; i < count && p + 46 <= e && b.ascii(p, 4) === 'PK\x01\x02'; i++) {
+            names.push(b.ascii(p + 46, b.u16(p + 28)));
+            p += 46 + b.u16(p + 28) + b.u16(p + 30) + b.u16(p + 32);
+        }
+        return { from, directory: base + offset, end: e, count, names, relative: base === 0 };
+    }
+    return null;
+}
+
 const parser: FormatParser = {
     parse(data, context) {
         const layout = mzLayout(data);
@@ -84,11 +112,21 @@ const parser: FormatParser = {
                 `The header says the program runs to ${imageEnd.toLocaleString('en-US')}, but the file ends at ${data.length.toLocaleString('en-US')}: the last ${bytesLabel(imageEnd - data.length)} would be whatever was in memory.`
             );
         if (minAlloc > maxAlloc && maxAlloc) warnings.push(`It asks for at least ${bytesLabel(minAlloc * 16)} more memory, but at most ${bytesLabel(maxAlloc * 16)}.`);
-        const entry = cs * 16 + ip;
-        const stackTop = ss * 16 + (sp || 0x10000);
+        // Segments count from the load segment and wrap at 1 MB, so a large one is one before it: packers start at FFF0:0100,
+        // which is the image's first byte (the 256 bytes before it are DOS's PSP).
+        const linear = (s: number, o: number) => {
+            const v = (s * 16 + o) % 0x100000;
+            return v >= 0x80000 ? v - 0x100000 : v;
+        };
+        const entry = linear(cs, ip);
+        const stackTop = linear(ss, sp || 0x10000);
         if (entry >= imageSize)
             warnings.push(
                 `It starts running at ${at(cs, ip)}, ${entry.toLocaleString('en-US')} bytes in, past the end of its image (${bytesLabel(imageSize)}): it would run whatever is in memory there.`
+            );
+        else if (entry < 0)
+            warnings.push(
+                `It starts running at ${at(cs, ip)}, ${bytesLabel(-entry)} before its image${entry >= -256 ? ', in the PSP, the 256 bytes DOS puts there' : ''}: it would run whatever is in memory there.`
             );
 
         // The checksum: the words of the file add up to 0xFFFF with it, when it's set. Nothing checks it.
@@ -146,7 +184,11 @@ const parser: FormatParser = {
                         0x10,
                         2,
                         seg(sp),
-                        stackTop > imageSize ? `The stack’s top is ${bytesLabel(stackTop - imageSize)} past the image, in the memory DOS adds.` : 'The stack’s top is inside the image.'
+                        stackTop > imageSize
+                            ? `The stack’s top is ${bytesLabel(stackTop - imageSize)} past the image, in the memory DOS adds.`
+                            : stackTop > 0
+                              ? 'The stack’s top is inside the image.'
+                              : 'The stack’s top is before the image.'
                     ),
                     field(
                         'Checksum',
@@ -329,6 +371,37 @@ const parser: FormatParser = {
             });
         }
 
+        // A self-extracting archive: the ZIP after the program, which the program unpacks.
+        const zip = fbov < 0 && imageEnd < data.length ? appendedZip(data, imageEnd) : null;
+        if (zip) {
+            fields.push({
+                name: 'ZIP archive',
+                offset: zip.from,
+                length: data.length - zip.from,
+                value: plural(zip.count, 'file'),
+                note: 'Not loaded by DOS: the program reads it from its own file, and unpacks it.',
+                children: [
+                    field('Files', zip.from, zip.directory - zip.from, bytesLabel(zip.directory - zip.from), 'Each file’s header, then its packed data.'),
+                    field('Central directory', zip.directory, zip.end - zip.directory, zip.names.join(', '), 'Each file’s name, size and where it is.'),
+                    field(
+                        'End record',
+                        zip.end,
+                        data.length - zip.end,
+                        plural(zip.count, 'file'),
+                        zip.relative ? 'Its offsets count from the start of the program’s file, as PKZIP’s ZIP2EXE writes them.' : undefined
+                    ),
+                ],
+            });
+            entries.push({
+                name: null,
+                label: `${(context.name ?? 'program').replace(/\.[^.]*$/, '')}.zip`,
+                offset: zip.from,
+                size: data.length - zip.from,
+                data: data.subarray(zip.from),
+                meta: { Holds: zip.names.join(', ') },
+            });
+        }
+
         // The segments, to look through: what TLINK says each is, how big, and where.
         const rows: TableRow[] = segments.map((s) => {
             const o = s.flags & OVERLAID ? overlays.find((x) => x.segment === s.segment) : undefined;
@@ -352,7 +425,7 @@ const parser: FormatParser = {
         for (const s of segments) counts.set(SAID[kindOf(s.flags)], counts.get(SAID[kindOf(s.flags)])! + 1);
         const stem = (context.name ?? '').toUpperCase();
         return {
-            title: fbov >= 0 ? 'DOS program (MZ), with Borland overlays' : 'DOS program (MZ)',
+            title: fbov >= 0 ? 'DOS program (MZ), with Borland overlays' : zip ? 'DOS program (MZ), a self-extracting ZIP' : 'DOS program (MZ)',
             summary: [
                 ...(made ? [[made.packed ? 'Packed with' : 'Linked with', made.name] as [string, string]] : []),
                 ['Program', `${bytesLabel(imageSize)}${made?.packed ? ', packed' : ''}`],
@@ -363,6 +436,7 @@ const parser: FormatParser = {
                 ...(fbov >= 0
                     ? [['Overlays', `${plural(overlays.length, 'piece')} of code, ${bytesLabel(overlayEnd - fbov)}, loaded from ${stem || 'the file'} when they’re called`] as [string, string]]
                     : []),
+                ...(zip ? [['Unpacks', `${zip.names.slice(0, 20).join(', ')}${zip.count > 20 ? `, and ${zip.count - 20} more` : ''}, from the ZIP after it`] as [string, string]] : []),
                 ...(segments.length
                     ? [
                           [
@@ -391,8 +465,8 @@ const parser: FormatParser = {
                       rows,
                   }
                 : undefined,
-            // DOS loads nothing past the image; anything there that isn't Borland's overlays is the shared checks' to look at.
-            end: fbov >= 0 ? overlayEnd : loaded,
+            // DOS loads nothing past the image; anything there that isn't Borland's overlays or a whole ZIP is the shared checks' to look at.
+            end: fbov >= 0 ? overlayEnd : zip ? data.length : loaded,
             warnings,
         };
     },

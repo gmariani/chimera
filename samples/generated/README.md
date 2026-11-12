@@ -37,6 +37,7 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `music.mid` | Standard MIDI file, two tracks: a tempo change halfway, a named melody written with running status | 90 bytes |
 | `music.xmi` | XMIDI music, two sequences: a phrase with an instrument from the bank, and a chord with a branch point | 148 bytes |
 | `team.emc` | Dune II script for the computer’s teams, in the game’s own style: a subroutine, a loop, a call to it | 68 bytes |
+| `credits.eng` | Dune II credits, as 1.07’s: a title, a role and its names, a centered line, the small print | 98 bytes |
 | `mentat.eng` | Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does | 224 bytes |
 | `music.adl` | Westwood AdLib music, as Dune II’s: a conductor starting two voices, one looping as Westwood’s tools do | 1,177 bytes |
 | `driver.adv` | Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF | 150 bytes |

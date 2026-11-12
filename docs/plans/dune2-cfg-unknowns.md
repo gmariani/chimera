@@ -1,45 +1,34 @@
 # Plan: what's still unknown in Dune II's DUNE.CFG
 
-Status: not started. The reader (`src/formats/westwood/dune2-cfg.ts`) decodes every byte, but three things in DUNE.CFG are only partly understood. The answers are in DUNE2.EXE's start-up code. The way in is a DOS MZ reader in Chimera, which is on the list anyway for `DUNE2.EXE` and `SETUP.EXE`.
+Status: **done**, for DUNE2.EXE 1.00 and 1.07. The reader (`src/formats/westwood/dune2-cfg.ts`) says what the game does with each setting, and `dune2-cfg.test.ts` checks it against both EXEs, finding the switches by their instructions.
 
-## The unknowns
+## What was found
 
-1. **Graphics (byte 0).** DUNE2.EXE accepts 7 to 12 and stops at anything else with "Unrecognized graphic mode!". What each value means isn't known. The installed game's file has 12; OpenDUNE's default is 1, and OpenDUNE doesn't read the field.
-2. **Bytes 6 and 7.** OpenDUNE names them `variable_0006` and `variable_0007` ("??"), and nothing it decompiled reads them. Both are 0 in the installed file.
-3. **Music drivers 8 to 12.** These are Miles's FM drivers (ADLIB.ADV, ADLIBG.ADV, PASFM.ADV, SBFM.ADV, SBP1FM.ADV). DUNE2.EXE's start-up code has a `switch` over exactly these, and one case sets the music driver to 1, Westwood's own player (ALFX.DRV). Which cases do that, and whether 13 (SBP2FM.ADV) is left alone on purpose, isn't traced. The reader leaves this out until it is.
+The settings code isn't in the part of DUNE2.EXE that DOS loads. It's in the first of the program's 36 Borland overlays: code the overlay manager loads from the file when it's called. The MZ reader (`src/formats/mz.ts`) found it there. The overlay's code starts at file offset 266,672 (0x411B0), and it's 966 bytes. Offsets below are within it, which is also its code segment's offsets, since an overlay loads at offset 0 of its own segment.
 
-## Where the code is (the installed DUNE2.EXE, version 1.00)
+The plan's first try put the switches at "file offset 0x3C748". That was an offset in the program's image, without the 19,456-byte header: in the file, 0x3C748 is a list of sound file names. The code is at 0x41348, 408 bytes into overlay 1.
 
-- DUNE.CFG is read into the data segment at 0x8FBB, in order:
+| Offset in overlay 1 | Code | What it does |
+|---|---|---|
+| 0x07E | `push ds; push 0x8FBB; push ds; push 0xE0 ("DUNE.CFG"); call 0x178:0x68` | Reads the file into DS:0x8FBB. If that fails: "The setup program must be run first." (DS:0xE9), and exit. The only place the settings' address is used as a whole. |
+| 0x192 | `mov word [0x6360],3` | Sets the graphics mode variable to 3, before looking at the setting. |
+| 0x198 | `mov al,[0x8FBB]; sub ax,7; cmp bx,5; ja 0x1B6; jmp [cs:bx+0x3BA]` | The graphics switch. Its table (0x3BA): 7, 8, 10, 11, 12 → 0x1AE, which sets `[0x6360]` to 3 again. **9** → 0x1B6, the error: "Unrecognized graphic mode!" (DS:0x114), and exit. So every value it takes means the same. |
+| 0x1D1 | `mov al,[0x8FBC]; sub ax,8; cmp bx,4; ja 0x1EE; jmp [cs:bx+0x3B0]` | The music switch. Its table (0x3B0): 8 to 12 → 0x1E7, `mov byte [0x8FBC],1`. Miles's FM drivers (ADLIB, ADLIBG, PASFM, SBFM, SBP1FM) become ALFX.DRV, Westwood's AdLib player. 13 (SBP2FM.ADV) is outside the switch and stays. The effects driver isn't switched on. |
 
-  | Address | Setting |
-  |---|---|
-  | 0x8FBB | Graphics |
-  | 0x8FBC | Music driver |
-  | 0x8FBD | Sound-effects driver |
-  | 0x8FBE | Voice driver |
-  | 0x8FBF | Use the mouse |
-  | 0x8FC0 | Use XMS (none sets the voice driver to 0) |
+The two jump tables are the overlay's last 22 bytes (0x3B0 to 0x3C5).
 
-- The data segment is 0x332F. libeastwood's `GlobalDataOffset` gives the same for version 1.00, and the driver tables' far pointers use it.
-- **The graphics switch:** at file offset 0x3C748 (MZ header 0x4C00 bytes), `sub ax,7; cmp bx,5; ja error; jmp [cs:bx+0x3BA]`. The error branch, at 0x3C766, pushes "Unrecognized graphic mode!" (data offset 0x114). The case at 0x3C75E sets `[0x6360] = 3`.
-- **The music switch:** right after it, `sub ax,8; cmp bx,4; ja; jmp [cs:bx+0x3B0]`. A case at 0x3C797 sets `[0x8FBC] = 1`.
-- **What stopped this:** the jump tables are at CS:0x3BA and CS:0x3B0, but the code segment's base in the file wasn't found. `ndisasm` truncates jump targets to 16 bits, so its addresses don't give the base. Working it out needs the MZ relocation table, or a disassembler that's given the right origin.
+**Bytes 6 and 7** (DS:0x8FC1 and 0x8FC2): no two bytes anywhere in DUNE2.EXE spell either address. Every other setting is addressed directly (0x8FBB to 0x8FC0). They're read and counted in the checksum, and nothing else touches them.
 
-## Steps
+**Also seen, not used yet:** right after reading the file, the game works out how much memory it needs from the settings. Voices add 6,000 bytes. ALFX.DRV as the music driver adds 24,000; any other music driver adds 30,000. With XMS on, it checks the total against what's free ("Insufficient memory by %ld bytes.").
 
-1. **A DOS MZ reader** (`src/formats/mz.ts`, beside `ne.ts`): the header, the relocation table, the load image, and the entry point. Pointers in the image are segment and offset, so it should give each relocated segment's place in the file.
-2. **Identify Dune II's versions.** libeastwood's `src/Dune2File.cpp` has signatures (`VersionOffset`) for the demo, 1.00 and three 1.07 builds, and where each one's tables are (units, structures, houses, files, driver data).
-3. **Find the code segment** holding 0x3C748. Read both jump tables, and disassemble each case: what `[0x6360]` (the graphics) is set to for 7 to 12, and which music drivers get swapped for ALFX.DRV.
-4. **Look for reads of 0x8FC1 and 0x8FC2** (bytes 6 and 7) anywhere in the code.
-5. **Update the reader:** name the graphics values; describe what the game does with drivers 8 to 12; name bytes 6 and 7, or say nothing reads them. Add a test for each, against the installed DUNE2.EXE (`gameFile('dune2', 'DUNE2.EXE')`).
+## 1.07
 
-## Also known, for the MZ reader
+DUNE2.EXE 1.07 (367,760 bytes, 40 overlays, data segment 0x32F0) does exactly the same, with the addresses moved: the settings are at DS:0x90C1, and in overlay 1 the graphics switch is at 0x1AA (table at 0x3CC) and the music switch at 0x1E3 (table at 0x3C2). 9 is refused, 8 to 12 become ALFX.DRV, and DS:0x90C7 and 0x90C8 (bytes 6 and 7) appear nowhere in the file. The 1.07 patch (PKZIP's self-extractor holding PATCH.EXE and an RTPatch PATCH.RTP) doesn't hold the EXE itself.
 
-- DUNE2.EXE's driver lists are at file offsets 0x3D984 (7 voice drivers, 4-byte far pointers to the file name), 0x3D9A0 (14 music drivers, 12 bytes each: file name, extension, two words), and 0x3DA48 (14 sound-effect drivers, the same layout). Entry 0 of each is empty ("none"). Music driver 1 (ALFX.DRV) carries 0x48, the AdLib player's 72 calls a second.
-- SETUP.EXE's menus name the cards (none, Sound Blaster, Sound Blaster Pro, AdLib Gold, MT-32/LAPC-1, Sound Canvas, AdLib, Tandy, PC speaker). How a menu choice becomes a driver number is in SETUP.EXE's code, not traced.
+What graphics mode 3 is, in the game's terms, is still open, but no setting changes it, so it doesn't matter for reading the file.
 
 ## References
 
 - OpenDUNE, `src/config.c` and `src/config.h`. In its history, revision `090f0751` and those before `3b61b700` have the driver tables (`MSDriver`, `DSDriver` in `src/global.h`) and the start-up checks (`Main()` in `src/opendune.c`): https://github.com/OpenDUNE/OpenDUNE
 - libeastwood, `src/Dune2File.cpp` and `src/ExeFile.cpp`: https://github.com/libeastwood/libeastwood
+- Borland's overlays, as LoadBorlandOverlays.java reads them: https://github.com/GeReV/ghidra_scripts/blob/main/LoadBorlandOverlays.java

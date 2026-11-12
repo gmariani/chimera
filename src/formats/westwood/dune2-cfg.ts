@@ -7,8 +7,8 @@ import { duneCfgValues, sniffDuneCfg, sniffDuneOptions } from './sniff';
  *
  * DUNE.CFG, which SETUP.EXE writes: the graphics, the sound drivers for
  * music, effects and voices (each a number in the game's own lists), whether
- * to use the mouse and extended memory, two bytes nothing is known to read,
- * the language, and a checksum. The first 8 are lightly hidden: each is
+ * to use the mouse and extended memory, two bytes the game never reads, the
+ * language, and a checksum. The first 8 are lightly hidden: each is
  * stored as (value + n) XOR 0xA5, n counting down from 7 (OpenDUNE's
  * Config_Read, src/config.c). Without a good one the game won't start: "The
  * setup program must be run first."
@@ -20,6 +20,12 @@ import { duneCfgValues, sniffDuneCfg, sniffDuneOptions } from './sniff';
  * The driver lists are DUNE2.EXE's own (OpenDUNE's MSDriver and DSDriver
  * tables, from before it replaced the drivers): each entry names the driver
  * and the extension of the music it plays. https://github.com/OpenDUNE/OpenDUNE
+ *
+ * What the game does with the settings is from DUNE2.EXE itself (1.00 and
+ * 1.07 alike), in the first of its Borland overlays (code that loads only when it's called): it
+ * reads the file into DS:0x8FBB, then checks the graphics and music settings
+ * with two switches, whose jump tables are the last 22 bytes of that overlay.
+ * No code anywhere in the program reads bytes 6 and 7.
  */
 
 /** The music and sound-effect drivers, by number: the file, the music it plays, and the card. */
@@ -51,6 +57,10 @@ const VOICE_DRIVERS: [string, string][] = [
 ];
 const LANGUAGES = ['English', 'French', 'German', 'Italian', 'Spanish'];
 const SPEEDS = ['Slowest', 'Slow', 'Normal', 'Fast', 'Fastest'];
+/** The graphics values DUNE2.EXE takes: its switch over 7 to 12 sends 9 to the same error as anything else. */
+const GRAPHICS = [7, 8, 10, 11, 12];
+/** Miles's FM drivers, which DUNE2.EXE swaps for its own AdLib player, ALFX.DRV (music driver 1), as it starts. */
+const SWAPPED = [8, 9, 10, 11, 12];
 const onOff = (v: number) => (v === 1 ? 'On' : v === 0 ? 'Off' : `${v}`);
 
 function duneCfg(data: Uint8Array): Parsed {
@@ -59,8 +69,9 @@ function duneCfg(data: Uint8Array): Parsed {
     const language = data[8];
     const warnings: string[] = [];
     if (checksum !== data[9]) warnings.push(`The checksum is ${data[9]}, but the settings add up to ${checksum}: Dune II won't start ("The setup program must be run first").`);
-    // DUNE2.EXE's start-up switches on the graphics value less 7, over 6 cases: anything else stops it.
-    if (graphics < 7 || graphics > 12) warnings.push(`The graphics setting is ${graphics}; Dune II takes only 7 to 12, and stops at any other ("Unrecognized graphic mode!").`);
+    if (!GRAPHICS.includes(graphics)) warnings.push(`The graphics setting is ${graphics}; Dune II takes only 7, 8, 10, 11 and 12, and stops at any other ("Unrecognized graphic mode!").`);
+    /** Said of the music driver when the game won't use it. */
+    const swapped = SWAPPED.includes(music) ? ' The game plays its own AdLib player (ALFX.DRV) instead: it swaps every one of Miles’s FM drivers but SBP2FM.ADV for it.' : '';
     const driver = (n: number, what: string) => {
         if (n >= MUSIC_DRIVERS.length) {
             warnings.push(`The ${what} driver is ${n}, past the ${MUSIC_DRIVERS.length} in Dune II's list: the game would read whatever follows it.`);
@@ -77,21 +88,21 @@ function duneCfg(data: Uint8Array): Parsed {
 
     const stored = (i: number, name: string, value: string | number, note?: string) => field(name, i, 1, value, `Stored as ${data[i]} (the value plus ${7 - i}, XOR 0xA5).${note ? ` ${note}` : ''}`);
     const fields: Field[] = [
-        stored(0, 'Graphics', graphics, 'The game takes 7 to 12; what each means isn’t known (OpenDUNE doesn’t read it).'),
-        stored(1, 'Music driver', driver(music, 'music')),
+        stored(0, 'Graphics', graphics, 'The game takes 7, 8, 10, 11 or 12, and none of them changes anything: it sets the same graphics mode for each.'),
+        stored(1, 'Music driver', driver(music, 'music'), swapped.trim() || undefined),
         stored(2, 'Sound effects driver', driver(sound, 'sound effects')),
         stored(3, 'Voice driver', voiceName, 'For the digitized speech.'),
         stored(4, 'Use the mouse', onOff(mouse)),
         stored(5, 'Use extended memory (XMS)', onOff(xms), 'Without it, the game turns the voices off.'),
-        stored(6, 'Unknown', unknown6, 'Nothing is known to read it.'),
-        stored(7, 'Unknown', unknown7, 'Nothing is known to read it.'),
+        stored(6, 'Unused', unknown6, 'Counted in the checksum, but nothing in the game reads it.'),
+        stored(7, 'Unused', unknown7, 'Counted in the checksum, but nothing in the game reads it.'),
         field('Language', 8, 1, language < LANGUAGES.length ? `${language}: ${LANGUAGES[language]}` : language, 'Stored as it is. Which .ENG, .FRE or .GER files the game reads.'),
         field('Checksum', 9, 1, data[9], checksum === data[9] ? 'The sum of the 8 settings, XOR 0xA5: it matches.' : `The sum of the 8 settings, XOR 0xA5, is ${checksum}.`),
     ];
     return {
         title: 'Settings (Dune II DUNE.CFG)',
         summary: [
-            ['Music', driver(music, 'music').replace(/^\d+: /, '')],
+            ['Music', SWAPPED.includes(music) ? `${MUSIC_DRIVERS[1][2]} (ALFX.DRV, playing .ADL), in place of ${MUSIC_DRIVERS[music][0]}` : driver(music, 'music').replace(/^\d+: /, '')],
             ['Sound effects', driver(sound, 'sound effects').replace(/^\d+: /, '')],
             ['Voices', voiceName.replace(/^\d+: /, '')],
             ['Language', LANGUAGES[language] ?? `${language} (none of Dune II’s)`],

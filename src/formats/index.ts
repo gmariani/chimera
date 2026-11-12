@@ -12,6 +12,7 @@ import { sniffPif } from './pif-sniff';
 import { sniffAil } from './ail-sniff';
 import { sniffMidi } from './midi/midi-sniff';
 import { sniffAdl } from './westwood/adl-layout';
+import { sniffDuneCredits } from './westwood/dune2-credits-layout';
 import { sniffVoc } from './voc-sniff';
 import { sniffTiff } from './tiff/sniff';
 import { sniffPng } from './png/sniff';
@@ -135,6 +136,7 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'midi', name: 'Music (MIDI)', extensions: ['mid', 'midi', 'smf'], sniff: sniffMidi, load: parserOf(() => import('./midi/midi')) },
     { id: 'xmi', name: 'Music (XMIDI)', extensions: ['xmi', 'c55', 'pcs', 'tan'], sniff: sniffXmi, load: parserOf(() => import('./westwood/xmi')) },
     { id: 'emc', name: 'Script (Dune II EMC)', extensions: ['emc'], sniff: sniffEmc, load: parserOf(() => import('./westwood/emc')) },
+    { id: 'dune2-credits', name: 'Credits (Dune II)', extensions: ['eng', 'fre', 'ger'], sniff: sniffDuneCredits, load: parserOf(() => import('./westwood/dune2-credits')) },
     { id: 'mentat', name: 'Mentat encyclopedia (Dune II)', extensions: ['eng', 'fre', 'ger', 'ita', 'spa'], sniff: sniffMentat, load: parserOf(() => import('./westwood/mentat')) },
     { id: 'strings', name: 'String table', extensions: ['eng', 'ger', 'fre', 'ita', 'spa'], sniff: sniffStrings, load: parserOf(() => import('./westwood/strings')) },
     { id: 'lut', name: 'Chronal vortex frame (RA)', extensions: ['lut'], sniff: sniffVortex, load: parserOf(() => import('./westwood/lut')) },
