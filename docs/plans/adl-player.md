@@ -1,67 +1,28 @@
 # Plan: playing Westwood AdLib music (.adl)
 
-Status: not started. The reader (`src/formats/westwood/adl.ts`) already decodes every program's commands and every instrument; this plan turns that into sound.
+Status: **done**. The ADL reader's preview plays the music: the tracks Dune II plays as music, or in another game's file the tracks that start the conductor, each on a timeline of its notes.
 
-## What it takes
+## What was built
 
-### 1. An OPL2 (Yamaha YM3812) emulator, in TypeScript
+- **The chip:** `src/core/opl2.ts`, a port of DOSBox's DBOPL (as ScummVM keeps it), its OPL2 half only. Chosen for being fast and proven in DOSBox. It reproduces DBOPL exactly: `opl2.test.ts` holds fingerprints of DBOPL's own samples, built from `dbopl.cpp` with g++, for a script that reaches every waveform, FM and AM, feedback, the envelopes, vibrato, tremolo and the drums, at 22,050 Hz and at the chip's 49,716 Hz.
+- **The player:** `src/formats/westwood/adl-player.ts`, a port of ScummVM's driver as AdPlug carries it (`src/adl.cpp`). It writes the same registers, in the same order, on the same ticks as AdPlug's player for every one of the 806 tracks in Dune II's 21 files: `adl-player.test.ts` holds a fingerprint of AdPlug's logs, built from source with a chip that prints each write.
+- **Rendering:** `src/formats/westwood/adl-render.ts`. 72 ticks a second into the chip at 22,050 Hz; the notes for the timeline are read back from the register writes (the drums of rhythm mode on MIDI's drum channel). A track plays until every voice has stopped (then a second of release) or come round (then four seconds fading out), at most 6 minutes, and 15 minutes a file in all. All of Dune II's music, 50 minutes of it, renders in about 5 seconds; a file in at most 0.6.
 
-- 9 voices of 2 operators; 4 waveforms; envelopes (attack, decay, sustain, release) with key scaling; tremolo and vibrato; feedback; FM or additive connection; rhythm mode (5 drums: Dune II uses it).
-- Runs at the chip's own rate, 49,716 Hz (14.318 MHz / 288), resampled for the browser.
-- Reference cores, all compatible with Chimera's GPL-3.0 (credit the source in the file's comment):
-  - **Nuked OPL3** (LGPL-2.1+): cycle-accurate, slower. Port its OPL2 subset.
-  - **ymfm** (BSD-3, Aaron Giles): accurate and cleaner to read.
-  - **DOSBox DBOPL** (GPL-2+): fast, less exact.
-- Decision needed: port Nuked (exact, so tests can compare closely) or write a leaner core from ymfm.
-- About 800 to 1,200 lines. Lives in `src/core/` (it's a shared decoder, like `inflate`), since Kyrandia's and Lands of Lore's music and other AdLib formats would use it.
+## Decisions
 
-### 2. Westwood's player
+- **The chip:** DBOPL (fast, proven), not Nuked OPL3 or a core after ymfm.
+- **The preview:** up front, like XMI's: the game's music in a stack under the tracks' outline.
+- **Missing instruments:** as Dune II does. ALFX.DRV adds an instrument's offset to the data's start in a 16-bit register with no check (`lds si,[cs:0x39E]; add si,[bx+si+0x1F4]` at 0x0F27), so 0 is the program table and 0xFFFF the byte before the data: the track table's last byte, the game keeping the file whole. ScummVM skips such instruments; `AdlDriver`'s `missing: 'skip'` does too, for the comparison with AdPlug. Only one music track uses one: DUNE17's track 4 (instrument 181, offset 0xFFFF). DUNE7's and DUNE16's instrument 62 is in track 63, a sound effect.
 
-- Port of ScummVM's driver, `engines/kyra/sound/drivers/adlib.cpp` (GPL-2+), about 1,500 lines of C++, to roughly 800 to 1,000 lines of TypeScript.
-- 72 callbacks a second. Each voice has a tempo and timer, a duration, note spacing, the primary effects (slide, vibrato), a secondary effect, three volume levels, priorities, a subroutine stack, and the rhythm section.
-- Note to frequency: ScummVM's tables (`_freqTable`, `_unkTable2`), note and octave from the raw note plus base note and octave.
-- Where Dune II's own player might differ, check `ALFX.DRV` (in `SOUND.PAK`), which is Dune II's ADL player:
-  - The command table is at 0x18DF: 75 near offsets, indexed by `(byte & 0x7F)`, clipped to 0x4A.
-  - The dispatcher is at 0x0AB9: `lodsw` takes the command and its first value byte together, a routine with no values gives one back with `dec si`, and a note is always 2 bytes.
-  - Already verified: every command's value count matches ScummVM's table; repeats and jumps land at "after the command, plus the offset", as ScummVM's do.
-  - Disassemble with `ndisasm -b16 -o0 ALFX.DRV`. It's installed; write the output to the scratchpad.
-- Sound-effect volume (`adjustSfxData`) differs below version 3; Dune II is version 3.
+## What turned up
 
-### 3. Rendering, and the preview
+- DBOPL's set-up clears every register twice (as an OPL3, then an OPL2), and the first pass leaves each operator's phase where a sine starts, which the drums keep. The port does the same.
+- DBOPL checks whether a channel is silent only at the start of each call, so its output depends on how many samples are asked for at once. The comparison asks in 512s, as the harness did; the renderer asks a tick's worth at a time.
+- DUNE0's short repeats landing on their counts, which then play as notes, are the shipped file's fault and play as the game would play them.
 
-- A track never ends by itself (loops, jumps back), so render until every voice has stopped, or until the conductor's jump has come round once, then fade. Cap at a few minutes.
-- The audio preview today is one finished WAV (`AudioClip`). Two ways to offer tracks:
-  - **On demand:** each track an entry, rendered when it's opened, like the video preview's frame decoding. Cleaner; needs the page to ask the worker for an entry's preview lazily.
-  - **Up front:** only the tracks Dune II plays as music (the reader already knows them from OpenDUNE's table: one to six a file). Fits the current preview as it is.
-- Render in the worker. Estimate: well over real time, but 40 tracks up front would still be wasteful.
+## The references, if this is picked up again
 
-### 4. Tests worth writing
-
-- **The player, exactly:** log the chip-register writes for a file and track, compare with AdPlug's player for the same. This needs AdPlug's `adplay` (not installed: ask before installing it), or AdPlug built from source in the scratchpad, never in the repo.
-- **The chip:** a single note's pitch by FFT against the OPL2 frequency formula (`f = fnum × 49716 × 2^(block − 20)`), and envelopes and waveforms against the reference core's output, within a tolerance (exact only if Nuked is ported).
-- **Round trips:** small programs from `adlMusic()` in `src/testing/samples.ts` (a note, a slide, a drum hit, the 0xBB loop) through player and chip.
-- **Real files:** every track Dune II plays as music (`DUNE2_MUSIC` in `adl.ts`) renders without a player fault, from `gameFile('dune2', 'SOUND.PAK')`.
-
-## Order and size
-
-About three sessions:
-
-1. The chip and its tests.
-2. The player and the register-log comparison.
-3. Rendering, the preview, and listening to the real music.
-
-## What the reader already found (so it isn't rediscovered)
-
-- Dune II's files are version 2/3; none use subroutine calls, so 2 and 3 read alike.
-- Westwood's tools loop long passages back onto the repeat count's own byte, set to 0xBB, which as a command is "Nothing". The player must run it as such.
-- DUNE0's short loops (counts 4 and 7) land on their counts too, which the player reads as notes. That's a real fault of the shipped file; the player should reproduce it, not fix it.
-- DUNE7, DUNE16 and DUNE17 use instruments their tables lack. Dune II's player sets the voice up from the bytes the empty entry points to (0 or 0xFFFF from the end of the track table); ScummVM skips it. Pick one and say which.
-- The game asks for tracks some files don't have: DUNE1's track 8, DUNE0's 3 and 5.
-
-## References
-
-- ScummVM, `engines/kyra/sound/drivers/adlib.cpp` and `engines/kyra/sound/sound_pc_v1.cpp`: https://github.com/scummvm/scummvm
+- Built in the session's scratchpad, never in the repo: DBOPL with a stand-in for ScummVM's `common/scummsys.h` and a harness reading "w reg val" / "g count" lines; AdPlug's `adl.cpp` with stand-ins for its `player.h` (a chip that prints "tick reg val") and `debug.h`.
+- ScummVM, `audio/softsynth/opl/dbopl.cpp` and `engines/kyra/sound/drivers/adlib.cpp`: https://github.com/scummvm/scummvm
 - AdPlug, `src/adl.cpp`: https://github.com/adplug/adplug
 - OpenDUNE, `src/table/sound.c` (`g_table_musics`): https://github.com/OpenDUNE/OpenDUNE
-- Nuked OPL3: https://github.com/nukeykt/Nuked-OPL3
-- ymfm: https://github.com/aaronsgiles/ymfm

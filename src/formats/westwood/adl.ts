@@ -1,6 +1,8 @@
 import { bytesLabel, field } from '../../core/bytes';
-import type { Field, FormatParser } from '../../core/types';
+import type { Field, FormatParser, Preview } from '../../core/types';
 import { ADL_REACH, adlLayout, COMMANDS } from './adl-layout';
+import { wav } from './adpcm';
+import { renderTrack, RENDER_RATE } from './adl-render';
 import { DUNE2_MUSIC } from './dune2-music';
 
 /**
@@ -30,6 +32,14 @@ import { DUNE2_MUSIC } from './dune2-music';
  * where jumps and repeats land, were checked against Dune II's own player,
  * ALFX.DRV. It doesn't play the music: that needs the chip.
  */
+
+/** Said under each track played here. */
+const PLAYED = 'Played as the game plays it: Westwood’s player, on an emulated AdLib.';
+/** Seconds of music played here, all told, and of one track at most. */
+const LISTEN_BUDGET = 15 * 60;
+const MOST_SECONDS = 6 * 60;
+/** Lines of the tracks' outline shown, with the music below it. */
+const OUTLINE_LINES = 10;
 
 /** Numbers past the table are taken as its last, a stop (the player clips them). */
 const LAST = COMMANDS.length - 1;
@@ -425,11 +435,40 @@ const parser: FormatParser = {
         }
         if (unreached) summary.push(['Not reached', `${bytesLabel(unreached)} in ${plural(places, 'place')}: leftovers nothing points to`]);
 
+        // The music, played: the tracks Dune II plays as music, or in another game's file those that start the conductor (as
+        // music does; sound effects play on a voice of their own), as far as LISTEN_BUDGET goes.
+        const listen = tracks.flatMap((p, t) => (p === null || programAt(p) === null ? [] : [t])).filter((t) => (music ? music.includes(t) : voices.get(tracks[t]!) === 9));
+        const driverVersion = version === 2 ? (calls.length && !callsRelative ? 2 : 3) : version;
+        const items: { title: string; preview: Preview }[] = [{ title: 'Tracks', preview: { kind: 'text', text: outline.join('\n'), maxLines: OUTLINE_LINES } }];
+        let budget = LISTEN_BUDGET;
+        for (const t of listen) {
+            if (budget <= 0) break;
+            const played = renderTrack(data, base, driverVersion, tracks[t]!, Math.min(MOST_SECONDS, budget));
+            budget -= played.seconds;
+            const said = [PLAYED];
+            if (played.ending === 'loops') said.push('It loops: it plays round once here, then fades out.');
+            if (played.ending === 'cut') said.push(`Only the first ${Math.round(played.seconds / 60)} minutes play here.`);
+            if (played.missing.length)
+                said.push(
+                    `It uses instrument${played.missing.length === 1 ? '' : 's'} ${played.missing.join(', ')}, which the file lacks: set up, as the game does, from the bytes ${played.missing.length === 1 ? 'its empty entry points' : 'their empty entries point'} to.`
+                );
+            items.push({
+                title: `Track ${t}${music?.includes(t) ? ' (music in Dune II)' : ''}`,
+                preview: {
+                    kind: 'music',
+                    notes: played.notes,
+                    length: played.seconds,
+                    audio: { wav: wav(played.samples, RENDER_RATE, 1), sampleRate: RENDER_RATE, channels: 1, bits: 16, seconds: played.seconds },
+                    note: said.join(' '),
+                },
+            });
+        }
+
         return {
             title: 'AdLib music (Westwood ADL)',
             summary,
             fields: [trackTable, offsetTable('Program offsets', programs, base, 'program'), offsetTable('Instrument offsets', instruments, base + programs.length * 2, 'instrument'), ...dataFields],
-            preview: { kind: 'text', text: outline.join('\n') },
+            preview: items.length > 1 ? { kind: 'stack', items } : items[0].preview,
             // The player reaches no further; the usual checks look at anything after.
             end: Math.max(reach, covered),
             warnings,

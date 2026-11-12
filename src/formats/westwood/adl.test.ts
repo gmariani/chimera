@@ -10,7 +10,10 @@ import pak from './pak';
 
 const parse = (data: Uint8Array, name = 'MUSIC.ADL') => parser.parse(data, { name, names: [] }) as Parsed;
 const summary = (r: Parsed, key: string) => r.summary.find(([k]) => k === key)?.[1];
-const text = (r: Parsed) => (r.preview?.kind === 'text' ? r.preview.text : '');
+const text = (r: Parsed) => {
+    const p = r.preview?.kind === 'stack' ? r.preview.items[0].preview : r.preview;
+    return p?.kind === 'text' ? p.text : '';
+};
 const find = (fields: Field[], name: string) => fields.find((f) => f.name === name);
 /** Where the sample's data starts (version 3), and so its programs: 9, 14 and 12 bytes. */
 const DATA = 1120;
@@ -31,6 +34,11 @@ describe('Westwood AdLib music (ADL)', () => {
             ['Calls', 'None, so versions 2 and 3 read it alike'],
         ]);
         expect(text(r)).toBe('Track 0: program 0, the conductor, starting 1 (voice 0), 2 (voice 1)');
+        // Not one of Dune II's, so the tracks that start the conductor play, as music does.
+        const played = r.preview?.kind === 'stack' ? r.preview.items.slice(1) : [];
+        expect(played.map((i) => i.title)).toEqual(['Track 0']);
+        const track = played[0].preview;
+        expect(track.kind === 'music' && [track.notes.length > 0, track.audio?.sampleRate, track.note]).toEqual([true, 22050, 'Played as the game plays it: Westwood’s player, on an emulated AdLib.']);
         const loop = find(r.fields, 'Program 1')!.children!;
         expect(loop.map((c) => c.name)).toEqual(['Voice', 'Priority', 'Instrument', 'Set the repeat count', 'Note', 'Note', 'Repeat: jump back while the count lasts', 'Stop']);
         expect(loop[4].value).toBe('0x45: octave 4, note 5, for 16');
@@ -91,7 +99,7 @@ describe('Westwood AdLib music (ADL)', () => {
 
     // Dune II's own, in SOUND.PAK, from wherever it's installed (npm run test:setup).
     const PAK = gameFile('dune2', 'SOUND.PAK') ?? '';
-    it.skipIf(!PAK)('reads Dune II’s 21, the game’s music where OpenDUNE says it is', async () => {
+    it.skipIf(!PAK)('reads Dune II’s 21, the game’s music where OpenDUNE says it is', { timeout: 60_000 }, async () => {
         const files = pak.parse(new Uint8Array(readFileSync(PAK)), { name: 'SOUND.PAK', names: [] }).entries!.filter((e) => e.label.endsWith('.ADL'));
         expect(files).toHaveLength(21);
         // Known faults of the shipped files: DUNE0's three short loops land on their counts' bytes, and one of its programs runs
@@ -121,6 +129,13 @@ describe('Westwood AdLib music (ADL)', () => {
                 expect(line, `${e.label}: ${line}`).toMatch(/: program \d+, the conductor, starting /);
         }
         const dune1 = parse(files.find((e) => e.label === 'DUNE1.ADL')!.data, 'DUNE1.ADL');
+        // The music OpenDUNE's table names, played: all but track 8, which the file lacks.
+        const titles = (r: Parsed) => (r.preview?.kind === 'stack' ? r.preview.items.slice(1).map((i) => i.title) : []);
+        expect(titles(dune1)).toEqual([2, 3, 4, 5, 6].map((t) => `Track ${t} (music in Dune II)`));
+        // DUNE17's music is the only music to use an instrument its file lacks (DUNE7's and DUNE16's 62 is a sound effect's).
+        const dune17 = parse(files.find((e) => e.label === 'DUNE17.ADL')!.data, 'DUNE17.ADL');
+        const music17 = dune17.preview?.kind === 'stack' ? dune17.preview.items[1].preview : null;
+        expect(music17?.kind === 'music' && music17.note).toContain('It uses instrument 181, which the file lacks: set up, as the game does, from the bytes its empty entry points to.');
         expect(text(dune1)).toContain('Track 2 (music in the game): program 197, the conductor, starting 198 (voice 0), 199 (voice 1), 200 (voice 2), 201 (voice 3), 202 (voice 4), 203 (voice 5)');
     });
 });
