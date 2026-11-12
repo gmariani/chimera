@@ -10,6 +10,7 @@ import { sniffNe } from './ne-sniff';
 import { sniffMz } from './mz-sniff';
 import { sniffPif } from './pif-sniff';
 import { sniffAil } from './ail-sniff';
+import { sniffDrv } from './westwood/drv-layout';
 import { sniffMidi } from './midi/midi-sniff';
 import { sniffAdl } from './westwood/adl-layout';
 import { sniffDuneCredits } from './westwood/dune2-credits-layout';
@@ -115,6 +116,8 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'sfnt', name: 'Font (TrueType, OpenType)', extensions: ['ttf', 'otf', 'ttc', 'otc'], sniff: sniffSfnt, load: parserOf(() => import('./font')) },
     { id: 'pbj', name: 'Pixel Bender kernel (PBJ)', extensions: ['pbj'], sniff: sniffPbj, load: parserOf(() => import('./pbj')) },
     { id: 'mp3', name: 'Sound (MP3)', extensions: ['mp3', 'mp2'], sniff: sniffMp3, load: parserOf(() => import('./mp3')) },
+    // Windows 3's drivers are .drv too, so the name alone says nothing.
+    { id: 'westwood-drv', name: 'Sound driver (Westwood DRV)', extensions: ['drv'], sniff: sniffDrv, byNameAlone: false, load: parserOf(() => import('./westwood/drv')) },
     { id: 'ail', name: 'Sound driver (Miles AIL 2)', extensions: ['adv'], sniff: sniffAil, load: parserOf(() => import('./ail')) },
     { id: 'pif', name: 'Program information file (PIF)', extensions: ['pif'], sniff: sniffPif, load: parserOf(() => import('./pif')) },
     { id: 'ico', name: 'Icon or cursor (ICO, CUR)', extensions: ['ico', 'cur'], sniff: sniffIco, load: parserOf(() => import('./ico')) },

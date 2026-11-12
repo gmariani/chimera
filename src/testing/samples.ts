@@ -673,6 +673,33 @@ export function mentat(): Uint8Array {
 }
 
 /**
+ * A Westwood sound driver laid out as ALFX.DRV is: two jumps (to the dispatcher, and to what the timer calls), then the
+ * code: functions 0 and 1 handing back the version (1.00) and the driver's size, function 2 taking two values, function 13
+ * taking three and doing nothing, the rest returning at once; an AdLib player's lookup of three music commands; the
+ * table of 18 functions; the dispatcher; and the commands' table. Every routine is a bare return.
+ */
+export function westwoodDriver(): Uint8Array {
+    const out = new Array<number>(117).fill(0);
+    const put = (at: number, bytes: number[]) => out.splice(at, bytes.length, ...bytes);
+    const rel = (from: number, to: number) => u16((to - from) & 0xffff);
+    put(0, [0xe9, ...rel(3, 99), 0xe9, ...rel(6, 41)]);
+    put(6, [0xb8, ...u16(0x100), 0xcb]);
+    put(10, [0xb8, ...u16(117), 0xcb]);
+    put(14, [0x0e, 0xe8, ...rel(18, 6), 0xcf]);
+    put(18, [0x0e, 0xe8, ...rel(22, 10), 0xcf]);
+    put(22, [0xcb]);
+    put(23, [0x52, 0x50, 0x0e, 0xe8, ...rel(29, 22), 0x83, 0xc4, 0x04, 0xcf]);
+    put(33, [0x51, 0x52, 0x50, 0x83, 0xc4, 0x06, 0xcf]);
+    put(40, [0xcf, 0xcb]);
+    put(42, [0x24, 0x7f, 0x3c, 0x02, 0x7e, 0x02, 0xb0, 0x02, 0x8a, 0xd8, 0x32, 0xff, 0xd0, 0xe3, 0x2e, 0xff, 0x97, ...u16(111), 0xc3, 0xc3]);
+    const functions = Array.from({ length: 18 }, (_, i) => ({ 0: 14, 1: 18, 2: 23, 13: 33 })[i] ?? 40);
+    put(63, functions.flatMap(u16));
+    put(99, [0x83, 0xfb, 17, 0x77, (40 - 104) & 0xff, 0xd1, 0xe3, 0x2e, 0xff, 0xa7, ...u16(63)]);
+    put(111, [62, 62, 62].flatMap(u16));
+    return Uint8Array.from(out);
+}
+
+/**
  * Dune II's credits (CREDITS.ENG), as 1.07's: a title, a role with two names (the first sharing its row, after 0x05), a
  * centered line with no style byte, the small print, blank rows, and the NUL that ends them. `extra` goes before the NUL.
  */
@@ -882,6 +909,12 @@ export function samples(): Sample[] {
         { name: 'credits.eng', format: 'dune2-credits', about: 'Dune II credits, as 1.07’s: a title, a role and its names, a centered line, the small print', data: duneCredits() },
         { name: 'mentat.eng', format: 'mentat', about: 'Dune II mentat encyclopedia: a briefing topic and a structure, its text compressed as the game does', data: mentat() },
         { name: 'music.adl', format: 'adl', about: 'Westwood AdLib music, as Dune II’s: a conductor starting two voices, one looping as Westwood’s tools do', data: adlMusic() },
+        {
+            name: 'alfx.drv',
+            format: 'westwood-drv',
+            about: 'Westwood sound driver, laid out as Dune II’s ALFX.DRV: 18 functions, an AdLib player’s three music commands, every routine a bare return',
+            data: westwoodDriver(),
+        },
         { name: 'driver.adv', format: 'ail', about: 'Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF', data: ailDriver() },
         { name: 'program.exe', format: 'mz', about: 'DOS program linked as Borland’s TLINK does with overlays: relocations, the segment table, one overlay with a fixup', data: dosProgram() },
         { name: 'program.pif', format: 'pif', about: 'Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections', data: pif() },
