@@ -3,7 +3,7 @@ import type { Field, FormatParser, Preview } from '../../core/types';
 import { ADL_REACH, adlLayout, COMMANDS } from './adl-layout';
 import { wav } from './adpcm';
 import { renderTrack, RENDER_RATE } from './adl-render';
-import { DUNE2_MUSIC } from './dune2-music';
+import { DUNE2_MUSIC, dune2MusicPlays } from './dune2-music';
 
 /**
  * Westwood's AdLib music (.adl): the music and sound effects of Eye of the
@@ -411,7 +411,8 @@ const parser: FormatParser = {
                 }
             const what = voice === undefined ? '(not there)' : voice === 9 ? 'the conductor' : `voice ${voice}`;
             const starts = started.length ? `, starting ${started.map((s) => `${s} (${voices.get(s) === 9 ? 'the conductor' : `voice ${voices.get(s) ?? '?'}`})`).join(', ')}` : '';
-            outline.push(`Track ${t}${music?.includes(t) ? ' (music in the game)' : ''}: program ${p}, ${what}${starts}`);
+            const plays = dune2MusicPlays(stem, t);
+            outline.push(`Track ${t}${plays ? ` (${plays})` : ''}: program ${p}, ${what}${starts}`);
         });
 
         const summary: [string, string][] = [
@@ -453,7 +454,7 @@ const parser: FormatParser = {
                     `It uses instrument${played.missing.length === 1 ? '' : 's'} ${played.missing.join(', ')}, which the file lacks: set up, as the game does, from the bytes ${played.missing.length === 1 ? 'its empty entry points' : 'their empty entries point'} to.`
                 );
             items.push({
-                title: `Track ${t}${music?.includes(t) ? ' (music in Dune II)' : ''}`,
+                title: `Track ${t}${music ? `: ${dune2MusicPlays(stem, t)}` : ''}`,
                 preview: {
                     kind: 'music',
                     notes: played.notes,

@@ -3,7 +3,7 @@ import type { Entry, Field, FormatParser, Preview } from '../../core/types';
 import { append, maxOf } from '../../core/math';
 import { readSmf } from '../midi/smf';
 import { songPreview } from '../midi/song-preview';
-import { DUNE2_MUSIC } from './dune2-music';
+import { DUNE2_MUSIC, dune2MusicPlays } from './dune2-music';
 
 /**
  * XMIDI (.xmi), the Miles Audio Interface Library's MIDI: the music of Dune II
@@ -365,7 +365,7 @@ const parser: FormatParser = {
         // The sequences as fields, and each as a MIDI file.
         const container = cat ?? single!;
         const sequenceFields: Field[] = sequences.map((s, i) => ({
-            name: `Sequence ${i}${music.includes(i) ? ' (music in Dune II)' : ''}`,
+            name: `Sequence ${i}${music.includes(i) ? ` (${dune2MusicPlays(stem, i)})` : ''}`,
             offset: s.form.at,
             length: Math.min(8 + s.form.size + (s.form.size & 1), data.length - s.form.at),
             value: s.evnt ? `${seconds(s.length)}, ${s.notes.toLocaleString('en-US')} notes` : 'no events',
@@ -437,7 +437,7 @@ const parser: FormatParser = {
             s.loops ? `, ${s.loops} loop${s.loops === 1 ? '' : 's'}${s.forever ? ` (${s.forever} meant to play forever, played once)` : ''}${s.cut ? ', cut off at 30 minutes' : ''}` : '';
         const outline = sequences.map(
             (s, i) =>
-                `Sequence ${i}${music.includes(i) ? ' (music in Dune II)' : ''}: ${s.evnt ? `${seconds(s.length)}, ${s.notes.toLocaleString('en-US')} notes on ${s.channels.size} channel${s.channels.size === 1 ? '' : 's'}` : 'no events'}${s.timbres.length ? `, ${s.timbres.length} instrument${s.timbres.length === 1 ? '' : 's'} from the bank` : ''}${s.branches.length ? `, ${s.branches.length} branch point${s.branches.length === 1 ? '' : 's'}` : ''}${loopsOf(s)}`
+                `Sequence ${i}${music.includes(i) ? ` (${dune2MusicPlays(stem, i)})` : ''}: ${s.evnt ? `${seconds(s.length)}, ${s.notes.toLocaleString('en-US')} notes on ${s.channels.size} channel${s.channels.size === 1 ? '' : 's'}` : 'no events'}${s.timbres.length ? `, ${s.timbres.length} instrument${s.timbres.length === 1 ? '' : 's'} from the bank` : ''}${s.branches.length ? `, ${s.branches.length} branch point${s.branches.length === 1 ? '' : 's'}` : ''}${loopsOf(s)}`
         );
 
         // Each sequence with notes, on a timeline; the game's own music plays here (it's what these files are opened for), and
@@ -463,7 +463,7 @@ const parser: FormatParser = {
             // Only some are played here, to keep the page light: the rest say where to hear them.
             const label = entries.find((e) => e.offset === s.form.at)?.label;
             items.push({
-                title: `Sequence ${i}${music.includes(i) ? ' (music in Dune II)' : ''}`,
+                title: `Sequence ${i}${music.includes(i) ? `: ${dune2MusicPlays(stem, i)}` : ''}`,
                 preview: songPreview(songs[i]!, { listen: listen.has(i), elsewhere: label ? `To hear it, open ${label} in the contents.` : undefined }),
             });
         });

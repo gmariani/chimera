@@ -171,6 +171,6 @@ describe('XMIDI music', () => {
         // DUNE1: the game's music is sequences 2 to 6 and 8 (OpenDUNE's table); 6 is the longest.
         const dune1 = parse(files.find((e) => e.label === 'DUNE1.XMI')!.data, 'DUNE1.XMI');
         expect(dune1.summary).toContainEqual(['In Dune II', 'It plays sequences 2, 3, 4, 5, 6, 8 as music (OpenDUNE’s table)']);
-        expect(text(dune1)).toContain('Sequence 6 (music in Dune II): 3:42, 1,610 notes on 6 channels, 14 instruments from the bank');
+        expect(text(dune1)).toContain('Sequence 6 (in the field, one of nine at random): 3:42, 1,610 notes on 6 channels, 14 instruments from the bank');
     });
 });

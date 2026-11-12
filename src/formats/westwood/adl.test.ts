@@ -125,17 +125,25 @@ describe('Westwood AdLib music (ADL)', () => {
             // OpenDUNE's music table names tracks the game plays as music: each that's in the file starts the conductor.
             for (const line of text(r.parsed)
                 .split('\n')
-                .filter((l) => l.includes('(music in the game)')))
+                .filter((l) => /^Track \d+ \(/.test(l)))
                 expect(line, `${e.label}: ${line}`).toMatch(/: program \d+, the conductor, starting /);
         }
         const dune1 = parse(files.find((e) => e.label === 'DUNE1.ADL')!.data, 'DUNE1.ADL');
         // The music OpenDUNE's table names, played: all but track 8, which the file lacks.
         const titles = (r: Parsed) => (r.preview?.kind === 'stack' ? r.preview.items.slice(1).map((i) => i.title) : []);
-        expect(titles(dune1)).toEqual([2, 3, 4, 5, 6].map((t) => `Track ${t} (music in Dune II)`));
+        expect(titles(dune1)).toEqual([
+            'Track 2: listed, but never played',
+            'Track 3: an Ordos defeat',
+            'Track 4: a Harkonnen defeat',
+            'Track 5: an Atreides defeat',
+            'Track 6: in the field, one of nine at random',
+        ]);
         // DUNE17's music is the only music to use an instrument its file lacks (DUNE7's and DUNE16's 62 is a sound effect's).
         const dune17 = parse(files.find((e) => e.label === 'DUNE17.ADL')!.data, 'DUNE17.ADL');
         const music17 = dune17.preview?.kind === 'stack' ? dune17.preview.items[1].preview : null;
         expect(music17?.kind === 'music' && music17.note).toContain('It uses instrument 181, which the file lacks: set up, as the game does, from the bytes its empty entry points to.');
-        expect(text(dune1)).toContain('Track 2 (music in the game): program 197, the conductor, starting 198 (voice 0), 199 (voice 1), 200 (voice 2), 201 (voice 3), 202 (voice 4), 203 (voice 5)');
+        expect(text(dune1)).toContain(
+            'Track 2 (listed, but never played): program 197, the conductor, starting 198 (voice 0), 199 (voice 1), 200 (voice 2), 201 (voice 3), 202 (voice 4), 203 (voice 5)'
+        );
     });
 });
