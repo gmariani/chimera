@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Field, Parsed } from '../core/types';
-import { gameFile } from '../testing/game-data';
+import { gameFile, gameFiles } from '../testing/game-data';
 import { dosProgram } from '../testing/samples';
 import { detect } from './index';
 import { inspect } from './inspect';
@@ -169,7 +169,7 @@ describe('DOS programs (MZ)', () => {
     });
 
     // Dune II's 1.07 patch, if it's beside the game: PKZIP's self-extractor, packed with PKLITE.
-    const PATCH = gameFile('dune2', 'DUNE2_107.EXE') ?? '';
+    const PATCH = gameFiles('dune2', /^DUNE2_107.*\.EXE$/i)[0] ?? '';
     it.skipIf(!PATCH)('reads Dune II’s 1.07 patch, a self-extracting ZIP', async () => {
         const r = await inspect(new Uint8Array(readFileSync(PATCH)), { name: 'DUNE2_107.EXE', names: [] });
         expect(r.format.id).toBe('mz');

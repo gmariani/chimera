@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { detect } from '../index';
@@ -120,5 +120,22 @@ describe.skipIf(!DUNE)('Dune II PAKs', () => {
         const sprites = parse(data).entries!.filter((e) => /\.shp$/i.test(e.label));
         expect(sprites.length).toBe(13);
         for (const e of sprites) expect(detect(e.data, e.name).id, e.label).toBe('shp-d2');
+    });
+
+    // 1.07's ENGLISH.PAK, when a copy sits beside the installed game: the sprites and pictures with English on them are
+    // named .ENG, as its text is, and that's no cause for alarm.
+    const ENGLISH_107 = join(DUNE, '..', 'dune II 1.07', 'ENGLISH.PAK');
+    it.skipIf(!existsSync(ENGLISH_107))('opens 1.07’s sprites and pictures named for the language as what they are', async () => {
+        const named = parse(new Uint8Array(readFileSync(ENGLISH_107))).entries!.filter((e) => /^(CHOAM|BTTN|MENTAT|AND|HERALD)\.ENG$/.test(e.label));
+        const read: Record<string, string> = {};
+        for (const e of named) {
+            const r = await inspect(e.data, { name: e.name, names: [] });
+            expect(
+                r.checks.filter((c) => c.level !== 'info'),
+                e.label
+            ).toEqual([]);
+            read[e.label] = r.format.id;
+        }
+        expect(read).toEqual({ 'CHOAM.ENG': 'shp-d2', 'BTTN.ENG': 'shp-d2', 'MENTAT.ENG': 'shp-d2', 'AND.ENG': 'cps', 'HERALD.ENG': 'cps' });
     });
 });
