@@ -51,8 +51,13 @@ export interface AudioClip {
     seconds: number;
 }
 
-/** One frame of video: palette indexes and the 768-byte 8-bit RGB palette in force for it, or (high-color movies) RGBA. */
-export type VideoFrame = { pixels: Uint8Array; palette: Uint8Array } | { rgba: Uint8Array };
+/**
+ * One frame of video: palette indexes and the 768-byte 8-bit RGB palette in force for it, or (high-color movies) RGBA,
+ * at the movie's size unless `width` and `height` say it's a smaller picture (a large movie, while it plays). `pixels`
+ * and `rgba` must be new arrays of their own each time: they're handed over to the page, not copied, and so are gone
+ * from the worker after.
+ */
+export type VideoFrame = { pixels: Uint8Array; palette: Uint8Array } | { rgba: Uint8Array; width?: number; height?: number };
 
 /** One part of a voxel model (a limb: a body, a turret), placed in the model's space. */
 export interface VoxelPart {
@@ -122,9 +127,18 @@ export type Preview =
           height: number;
           frameCount: number;
           fps: number;
-          /** Decodes a frame on demand (movies are too big to decode up front). Fastest in order. */
-          frame(index: number): VideoFrame;
+          /**
+           * Decodes a frame on demand (movies are too big to decode up front). Fastest in order. `playing` asks for
+           * what keeps up while the movie plays: a large movie may answer with a smaller picture.
+           */
+          frame(index: number, playing?: boolean): VideoFrame;
           audio?: AudioClip;
+          /** The movie's other sound tracks, to pick from instead of `audio`. */
+          otherAudio?: { title: string; clip: AudioClip }[];
+          /** What `audio` is called when there are others to pick from. */
+          audioTitle?: string;
+          /** The frames have an alpha plane: shown over a checkerboard. */
+          transparent?: boolean;
       }
     | {
           kind: 'text';

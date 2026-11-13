@@ -1,0 +1,89 @@
+Chimera's fix to the fork's Bink 2 decoder (wasm/bink2/build.sh applies it).
+
+Alpha: frame flag 0x80000 means the frame carries no alpha data, and its whole
+alpha plane is then one value, the frame flags' top byte (0 where an interface
+piece starts blank, 255 through most of the intro, 17, 34 ... 238 in a fade).
+The fork read an alpha plane from every frame of a movie with alpha, so such a
+frame went out of step at once and the movie didn't decode at all (80 of the
+Remastered Collection's 438 movies have alpha). With the flag the plane isn't
+read or motion-compensated, just filled. Checked against frames exported with
+alpha by RAD Video Tools (305 of them, from two movies): no pixel's alpha more
+than 9 levels off. All 80 decode, each slice ending where its offset says.
+
+diff --git a/libavcodec/bink2.c b/libavcodec/bink2.c
+index fe868f0..d20477a 100644
+--- a/libavcodec/bink2.c
++++ b/libavcodec/bink2.c
+@@ -310,6 +310,13 @@ static int bink2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
+ 
+     skip_bits_long(gb, 32 + 32 * (c->num_slices - 1));
+ 
++    /* Frame flag 0x80000: the frame has no alpha data. Its alpha plane is one
++     * value throughout, the frame flags' top byte: 0 (transparent) where an
++     * interface piece starts blank, 255 (opaque) through most of the intro. */
++    if (c->has_alpha && (c->frame_flags & 0x80000))
++        for (int y = 0; y < avctx->height; y++)
++            memset(frame->data[3] + y * frame->linesize[3], c->frame_flags >> 24, avctx->width);
++
+     if (c->frame_flags & 0x10000) {
+         if (!(c->frame_flags & 0x8000))
+             bink2_get_block_flags(gb, 1, (((avctx->height + 15) & ~15) >> 3) - 1, c->row_cbp);
+diff --git a/libavcodec/bink2g.c b/libavcodec/bink2g.c
+index 82e381c..609acdc 100644
+--- a/libavcodec/bink2g.c
++++ b/libavcodec/bink2g.c
+@@ -1255,6 +1109,9 @@ static int bink2g_decode_slice(Bink2Context *c,
+     int w = c->avctx->width;
+     int h = c->avctx->height;
+     int ret = 0, dq, flags;
++    /* Frame flag 0x80000: the frame has no alpha data; its plane was filled
++     * with one value before the slices (bink2.c). */
++    const int alpha_coded = c->has_alpha && !(c->frame_flags & 0x80000);
+ 
+     memset(c->prev_q, 0, ((c->avctx->width + 31) / 32) * sizeof(*c->prev_q));
+     memset(c->prev_mv, 0, ((c->avctx->width + 31) / 32) * sizeof(*c->prev_mv));
+@@ -1338,7 +1195,7 @@ static int bink2g_decode_slice(Bink2Context *c,
+                                                  dst[1] + x/2, stride[1], flags);
+                 if (ret < 0)
+                     goto fail;
+-                if (c->has_alpha) {
++                if (alpha_coded) {
+                     c->comp = 3;
+                     ret = bink2g_decode_intra_luma(c, gb, c->iblock, &a_cbp_intra, *intra_q, &c->dsp,
+                                                    dst[3] + x, stride[3], flags);
+@@ -1357,7 +1214,7 @@ static int bink2g_decode_slice(Bink2Context *c,
+                              stride[1], sstride[1], 16);
+                 copy_block16(dst[2] + (x/2), src[2] + (x/2) + sstride[2] * (y/2),
+                              stride[2], sstride[2], 16);
+-                if (c->has_alpha) {
++                if (alpha_coded) {
+                     copy_block16(dst[3] + x, src[3] + x + sstride[3] * y,
+                                  stride[3], sstride[3], 32);
+                     copy_block16(dst[3] + x + 16, src[3] + x + 16 + sstride[3] * y,
+@@ -1392,7 +1249,7 @@ static int bink2g_decode_slice(Bink2Context *c,
+                                                 w/2, h/2);
+                 if (ret < 0)
+                     goto fail;
+-                if (c->has_alpha) {
++                if (alpha_coded) {
+                     c->comp = 3;
+                     ret = bink2g_mcompensate_luma(c, x, y,
+                                                   dst[3], stride[3],
+@@ -1435,7 +1292,7 @@ static int bink2g_decode_slice(Bink2Context *c,
+                                                 w/2, h/2);
+                 if (ret < 0)
+                     goto fail;
+-                if (c->has_alpha) {
++                if (alpha_coded) {
+                     c->comp = 3;
+                     ret = bink2g_mcompensate_luma(c, x, y,
+                                                   dst[3], stride[3],
+@@ -1464,7 +1321,7 @@ static int bink2g_decode_slice(Bink2Context *c,
+                     u_cbp_inter = 0;
+                     v_cbp_inter = 0;
+                 }
+-                if (c->has_alpha) {
++                if (alpha_coded) {
+                     c->comp = 3;
+                     ret = bink2g_decode_inter_luma(c, gb, c->iblock, &a_cbp_inter, *inter_q, &c->dsp,
+                                                    dst[3] + x, stride[3], flags);

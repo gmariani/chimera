@@ -16,7 +16,7 @@ import type { DataRef, FromPage, FromWorker, Request, Results, WireEntry, WireIn
  */
 export function serve(post: (message: FromWorker, transfer?: Transferable[]) => void): (message: FromPage) => void {
     const store = new Map<number, Uint8Array>();
-    const handles = new Map<number, (...args: number[]) => unknown>();
+    const handles = new Map<number, (...args: never[]) => unknown>();
     const library = new Library();
     let nextHandle = 1;
     // Keys the worker makes are negative, so they never meet the page's.
@@ -40,7 +40,7 @@ export function serve(post: (message: FromWorker, transfer?: Transferable[]) => 
         return { key, bytes };
     };
 
-    const handle = (fn: (...args: number[]) => unknown) => {
+    const handle = (fn: (...args: never[]) => unknown) => {
         const id = nextHandle++;
         handles.set(id, fn);
         return id;
@@ -103,7 +103,7 @@ export function serve(post: (message: FromWorker, transfer?: Transferable[]) => 
             case 'call': {
                 const fn = handles.get(r.handle);
                 if (!fn) throw new Error('That preview is out of date; open the file again.');
-                return fn(...r.args) as Results[R['op']];
+                return (fn as (...args: unknown[]) => unknown)(...r.args) as Results[R['op']];
             }
             case 'palettes':
                 return (await palettesIn(r.name, resolve(r.data), library.names)) as Results[R['op']];
@@ -129,12 +129,23 @@ export function serve(post: (message: FromWorker, transfer?: Transferable[]) => 
         queue = queue.then(async () => {
             post({ id, type: 'start' });
             try {
-                post({ id, type: 'done', result: await run(request) });
+                const result = await run(request);
+                post({ id, type: 'done', result }, request.op === 'call' ? frameBuffers(result) : undefined);
             } catch (e) {
                 post({ id, type: 'error', name: e instanceof Error ? e.name : 'Error', message: e instanceof Error ? e.message : String(e) });
             }
         });
     };
+}
+
+/**
+ * A video frame's picture, handed over to the page rather than copied (a 1080p frame is 8 MB, 30 times a second).
+ * Readers make a new array for each frame (see VideoFrame), so the worker has no further use for it.
+ */
+function frameBuffers(result: unknown): Transferable[] | undefined {
+    if (!result || typeof result !== 'object') return undefined;
+    const picture = 'rgba' in result ? result.rgba : 'pixels' in result ? result.pixels : undefined;
+    return picture instanceof Uint8Array && picture.byteOffset === 0 && picture.byteLength === picture.buffer.byteLength && picture.buffer instanceof ArrayBuffer ? [picture.buffer] : undefined;
 }
 
 /** How deep to look inside archives within archives (Red Alert keeps palettes two levels down). */

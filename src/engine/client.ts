@@ -36,7 +36,7 @@ export type UiPreview =
     | Exclude<Preview, { kind: 'images' | 'picture' | 'video' | 'stack' }>
     | (Omit<Extract<Preview, { kind: 'images' }>, 'toggle'> & { toggle?: { label: string; off(): Promise<IndexedImage[]> } })
     | (Omit<Extract<Preview, { kind: 'picture' }>, 'toggle'> & { toggle?: { label: string; off(): Promise<Uint8Array> } })
-    | (Omit<Extract<Preview, { kind: 'video' }>, 'frame'> & { frame(index: number): Promise<VideoFrame> })
+    | (Omit<Extract<Preview, { kind: 'video' }>, 'frame'> & { frame(index: number, playing?: boolean): Promise<VideoFrame> })
     | { kind: 'stack'; items: { title: string; preview: UiPreview }[] };
 
 export type UiParsed = Omit<Parsed, 'preview'> & { preview?: UiPreview };
@@ -299,7 +299,7 @@ export class Engine {
         return this.request<'readNames'>(`Reading names from ${name}`, () => ({ op: 'readNames', data: this.ref(data) }), `names:${this.poisonKey(data)}`);
     }
 
-    private call<T>(what: string, handle: number, generation: number, args: number[] = []): Promise<T> {
+    private call<T>(what: string, handle: number, generation: number, args: (number | boolean | undefined)[] = []): Promise<T> {
         if (generation !== this.generation) return Promise.reject(new Stopped('The worker was restarted since this was opened; open the file again.'));
         return this.request<'call'>(what, () => ({ op: 'call', handle, args }), `call:${generation}:${handle}`) as Promise<T>;
     }
@@ -323,7 +323,7 @@ export class Engine {
                 case 'video': {
                     const { frame, ...rest } = p;
                     handles.push(frame);
-                    return { ...rest, frame: (i: number) => this.call<VideoFrame>(`Decoding frame ${i + 1}`, frame, generation, [i]) };
+                    return { ...rest, frame: (i: number, playing?: boolean) => this.call<VideoFrame>(`Decoding frame ${i + 1}`, frame, generation, [i, playing]) };
                 }
                 case 'stack':
                     return { kind: 'stack', items: p.items.map((item) => ({ title: item.title, preview: preview(item.preview) })) };

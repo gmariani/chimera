@@ -4,6 +4,7 @@ fuzz/build/
 fuzz/findings/
 fuzz/last-run.json
 src/formats/westwood/bink-wasm/
+src/formats/westwood/bink2-wasm/
 wasm/bink/build/
 package-lock.json
 

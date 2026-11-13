@@ -516,10 +516,14 @@ function AudioPreview({ clip, fileName }: { clip: AudioClip; fileName: string })
  * the clock and the picture follows it.
  */
 function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kind: 'video' }>; fileName: string }) {
-    const { width, height, frameCount, fps, audio } = preview;
+    const { width, height, frameCount, fps, otherAudio, transparent } = preview;
+    // The sound track to play along, when there's a choice (Bink 2's movies have up to three).
+    const tracks = preview.audio ? [{ title: preview.audioTitle ?? 'Sound', clip: preview.audio }, ...(otherAudio ?? [])] : [];
+    const [track, setTrack] = useState(0);
+    const audio = tracks[track]?.clip;
     const [frame, setFrame] = useState(0);
     const [playing, setPlaying] = useState(false);
-    const [zoom, setZoom] = useState(width <= 320 ? 2 : 1);
+    const [zoom, setZoom] = useState<Zoom>(initialZoom(width));
     const pan = useDragPan<HTMLDivElement>();
     const [busy, setBusy] = useState<string | null>(null);
     const canvas = useRef<HTMLCanvasElement>(null);
@@ -528,19 +532,46 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
     const shown = useRef(-1);
 
     const [error, setError] = useState<string | null>(null);
-    const image = (f: VideoFrame) => ('rgba' in f ? new ImageData(new Uint8ClampedArray(f.rgba), width, height) : toImageData({ width, height, pixels: f.pixels }, { palette: f.palette }));
+    // The frame's own buffer, handed over by the worker, so no copy is made of it.
+    const image = (f: VideoFrame) =>
+        'rgba' in f
+            ? new ImageData(new Uint8ClampedArray(f.rgba.buffer as ArrayBuffer, f.rgba.byteOffset, f.rgba.byteLength), f.width ?? width, f.height ?? height)
+            : toImageData({ width, height, pixels: f.pixels }, { palette: f.palette });
+    /** Draws a frame; a smaller one (a large movie, while it plays) is scaled up to fill the canvas. */
+    // A movie's alpha can be shown, over the checkerboard, or ignored, as Bink's own player does (it draws every movie
+    // opaque): to see the picture under a fade, say.
+    const [showAlpha, setShowAlpha] = useState(true);
+    const alphaShown = useRef(true);
+    const paint = async (c: HTMLCanvasElement, f: VideoFrame) => {
+        if (transparent && !alphaShown.current && 'rgba' in f) for (let i = 3; i < f.rgba.length; i += 4) f.rgba[i] = 255;
+        const picture = image(f);
+        const context = c.getContext('2d')!;
+        if (picture.width === width && picture.height === height) return context.putImageData(picture, 0, 0);
+        const bitmap = await createImageBitmap(picture);
+        context.clearRect(0, 0, width, height);
+        context.drawImage(bitmap, 0, 0, width, height);
+        bitmap.close();
+    };
 
     // Frames are decoded in the parsing worker: one at a time, the latest wanted, so playing never queues up behind itself.
     const wanted = useRef(0);
+    const playingNow = useRef(false);
+    // Paused, the frame on screen is drawn again in full when it was drawn small while playing; and again when the alpha
+    // switch changes. (A saved frame is drawn the same way, with or without its alpha, as on screen.)
+    useEffect(() => {
+        playingNow.current = playing;
+        alphaShown.current = showAlpha;
+        if (!playing) shown.current = -1;
+    }, [playing, showAlpha]);
     const drawing = useRef(false);
     const draw = () => {
         if (drawing.current || !canvas.current || shown.current === wanted.current) return;
         const index = wanted.current;
         drawing.current = true;
         preview
-            .frame(index)
+            .frame(index, playingNow.current)
             .then(
-                (f) => canvas.current?.getContext('2d')!.putImageData(image(f), 0, 0),
+                (f) => canvas.current && paint(canvas.current, f),
                 (e: unknown) => {
                     setError(`Frame ${index + 1} couldn't be decoded: ${e instanceof Error ? e.message : String(e)}`);
                     setPlaying(false);
@@ -561,7 +592,8 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
     const startFrame = useEffectEvent(() => frame);
     useEffect(() => {
         if (!playing) return;
-        const el = sound.current;
+        // The sound is the clock when there is one; it's one element whatever the track, so a switch doesn't lose it.
+        const el = sound.current?.src ? sound.current : null;
         if (el) {
             if (el.currentTime >= el.duration - 0.05) el.currentTime = 0;
             void el.play();
@@ -569,6 +601,11 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
         const start = performance.now() - (startFrame() / fps) * 1000;
         let request = 0;
         const tick = () => {
+            // While a newly picked track loads, the clock hasn't moved: stay on this frame.
+            if (el && el.readyState < HTMLMediaElement.HAVE_METADATA) {
+                request = requestAnimationFrame(tick);
+                return;
+            }
             const seconds = el ? el.currentTime : (performance.now() - start) / 1000;
             const next = Math.floor(seconds * fps);
             if (next >= frameCount || (el && el.ended)) {
@@ -595,7 +632,7 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
         const c = document.createElement('canvas');
         c.width = width;
         c.height = height;
-        c.getContext('2d')!.putImageData(image(await preview.frame(index)), 0, 0);
+        await paint(c, await preview.frame(index));
         return png(c);
     };
 
@@ -619,8 +656,8 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
     return (
         <div className='cell-row cell-row--boxed'>
             <div className='cell cell--stage'>
-                <div className='image-stage image-stage--pannable' {...pan} onPointerCancel={pan.onPointerUp}>
-                    <canvas ref={canvas} width={width} height={height} className='image-canvas' style={{ width: width * zoom }} />
+                <div className={`image-stage ${zoom === 'fit' ? '' : 'image-stage--pannable'}`} {...pan} onPointerCancel={pan.onPointerUp}>
+                    <canvas ref={canvas} width={width} height={height} className='image-canvas' style={zoomStyle(zoom, width, height)} />
                 </div>
             </div>
             <div className='cell cell--side'>
@@ -635,25 +672,52 @@ function VideoPreview({ preview, fileName }: { preview: Extract<UiPreview, { kin
                 </div>
                 {/* The movie's own sound, played along with it; there are no captions to give it. */}
                 {/* oxlint-disable-next-line jsx-a11y/media-has-caption */}
-                {url && <audio ref={sound} src={url} preload='auto' />}
+                <audio
+                    ref={sound}
+                    src={url}
+                    preload='auto'
+                    // A new track (picked, or the first one loaded) starts where the movie is, and keeps playing if it was.
+                    onLoadedMetadata={(e) => {
+                        e.currentTarget.currentTime = frame / fps;
+                        if (playing) void e.currentTarget.play();
+                    }}
+                />
                 {error && <p className='small text-danger'>{error}</p>}
 
-                <Form.Group className='mb-3'>
-                    <Form.Label className='small text-body-secondary mb-1'>Zoom</Form.Label>
-                    <ButtonGroup size='sm' className='d-flex'>
-                        {[1, 2, 3].map((z) => (
-                            <Button key={z} variant={zoom === z ? 'primary' : 'outline-light'} onClick={() => setZoom(z)}>
-                                {z}×
-                            </Button>
-                        ))}
-                    </ButtonGroup>
-                </Form.Group>
+                {transparent && (
+                    <Form.Check
+                        type='switch'
+                        id='video-alpha'
+                        className='mb-3'
+                        label='Show the alpha plane'
+                        checked={showAlpha}
+                        onChange={(e) => {
+                            setShowAlpha(e.target.checked);
+                            shown.current = -1;
+                        }}
+                    />
+                )}
+                <ZoomButtons zoom={zoom} onChange={setZoom} />
 
                 <p className='small mb-3'>
                     <Muted>
-                        {width} × {height} · {fps} fps · {(frameCount / fps).toFixed(1)} s{audio ? ` · sound: ${clipLabel(audio)}` : ' · no sound'}
+                        {width} × {height}
+                        {transparent ? ' with alpha' : ''} · {+fps.toFixed(3)} fps · {(frameCount / fps).toFixed(1)} s{audio ? ` · sound: ${clipLabel(audio)}` : ' · no sound'}
                     </Muted>
                 </p>
+
+                {tracks.length > 1 && (
+                    <Form.Group className='mb-3'>
+                        <Form.Label className='small text-body-secondary mb-1'>Sound track</Form.Label>
+                        <Form.Select size='sm' value={track} onChange={(e) => setTrack(Number(e.target.value))}>
+                            {tracks.map((t, i) => (
+                                <option key={t.title} value={i}>
+                                    {t.title}
+                                </option>
+                            ))}
+                        </Form.Select>
+                    </Form.Group>
+                )}
 
                 <div className='d-flex flex-wrap gap-2'>
                     <Button size='sm' variant='outline-light' onClick={async () => download(await framePng(frame), `${safeName(stem(fileName))}-${String(frame).padStart(4, '0')}.png`)}>

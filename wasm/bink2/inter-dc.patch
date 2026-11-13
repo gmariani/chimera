@@ -1,0 +1,32 @@
+Chimera's fix to the fork's Bink 2 decoder (wasm/bink2/build.sh applies it).
+
+Inter DC range: the fork clamped a residual block's DC to -1023..1023, which
+is -128..127 as pixels, where a residual can be a plane's whole range. A cut
+from dark to bright in GDI13 (frame 926) came out 62 levels short of what
+Bink's own player shows; with the clamp at -2047..2047 it's within 1.5.
+
+diff --git a/libavcodec/bink2g.c b/libavcodec/bink2g.c
+index 82e381c..609acdc 100644
+--- a/libavcodec/bink2g.c
++++ b/libavcodec/bink2g.c
+@@ -701,7 +701,10 @@ static int bink2g_decode_inter_luma(Bink2Context *c,
+ 
+     *prev_cbp = cbp = bink2g_decode_cbp_luma(c, gb, *prev_cbp);
+ 
+-    bink2g_decode_dc(c, gb, dc, 1, q, -1023, 1023, 0xA8);
++    /* A residual DC can be as much as a whole plane's range (-255 to 255 as
++     * pixels, -2040 to 2040 here): clamped at 1023, a cut from dark to bright
++     * came out 62 levels short (GDI13, frame 926, against Bink's own player). */
++    bink2g_decode_dc(c, gb, dc, 1, q, -2047, 2047, 0xA8);
+ 
+     for (int i = 0; i < 4; i++) {
+         ret = bink2g_decode_ac(gb, bink2g_scan, block, cbp >> (4 * i),
+@@ -732,7 +735,7 @@ static int bink2g_decode_inter_chroma(Bink2Context *c,
+ 
+     *prev_cbp = cbp = bink2g_decode_cbp_chroma(gb, *prev_cbp);
+ 
+-    bink2g_decode_dc(c, gb, dc, 0, q, -1023, 1023, 0xA8);
++    bink2g_decode_dc(c, gb, dc, 0, q, -2047, 2047, 0xA8); /* as above */
+ 
+     ret = bink2g_decode_ac(gb, bink2g_scan, block, cbp,
+                            q, bink2g_inter_qmat);

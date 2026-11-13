@@ -350,7 +350,8 @@ describe('Bink', () => {
         expect(detect(data, null).id).toBe('bink');
         const format = detect(data, null);
         const parsed = (await format.load()).parse(data, context('test.bik'));
-        expect(parsed.warnings).toEqual([]);
+        // Its frames are 6 bytes of nothing, which the decoder says.
+        expect(parsed.warnings).toEqual([expect.stringMatching(/^The first frame doesn't decode/)]);
         expect(parsed.summary).toContainEqual(['Frames', '2 at 15 per second (0.1 s), 1 keyframe']);
         expect(parsed.summary).toContainEqual(['Sound', '22050 Hz stereo, DCT']);
         expect(parsed.fields.map((f) => f.name)).toEqual(expect.arrayContaining(['Frame 0 (keyframe)', 'Frame 1']));

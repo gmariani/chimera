@@ -1,7 +1,9 @@
 import { Bytes, bytesLabel, field } from '../../core/bytes';
+import { checkPixels } from '../../core/limits';
 import type { AudioClip, FormatParser, VideoFrame } from '../../core/types';
 import { wav } from './adpcm';
 import type { BinkWasm } from './bink-wasm/bink.mjs';
+import type { Bink2Wasm } from './bink2-wasm/bink2.mjs';
 
 /**
  * Bink video (RAD Game Tools), which RA2 uses for its movies, and Bink 2 ("KB2"),
@@ -12,27 +14,39 @@ import type { BinkWasm } from './bink-wasm/bink.mjs';
  * track, a 4-byte size and that much audio, then the video.
  *
  * The packets are decoded by FFmpeg's Bink decoders, compiled to WebAssembly
- * (wasm/bink), which load only when a Bink file is opened. FFmpeg has no Bink 2
- * video decoder (RAD never published the format), so Bink 2 files play their
- * sound only; their sound is the same Bink audio as Bink 1's.
+ * (wasm/bink), which load only when a Bink file is opened. Bink 2's sound is the
+ * same Bink audio. Its video has no decoder in FFmpeg (RAD never published the
+ * format): it's decoded by Paul B Mahol's unmerged one, from a fork of FFmpeg
+ * with a fix of ours for its color (wasm/bink2), in a module of its own.
  */
 
 const AUDIO_STEREO = 0x2000;
 const AUDIO_DCT = 0x1000;
+/** In the video flags: the movie has an alpha plane. */
+const ALPHA = 0x100000;
 
 let wasm: BinkWasm | null = null;
+let wasm2: Bink2Wasm | null = null;
 let loading: Promise<void> | null = null;
 
 /** Loads the decoders; the format registry waits for this before parsing. */
 export function ready(): Promise<void> {
-    loading ??= import('./bink-wasm/bink.mjs')
-        .then((m) => m.default())
-        .then((w) => {
-            wasm = w;
-        })
+    loading ??= Promise.all([
+        import('./bink-wasm/bink.mjs')
+            .then((m) => m.default())
+            .then((w) => {
+                wasm = w;
+            }),
+        import('./bink2-wasm/bink2.mjs')
+            .then((m) => m.default())
+            .then((w) => {
+                wasm2 = w;
+            }),
+    ])
         .catch(() => {
             // Without the decoders the header is still shown.
-        });
+        })
+        .then(() => undefined);
     return loading;
 }
 
@@ -94,11 +108,18 @@ function packets(data: Uint8Array, l: Layout, i: number): { audio: Uint8Array[];
     return { audio, video: data.subarray(at, end) };
 }
 
+/** What both decoder modules have for their memory. */
+interface Memory {
+    HEAPU8: Uint8Array;
+    _malloc(size: number): number;
+    _free(pointer: number): void;
+}
+
 /** Copies bytes into the decoders' memory (growing a reused buffer), returning where. */
 class Input {
     private pointer = 0;
     private size = 0;
-    constructor(private readonly w: BinkWasm) {}
+    constructor(private readonly w: Memory) {}
     put(bytes: Uint8Array): number {
         if (bytes.length > this.size) {
             if (this.pointer) this.w._free(this.pointer);
@@ -114,16 +135,63 @@ class Input {
     }
 }
 
-/** How often to keep the decoder's state while playing, so a jump only decodes from the nearest one. */
+/** The video decoders' common calls: Bink 1's in one module, Bink 2's in another. */
+interface Codec {
+    w: Memory;
+    open(l: Layout): number;
+    /** 1 for a frame, written to rgba unless that's 0, 2^shift times smaller each way; negative on error. */
+    decode(decoder: number, data: number, size: number, key: boolean, rgba: number, shift: number): number;
+    /** The codec can draw a frame smaller, for playing large movies. */
+    canShrink: boolean;
+    save(decoder: number): number;
+    restore(decoder: number, saved: number): number;
+    forget(saved: number): void;
+    flush(decoder: number): void;
+    close(decoder: number): void;
+}
+
+const bink1 = (w: BinkWasm): Codec => ({
+    w,
+    open: (l) => w._video_open(l.tag, l.flags, l.width, l.height),
+    decode: (d, data, size, _key, rgba) => w._video_decode(d, data, size, rgba),
+    canShrink: false,
+    save: (d) => w._video_save(d),
+    restore: (d, saved) => w._video_restore(d, saved),
+    forget: (saved) => w._video_forget(saved),
+    flush: (d) => w._decoder_flush(d),
+    close: (d) => w._decoder_close(d),
+});
+
+const bink2 = (w: Bink2Wasm): Codec => ({
+    w,
+    open: (l) => w._video_open(l.tag, l.flags, l.width, l.height),
+    decode: (d, data, size, key, rgba, shift) => w._video_decode(d, data, size, key ? 1 : 0, rgba, shift, 0),
+    canShrink: true,
+    save: (d) => w._video_save(d),
+    restore: (d, saved) => w._video_restore(d, saved),
+    forget: (saved) => w._video_forget(saved),
+    flush: (d) => w._decoder_flush(d),
+    close: (d) => w._decoder_close(d),
+});
+
+/** Keep the decoder's state at least this often while playing, so a jump only decodes from the nearest one... */
 const SNAPSHOT_EVERY = 100;
+/** ...but no more of them than fit in this much memory: a 26-minute 1080p movie would need 1.5 GB at every 100 frames. */
+const SNAPSHOT_BUDGET = 256 * 1024 * 1024;
+/**
+ * A movie bigger than this many pixels plays at half size each way (a quarter of the pixels), so it keeps up: turning
+ * a 4K frame into 33 MB of RGBA and handing it to the page 30 times a second is more than a browser manages, where the
+ * decoding itself keeps up. 1080p plays at full size. Paused, and saved, a frame is always full size.
+ */
+const PLAY_SMALLER_ABOVE = 1920 * 1088;
 
 /** Only the most recently opened movie keeps its decoder and snapshots; the one before lets them go. */
 let current: Player | null = null;
 
 /**
- * Plays frames in order. RA2's movies have one keyframe, at the start, so the
- * decoder's state is kept every SNAPSHOT_EVERY frames as it goes: a jump starts
- * from the nearest kept frame (or keyframe) before the one wanted.
+ * Plays frames in order. RA2's and the Remastered Collection's movies have one
+ * keyframe, at the start, so the decoder's state is kept every so many frames as
+ * it goes: a jump starts from the nearest kept frame (or keyframe) before the one wanted.
  */
 class Player {
     private decoder = 0;
@@ -132,13 +200,18 @@ class Player {
     private position = -1;
     /** Frame number → the decoder's reference frame just after decoding it. */
     private readonly snapshots = new Map<number, number>();
+    private readonly every: number;
     errors = 0;
 
     constructor(
-        private readonly w: BinkWasm,
+        private readonly codec: Codec,
         private readonly data: Uint8Array,
         private readonly l: Layout
     ) {
+        // What one kept frame costs: the planes as the decoder pads them (to 32), and alpha's plane when there is one.
+        const padded = Math.ceil(l.width / 32) * 32 * Math.ceil(l.height / 32) * 32;
+        const each = padded * (l.flags & ALPHA ? 2.5 : 1.5);
+        this.every = Math.max(SNAPSHOT_EVERY, Math.ceil(l.frames.length / Math.max(1, Math.floor(SNAPSHOT_BUDGET / each))));
         this.open();
     }
 
@@ -148,36 +221,36 @@ class Player {
         // oxlint-disable-next-line typescript/no-this-alias
         current = this;
         if (this.decoder) return;
-        this.decoder = this.w._video_open(this.l.tag, this.l.flags, this.l.width, this.l.height);
+        this.decoder = this.codec.open(this.l);
         if (!this.decoder) throw new Error("The Bink decoder wouldn't open this video.");
-        this.rgba = this.w._malloc(this.l.width * this.l.height * 4);
-        this.input = new Input(this.w);
+        this.rgba = this.codec.w._malloc(this.l.width * this.l.height * 4);
+        this.input = new Input(this.codec.w);
         this.position = -1;
     }
 
     /** Lets the decoder and snapshots go; opening again starts afresh. */
     close() {
         if (!this.decoder) return;
-        for (const saved of this.snapshots.values()) this.w._video_forget(saved);
+        for (const saved of this.snapshots.values()) this.codec.forget(saved);
         this.snapshots.clear();
-        this.w._decoder_close(this.decoder);
-        this.w._free(this.rgba);
+        this.codec.close(this.decoder);
+        this.codec.w._free(this.rgba);
         this.input?.free();
         this.decoder = this.rgba = 0;
         this.input = null;
     }
 
-    private decode(i: number, draw: boolean) {
+    private decode(i: number, draw: boolean, shift = 0) {
         const video = packets(this.data, this.l, i).video;
-        if (video.length && this.w._video_decode(this.decoder, this.input!.put(video), video.length, draw ? this.rgba : 0) < 0) this.errors++;
+        if (video.length && this.codec.decode(this.decoder, this.input!.put(video), video.length, this.l.frames[i].key, draw ? this.rgba : 0, shift) < 0) this.errors++;
         this.position = i;
-        if (i % SNAPSHOT_EVERY === 0 && i > 0 && !this.snapshots.has(i)) {
-            const saved = this.w._video_save(this.decoder);
+        if (i % this.every === 0 && i > 0 && !this.snapshots.has(i)) {
+            const saved = this.codec.save(this.decoder);
             if (saved) this.snapshots.set(i, saved);
         }
     }
 
-    frame(index: number): VideoFrame {
+    frame(index: number, playing = false): VideoFrame {
         this.open();
         // Where to start: the frame before this one, the nearest kept state, or the keyframe.
         let key = index;
@@ -186,16 +259,20 @@ class Player {
         for (const at of this.snapshots.keys()) if (at < index && at >= key && at > snapshot) snapshot = at;
         const best = Math.max(key - 1, snapshot);
         if (!(this.position >= best && this.position < index)) {
-            if (snapshot >= key && this.w._video_restore(this.decoder, this.snapshots.get(snapshot)!) >= 0) {
+            if (snapshot >= key && this.codec.restore(this.decoder, this.snapshots.get(snapshot)!) >= 0) {
                 this.position = snapshot;
             } else {
-                this.w._decoder_flush(this.decoder);
+                this.codec.flush(this.decoder);
                 this.position = key - 1;
             }
         }
         while (this.position < index - 1) this.decode(this.position + 1, false);
-        this.decode(index, true);
-        return { rgba: this.w.HEAPU8.slice(this.rgba, this.rgba + this.l.width * this.l.height * 4) };
+        const shift = playing && this.codec.canShrink && this.l.width * this.l.height > PLAY_SMALLER_ABOVE ? 1 : 0;
+        this.decode(index, true, shift);
+        const [width, height] = [(this.l.width + (1 << shift) - 1) >> shift, (this.l.height + (1 << shift) - 1) >> shift];
+        // A copy of its own, handed over to the page whole.
+        const rgba = this.codec.w.HEAPU8.slice(this.rgba, this.rgba + width * height * 4);
+        return shift ? { rgba, width, height } : { rgba };
     }
 }
 
@@ -231,6 +308,13 @@ function sound(w: BinkWasm, data: Uint8Array, l: Layout, index = 0): AudioClip |
     return { wav: wav(samples, track.rate, channels), sampleRate: track.rate, channels, bits: 16, seconds: samples.length / channels / track.rate };
 }
 
+/**
+ * What a sound track is called: only its number, since nothing in the file names it. (The Remastered Collection's
+ * movies with three tracks hold the dialogue in English, German and French, in that order, but their track IDs are
+ * just 0, 1 and 2.)
+ */
+const trackTitle = (i: number, _count: number) => `Sound track ${i + 1}`;
+
 const parser: FormatParser = {
     parse(data) {
         const b = new Bytes(data);
@@ -243,24 +327,26 @@ const parser: FormatParser = {
         const warnings: string[] = [];
 
         let player: Player | null = null;
-        let audio: AudioClip | undefined;
-        /** Bink 2's other sound tracks (the Remastered Collection's movies have one per language, it seems). */
-        let others: AudioClip[] = [];
+        let tracks: AudioClip[] = [];
         if (!wasm) warnings.push("The Bink decoder couldn't be loaded, so only the header is shown.");
         else {
             try {
-                if (l.two) warnings.push("Bink 2 video can't be shown: RAD never published the format and FFmpeg has no decoder for it. The sound plays.");
-                else player = new Player(wasm, data, l);
-                audio = sound(wasm, data, l);
-                if (l.two)
-                    others = l.tracks
-                        .slice(1)
-                        .map((_, i) => sound(wasm!, data, l, i + 1))
-                        .filter((c): c is AudioClip => !!c);
+                checkPixels(l.width, l.height, 'The movie');
+                if (count && !l.frames[0].key) warnings.push("The first frame isn't marked as a keyframe, which every Bink movie starts with: there's nothing for it to be drawn over.");
+                if (!l.two) player = new Player(bink1(wasm), data, l);
+                else if (wasm2) player = new Player(bink2(wasm2), data, l);
+                else warnings.push("The Bink 2 video decoder couldn't be loaded, so the picture can't be shown. The sound plays.");
+                // The first frame is decoded now, as it's the first shown: a movie whose picture can't be decoded says so.
+                if (player && count) {
+                    player.frame(0);
+                    if (player.errors) warnings.push("The first frame doesn't decode: the video is damaged, or isn't what the header says.");
+                }
+                tracks = l.tracks.map((_, i) => sound(wasm!, data, l, i)).filter((c): c is AudioClip => !!c);
             } catch (e) {
                 warnings.push(e instanceof Error ? e.message : String(e));
             }
         }
+        const [audio, ...others] = tracks;
 
         return {
             title: l.two ? 'Bink 2 video' : 'Bink video',
@@ -272,7 +358,7 @@ const parser: FormatParser = {
                     `${count} at ${+fps.toFixed(3)} per second (${fps ? (count / fps).toFixed(1) : '?'} s), ${((k) => `${k} keyframe${k === 1 ? '' : 's'}`)(l.frames.filter((f) => f.key).length)}`,
                 ],
                 ['Sound', l.tracks.length ? l.tracks.map((t) => `${t.rate} Hz ${t.flags & AUDIO_STEREO ? 'stereo' : 'mono'}, ${t.flags & AUDIO_DCT ? 'DCT' : 'RDFT'}`).join('; ') : 'None'],
-                ['Decoder', l.two ? "Sound only: FFmpeg's Bink audio decoder, compiled to WebAssembly" : "FFmpeg's Bink decoders, compiled to WebAssembly"],
+                ['Decoder', l.two ? "A Bink 2 decoder from a fork of FFmpeg, and FFmpeg's Bink audio decoder, compiled to WebAssembly" : "FFmpeg's Bink decoders, compiled to WebAssembly"],
             ],
             fields: [
                 {
@@ -301,12 +387,27 @@ const parser: FormatParser = {
                 ),
                 ...l.tracks.map((_, i) => field(`Track ${i} ID`, l.base + l.tracks.length * 8 + i * 4, 4, b.u32(l.base + l.tracks.length * 8 + i * 4))),
                 field('Frame index', l.base + l.tracks.length * 12, (count + 1) * 4, `${count + 1} offsets`, 'Where each frame starts; bit 0 marks a keyframe.'),
+                // A field a frame, up to a point: a long movie has tens of thousands.
                 ...l.frames.slice(0, 2000).map((f, i) => field(`Frame ${i}${f.key ? ' (keyframe)' : ''}`, f.start, f.end - f.start, bytesLabel(f.end - f.start))),
+                ...(count > 2000
+                    ? [field(`Frames 2000 to ${count - 1}`, l.frames[2000].start, l.frames[count - 1].end - l.frames[2000].start, `${(count - 2000).toLocaleString('en-US')} more frames`)]
+                    : []),
             ],
+            end: count ? l.frames[count - 1].end : l.base + l.tracks.length * 12 + (count + 1) * 4,
             preview: player
-                ? { kind: 'video', width: l.width, height: l.height, frameCount: count, fps: fps || 15, frame: (i) => player.frame(i), audio }
+                ? {
+                      kind: 'video',
+                      width: l.width,
+                      height: l.height,
+                      frameCount: count,
+                      fps: fps || 15,
+                      frame: (i, playing) => player.frame(i, playing),
+                      audio,
+                      ...(others.length ? { audioTitle: trackTitle(0, tracks.length), otherAudio: others.map((clip, i) => ({ title: trackTitle(i + 1, tracks.length), clip })) } : {}),
+                      ...(l.flags & ALPHA ? { transparent: true } : {}),
+                  }
                 : audio && others.length
-                  ? { kind: 'stack', items: [audio, ...others].map((clip, i) => ({ title: `Sound track ${i + 1}`, preview: { kind: 'audio', ...clip } })) }
+                  ? { kind: 'stack', items: tracks.map((clip, i) => ({ title: trackTitle(i, tracks.length), preview: { kind: 'audio', ...clip } })) }
                   : audio
                     ? { kind: 'audio', ...audio }
                     : undefined,

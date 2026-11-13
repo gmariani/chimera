@@ -9,7 +9,18 @@
         "node": true,
         "es2024": true
     },
-    "ignorePatterns": ["build/**", "fuzz/build/**", "fuzz/findings/**", "src/formats/westwood/bink-wasm/**", "wasm/bink/build/**", "samples/**", "legacy/**", "dune2k/**"],
+    "ignorePatterns": [
+        "build/**",
+        "fuzz/build/**",
+        "fuzz/findings/**",
+        "src/formats/westwood/bink-wasm/**",
+        "src/formats/westwood/bink2-wasm/**",
+        "wasm/bink/build/**",
+        "wasm/bink2/build/**",
+        "samples/**",
+        "legacy/**",
+        "dune2k/**"
+    ],
     "rules": {
         "no-console": "warn",
         "no-unused-vars": "warn",

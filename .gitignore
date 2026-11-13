@@ -16,6 +16,7 @@ format-counts.local.json
 *.mix
 *.MIX
 /wasm/bink/build
+/wasm/bink2/build
 /SWF Samples
 
 # Fuzzer output
