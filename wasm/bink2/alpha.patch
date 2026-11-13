@@ -3,9 +3,10 @@ Chimera's fix to the fork's Bink 2 decoder (wasm/bink2/build.sh applies it).
 Alpha: frame flag 0x80000 means the frame carries no alpha data, and its whole
 alpha plane is then one value, the frame flags' top byte (0 where an interface
 piece starts blank, 255 through most of the intro, 17, 34 ... 238 in a fade).
-The fork read an alpha plane from every frame of a movie with alpha, so such a
-frame went out of step at once and the movie didn't decode at all (80 of the
-Remastered Collection's 438 movies have alpha). With the flag the plane isn't
+The fork read an alpha plane from every frame of a movie with alpha, so each
+frame with the flag failed and was dropped: 15 of the Remastered Collection's
+80 movies with alpha set it, and six of those gave no frames at all (INTRO2
+gave 762 of 3,283). With the flag the plane isn't
 read or motion-compensated, just filled. Checked against frames exported with
 alpha by RAD Video Tools (305 of them, from two movies): no pixel's alpha more
 than 9 levels off. All 80 decode, each slice ending where its offset says.
