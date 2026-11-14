@@ -69,7 +69,7 @@ Steps 1 to 5, 7 and 8, and most of 6: the build (`wasm/bink2/build.sh`, three pa
 
 ### Later, once it's tested
 
-3. **Move the decoder onto FFmpeg 7.1,** the Bink 1 module's base, so one module and one FFmpeg serve Bink 1 and 2 (and the newer Bink audio fixes come with it). Only after the second module has played the Remastered movies right and passed the hostile-file pass, so the port changes nothing else at the same time: the checksums from the native build (step 5) must come out the same after it. The work is the API between 2022 and 7.1: how a decoder is registered (`FFCodec`), its VLC tables' set-up, and frame handling.
+3. **Move the decoder onto FFmpeg 7.1: done** (2026-11-13). `build.sh` takes the fork's three decoder files at the pinned commit, applies the four fixes, then `ffmpeg-7.1.patch`: the decoder's registration, and the internals that changed since 2022 (headers, `AV_FRAME_FLAG_KEY`, the VLC API, tables built once with `ff_thread_once`, `ff_blockdsp_init`'s arguments). Checked natively: 83 movies (80 with alpha, 23,098 frames) decode to the same frames as the fork with the same fixes, with no errors. That comparison found a fault in the alpha fix: it filled only the picture's rows, while motion compensation also reads the rows below it (the size rounded up to 32), left as whatever the buffer held, so four movies (`GDI1`, `INTRO2`, `LOGO`, `EARTH_E-00`) differed between the two from leftover memory alone. `alpha.patch` now fills the whole decoded area. Still two modules: merging them into one, which serves Bink 1 and 2 from one FFmpeg, means one wrapper for both, and is left for later.
 
 ## References
 

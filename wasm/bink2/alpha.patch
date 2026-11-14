@@ -11,20 +11,28 @@ read or motion-compensated, just filled. Checked against frames exported with
 alpha by RAD Video Tools (305 of them, from two movies): no pixel's alpha more
 than 9 levels off. All 80 decode, each slice ending where its offset says.
 
+The fill covers the whole decoded area, the size rounded up to 32 each way,
+not only the picture: a later frame's motion compensation can read from below
+the picture, which would otherwise be whatever the buffer held. Filling only
+the picture made GDI1, INTRO2, LOGO and EARTH_E-00 come out differently on
+FFmpeg 2022 and 7.1, from the leftover memory alone.
+
 diff --git a/libavcodec/bink2.c b/libavcodec/bink2.c
 index fe868f0..d20477a 100644
 --- a/libavcodec/bink2.c
 +++ b/libavcodec/bink2.c
-@@ -310,6 +310,13 @@ static int bink2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
+@@ -310,6 +310,15 @@ static int bink2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
  
      skip_bits_long(gb, 32 + 32 * (c->num_slices - 1));
  
 +    /* Frame flag 0x80000: the frame has no alpha data. Its alpha plane is one
 +     * value throughout, the frame flags' top byte: 0 (transparent) where an
-+     * interface piece starts blank, 255 (opaque) through most of the intro. */
++     * interface piece starts blank, 255 (opaque) through most of the intro.
++     * The whole decoded area, 32-aligned, is filled: motion compensation in
++     * later frames reads the rows below the picture too. */
 +    if (c->has_alpha && (c->frame_flags & 0x80000))
-+        for (int y = 0; y < avctx->height; y++)
-+            memset(frame->data[3] + y * frame->linesize[3], c->frame_flags >> 24, avctx->width);
++        for (int y = 0; y < height_a; y++)
++            memset(frame->data[3] + y * frame->linesize[3], c->frame_flags >> 24, FFALIGN(avctx->width, 32));
 +
      if (c->frame_flags & 0x10000) {
          if (!(c->frame_flags & 0x8000))

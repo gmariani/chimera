@@ -1,0 +1,213 @@
+Chimera's port of the fork's Bink 2 decoder to FFmpeg 7.1 (wasm/bink2/build.sh
+applies it, after the fixes, to the fork's three decoder files copied into
+FFmpeg 7.1's source).
+
+Registration, as the fork's commit adding the decoder did it: a codec ID
+(AV_CODEC_ID_BINKVIDEO2, at the end of the video IDs), its descriptor, the
+codec list, the Makefile and configure.
+
+bink2.c, for what changed in FFmpeg's internals between 2022 and 7.1:
+- headers: ff_get_buffer and ff_set_dimensions are in decode.h; the memory
+  functions, DECLARE_ALIGNED and emms_c come from their own libavutil headers;
+- a keyframe is marked with AV_FRAME_FLAG_KEY, not frame->key_frame;
+- the code tables use the VLC API that replaced ff_init_vlc_sparse (VLCElem
+  entries, VLC_INIT_* flags), and are built once for all decoders (with
+  ff_thread_once, as other decoders do) instead of on every open, the
+  FF_CODEC_CAP_INIT_THREADSAFE flag they relied on being gone;
+- ff_blockdsp_init takes no codec context;
+- CODEC_LONG_NAME for the long name.
+
+Nothing that decodes changes: 83 of the Remastered Collection's movies (80
+with alpha) give the same frames, every one, as the fork with the same fixes.
+
+diff --git a/configure b/configure
+index d77a55b..4cbe15e 100755
+--- a/configure
++++ b/configure
+@@ -2915,6 +2915,7 @@ atrac3p_decoder_select="sinewin"
+ atrac3pal_decoder_select="sinewin"
+ av1_decoder_select="atsc_a53 cbs_av1 dovi_rpudec"
+ bink_decoder_select="blockdsp hpeldsp"
++bink2_decoder_select="blockdsp"
+ binkaudio_dct_decoder_select="wma_freqs"
+ binkaudio_rdft_decoder_select="wma_freqs"
+ cavs_decoder_select="blockdsp golomb h264chroma idctdsp qpeldsp videodsp"
+diff --git a/libavcodec/Makefile b/libavcodec/Makefile
+index a4fcce3..8c772b6 100644
+--- a/libavcodec/Makefile
++++ b/libavcodec/Makefile
+@@ -277,6 +277,7 @@ OBJS-$(CONFIG_AVUI_ENCODER)            += avuienc.o
+ OBJS-$(CONFIG_BETHSOFTVID_DECODER)     += bethsoftvideo.o
+ OBJS-$(CONFIG_BFI_DECODER)             += bfi.o
+ OBJS-$(CONFIG_BINK_DECODER)            += bink.o binkdsp.o
++OBJS-$(CONFIG_BINK2_DECODER)           += bink2.o
+ OBJS-$(CONFIG_BINKAUDIO_DCT_DECODER)   += binkaudio.o
+ OBJS-$(CONFIG_BINKAUDIO_RDFT_DECODER)  += binkaudio.o
+ OBJS-$(CONFIG_BINTEXT_DECODER)         += bintext.o cga_data.o
+diff --git a/libavcodec/allcodecs.c b/libavcodec/allcodecs.c
+index aa0fc47..0b806a1 100644
+--- a/libavcodec/allcodecs.c
++++ b/libavcodec/allcodecs.c
+@@ -63,6 +63,7 @@ extern const FFCodec ff_avui_decoder;
+ extern const FFCodec ff_bethsoftvid_decoder;
+ extern const FFCodec ff_bfi_decoder;
+ extern const FFCodec ff_bink_decoder;
++extern const FFCodec ff_bink2_decoder;
+ extern const FFCodec ff_bitpacked_decoder;
+ extern const FFCodec ff_bitpacked_encoder;
+ extern const FFCodec ff_bmp_encoder;
+diff --git a/libavcodec/bink2.c b/libavcodec/bink2.c
+index b655bb4..3be58fd 100644
+--- a/libavcodec/bink2.c
++++ b/libavcodec/bink2.c
+@@ -22,14 +22,18 @@
+ 
+ #include "libavutil/avassert.h"
+ #include "libavutil/attributes.h"
++#include "libavutil/emms.h"
+ #include "libavutil/imgutils.h"
+ #include "libavutil/internal.h"
++#include "libavutil/mem.h"
++#include "libavutil/mem_internal.h"
++#include "libavutil/thread.h"
+ #include "avcodec.h"
+ #include "blockdsp.h"
+ #include "codec_internal.h"
+ #include "copy_block.h"
++#include "decode.h"
+ #include "idctdsp.h"
+-#include "internal.h"
+ #include "mathops.h"
+ 
+ #define BITSTREAM_READER_LE
+@@ -354,7 +358,10 @@ static int bink2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
+         dst[3] = frame->data[3] + c->slice_height[i]   * stride[3];
+     }
+ 
+-    frame->key_frame = is_kf;
++    if (is_kf)
++        frame->flags |= AV_FRAME_FLAG_KEY;
++    else
++        frame->flags &= ~AV_FRAME_FLAG_KEY;
+     frame->pict_type = is_kf ? AV_PICTURE_TYPE_I : AV_PICTURE_TYPE_P;
+ 
+     av_frame_unref(c->last);
+@@ -373,18 +380,40 @@ static int bink2_decode_frame(AVCodecContext *avctx, AVFrame *frame,
+                            symbols, symbols_wrap, symbols_size,    \
+                            static_size)                            \
+     do {                                                           \
+-        static VLC_TYPE table[static_size][2];                     \
++        static VLCElem table[static_size];                         \
+         (vlc)->table           = table;                            \
+         (vlc)->table_allocated = static_size;                      \
+-        ff_init_vlc_sparse(vlc, nb_bits, nb_codes,                 \
++        ff_vlc_init_sparse(vlc, nb_bits, nb_codes,                 \
+                            bits, bits_wrap, bits_size,             \
+                            codes, codes_wrap, codes_size,          \
+                            symbols, symbols_wrap, symbols_size,    \
+-                           INIT_VLC_LE | INIT_VLC_USE_NEW_STATIC); \
++                           VLC_INIT_LE | VLC_INIT_USE_STATIC);     \
+     } while (0)
+ 
++static av_cold void bink2_init_static(void)
++{
++    INIT_VLC_STATIC_LE(&bink2f_quant_vlc, 9, FF_ARRAY_ELEMS(bink2f_quant_codes),
++                       bink2f_quant_bits, 1, 1, bink2f_quant_codes, 1, 1, NULL, 0, 0, 512);
++    INIT_VLC_STATIC_LE(&bink2f_ac_val0_vlc, 9, FF_ARRAY_ELEMS(bink2f_ac_val_bits[0]),
++                       bink2f_ac_val_bits[0], 1, 1, bink2f_ac_val_codes[0], 2, 2, NULL, 0, 0, 512);
++    INIT_VLC_STATIC_LE(&bink2f_ac_val1_vlc, 9, FF_ARRAY_ELEMS(bink2f_ac_val_bits[1]),
++                       bink2f_ac_val_bits[1], 1, 1, bink2f_ac_val_codes[1], 2, 2, NULL, 0, 0, 512);
++    INIT_VLC_STATIC_LE(&bink2f_ac_skip0_vlc, 9, FF_ARRAY_ELEMS(bink2f_ac_skip_bits[0]),
++                       bink2f_ac_skip_bits[0], 1, 1, bink2f_ac_skip_codes[0], 2, 2, NULL, 0, 0, 512);
++    INIT_VLC_STATIC_LE(&bink2f_ac_skip1_vlc, 9, FF_ARRAY_ELEMS(bink2f_ac_skip_bits[1]),
++                       bink2f_ac_skip_bits[1], 1, 1, bink2f_ac_skip_codes[1], 2, 2, NULL, 0, 0, 512);
++
++    INIT_VLC_STATIC_LE(&bink2g_ac_skip0_vlc, 9, FF_ARRAY_ELEMS(bink2g_ac_skip_bits[0]),
++                       bink2g_ac_skip_bits[0], 1, 1, bink2g_ac_skip_codes[0], 2, 2, NULL, 0, 0, 512);
++    INIT_VLC_STATIC_LE(&bink2g_ac_skip1_vlc, 9, FF_ARRAY_ELEMS(bink2g_ac_skip_bits[1]),
++                       bink2g_ac_skip_bits[1], 1, 1, bink2g_ac_skip_codes[1], 2, 2, NULL, 0, 0, 512);
++    INIT_VLC_STATIC_LE(&bink2g_mv_vlc, 9, FF_ARRAY_ELEMS(bink2g_mv_bits),
++                       bink2g_mv_bits, 1, 1, bink2g_mv_codes, 1, 1, NULL, 0, 0, 512);
++}
++
+ static av_cold int bink2_decode_init(AVCodecContext *avctx)
+ {
++    static AVOnce init_static_once = AV_ONCE_INIT;
+     Bink2Context * const c = avctx->priv_data;
+     int ret;
+ 
+@@ -407,25 +436,9 @@ static av_cold int bink2_decode_init(AVCodecContext *avctx)
+ 
+     avctx->pix_fmt = c->has_alpha ? AV_PIX_FMT_YUVA420P : AV_PIX_FMT_YUV420P;
+ 
+-    ff_blockdsp_init(&c->dsp, avctx);
+-
+-    INIT_VLC_STATIC_LE(&bink2f_quant_vlc, 9, FF_ARRAY_ELEMS(bink2f_quant_codes),
+-                       bink2f_quant_bits, 1, 1, bink2f_quant_codes, 1, 1, NULL, 0, 0, 512);
+-    INIT_VLC_STATIC_LE(&bink2f_ac_val0_vlc, 9, FF_ARRAY_ELEMS(bink2f_ac_val_bits[0]),
+-                       bink2f_ac_val_bits[0], 1, 1, bink2f_ac_val_codes[0], 2, 2, NULL, 0, 0, 512);
+-    INIT_VLC_STATIC_LE(&bink2f_ac_val1_vlc, 9, FF_ARRAY_ELEMS(bink2f_ac_val_bits[1]),
+-                       bink2f_ac_val_bits[1], 1, 1, bink2f_ac_val_codes[1], 2, 2, NULL, 0, 0, 512);
+-    INIT_VLC_STATIC_LE(&bink2f_ac_skip0_vlc, 9, FF_ARRAY_ELEMS(bink2f_ac_skip_bits[0]),
+-                       bink2f_ac_skip_bits[0], 1, 1, bink2f_ac_skip_codes[0], 2, 2, NULL, 0, 0, 512);
+-    INIT_VLC_STATIC_LE(&bink2f_ac_skip1_vlc, 9, FF_ARRAY_ELEMS(bink2f_ac_skip_bits[1]),
+-                       bink2f_ac_skip_bits[1], 1, 1, bink2f_ac_skip_codes[1], 2, 2, NULL, 0, 0, 512);
++    ff_blockdsp_init(&c->dsp);
+ 
+-    INIT_VLC_STATIC_LE(&bink2g_ac_skip0_vlc, 9, FF_ARRAY_ELEMS(bink2g_ac_skip_bits[0]),
+-                       bink2g_ac_skip_bits[0], 1, 1, bink2g_ac_skip_codes[0], 2, 2, NULL, 0, 0, 512);
+-    INIT_VLC_STATIC_LE(&bink2g_ac_skip1_vlc, 9, FF_ARRAY_ELEMS(bink2g_ac_skip_bits[1]),
+-                       bink2g_ac_skip_bits[1], 1, 1, bink2g_ac_skip_codes[1], 2, 2, NULL, 0, 0, 512);
+-    INIT_VLC_STATIC_LE(&bink2g_mv_vlc, 9, FF_ARRAY_ELEMS(bink2g_mv_bits),
+-                       bink2g_mv_bits, 1, 1, bink2g_mv_codes, 1, 1, NULL, 0, 0, 512);
++    ff_thread_once(&init_static_once, bink2_init_static);
+ 
+     c->current_q = av_malloc_array((avctx->width + 31) / 32, sizeof(*c->current_q));
+     if (!c->current_q)
+@@ -498,7 +511,7 @@ static av_cold int bink2_decode_end(AVCodecContext *avctx)
+ 
+ const FFCodec ff_bink2_decoder = {
+     .p.name         = "binkvideo2",
+-    .p.long_name    = NULL_IF_CONFIG_SMALL("Bink video 2"),
++    CODEC_LONG_NAME("Bink video 2"),
+     .p.type         = AVMEDIA_TYPE_VIDEO,
+     .p.id           = AV_CODEC_ID_BINKVIDEO2,
+     .priv_data_size = sizeof(Bink2Context),
+@@ -507,6 +520,5 @@ const FFCodec ff_bink2_decoder = {
+     FF_CODEC_DECODE_CB(bink2_decode_frame),
+     .flush          = bink2_flush,
+     .p.capabilities = AV_CODEC_CAP_DR1,
+-    .caps_internal  = FF_CODEC_CAP_INIT_THREADSAFE |
+-                      FF_CODEC_CAP_INIT_CLEANUP,
++    .caps_internal  = FF_CODEC_CAP_INIT_CLEANUP,
+ };
+diff --git a/libavcodec/codec_desc.c b/libavcodec/codec_desc.c
+index 03dea57..7c85208 100644
+--- a/libavcodec/codec_desc.c
++++ b/libavcodec/codec_desc.c
+@@ -1959,6 +1959,13 @@ static const AVCodecDescriptor codec_descriptors[] = {
+         .long_name = NULL_IF_CONFIG_SMALL("LEAD MCMP"),
+         .props     = AV_CODEC_PROP_INTRA_ONLY | AV_CODEC_PROP_LOSSY,
+     },
++    {
++        .id        = AV_CODEC_ID_BINKVIDEO2,
++        .type      = AVMEDIA_TYPE_VIDEO,
++        .name      = "binkvideo2",
++        .long_name = NULL_IF_CONFIG_SMALL("Bink video 2"),
++        .props     = AV_CODEC_PROP_LOSSY,
++    },
+ 
+     /* various PCM "codecs" */
+     {
+diff --git a/libavcodec/codec_id.h b/libavcodec/codec_id.h
+index 0a8d3be..a7e874c 100644
+--- a/libavcodec/codec_id.h
++++ b/libavcodec/codec_id.h
+@@ -322,6 +322,7 @@ enum AVCodecID {
+     AV_CODEC_ID_RTV1,
+     AV_CODEC_ID_VMIX,
+     AV_CODEC_ID_LEAD,
++    AV_CODEC_ID_BINKVIDEO2,
+ 
+     /* various PCM "codecs" */
+     AV_CODEC_ID_FIRST_AUDIO = 0x10000,     ///< A dummy id pointing at the start of audio codecs

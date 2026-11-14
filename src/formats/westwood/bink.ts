@@ -16,8 +16,9 @@ import type { Bink2Wasm } from './bink2-wasm/bink2.mjs';
  * The packets are decoded by FFmpeg's Bink decoders, compiled to WebAssembly
  * (wasm/bink), which load only when a Bink file is opened. Bink 2's sound is the
  * same Bink audio. Its video has no decoder in FFmpeg (RAD never published the
- * format): it's decoded by Paul B Mahol's unmerged one, from a fork of FFmpeg
- * with a fix of ours for its color (wasm/bink2), in a module of its own.
+ * format): it's decoded by Paul B Mahol's unmerged one, taken from a fork of
+ * FFmpeg with fixes of ours and built into FFmpeg 7.1 (wasm/bink2), in a
+ * module of its own.
  */
 
 const AUDIO_STEREO = 0x2000;
@@ -358,7 +359,7 @@ const parser: FormatParser = {
                     `${count} at ${+fps.toFixed(3)} per second (${fps ? (count / fps).toFixed(1) : '?'} s), ${((k) => `${k} keyframe${k === 1 ? '' : 's'}`)(l.frames.filter((f) => f.key).length)}`,
                 ],
                 ['Sound', l.tracks.length ? l.tracks.map((t) => `${t.rate} Hz ${t.flags & AUDIO_STEREO ? 'stereo' : 'mono'}, ${t.flags & AUDIO_DCT ? 'DCT' : 'RDFT'}`).join('; ') : 'None'],
-                ['Decoder', l.two ? "A Bink 2 decoder from a fork of FFmpeg, and FFmpeg's Bink audio decoder, compiled to WebAssembly" : "FFmpeg's Bink decoders, compiled to WebAssembly"],
+                ['Decoder', l.two ? "An unmerged Bink 2 decoder built into FFmpeg, and FFmpeg's Bink audio decoder, compiled to WebAssembly" : "FFmpeg's Bink decoders, compiled to WebAssembly"],
             ],
             fields: [
                 {

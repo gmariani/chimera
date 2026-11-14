@@ -5,40 +5,51 @@
 #
 # FFmpeg has no Bink 2 decoder. This one is Paul B Mahol's (on Konstantin
 # Shishkov's work), sent to FFmpeg in 2022 and never merged, as kept with fixes
-# in the fork below, at a pinned commit: FFmpeg as of May 2022 plus the decoder.
-# It's LGPL 2.1+, as FFmpeg is. Five changes are made to it here: chroma-mc.patch
-# (its color fault), alpha.patch (movies with alpha didn't decode), inter-dc.patch
+# in the fork below. Its three files are taken from the fork at a pinned commit
+# and built into FFmpeg 7.1, the same release as the Bink 1 module (wasm/bink).
+# It's LGPL 2.1+, as FFmpeg is. The changes made here, in order: chroma-mc.patch
+# (its color fault), alpha.patch (frames without alpha data), inter-dc.patch
 # (a residual's range), block-flags.patch (a write past an array, on a damaged
-# file) and bink2-reference.c, appended to libavcodec/bink2.c.
+# file), ffmpeg-7.1.patch (the port to 7.1's internals, and the decoder's
+# registration) and bink2-reference.c, appended to libavcodec/bink2.c.
 #
 # Needs Docker: it runs Emscripten's official image.
 set -euo pipefail
 
-FORK=https://github.com/mrtnmtth/FFmpeg-bink2
+FFMPEG_VERSION=7.1
+FORK=https://raw.githubusercontent.com/mrtnmtth/FFmpeg-bink2
 COMMIT=f4904840e820bfd0fb8fbc22179b39dfdbd3a9e0
 EMSDK_IMAGE=emscripten/emsdk:3.1.74
 
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
 build="$here/build"
-src="$build/FFmpeg-bink2-$COMMIT"
+src="$build/ffmpeg-$FFMPEG_VERSION"
 out="$repo/src/formats/westwood/bink2-wasm"
 mkdir -p "$build" "$out"
 
 if [ ! -d "$src" ]; then
-    curl -fsSL --retry 3 "$FORK/archive/$COMMIT.tar.gz" -o "$build/fork.tar.gz"
-    tar -xzf "$build/fork.tar.gz" -C "$build"
+    # ffmpeg.org's release, or the same tag from its GitHub mirror.
+    if curl -fsSL --retry 3 "https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz" -o "$build/ffmpeg.tar.xz"; then
+        tar -xJf "$build/ffmpeg.tar.xz" -C "$build"
+    else
+        curl -fsSL --retry 3 "https://github.com/FFmpeg/FFmpeg/archive/refs/tags/n$FFMPEG_VERSION.tar.gz" -o "$build/ffmpeg.tar.gz"
+        tar -xzf "$build/ffmpeg.tar.gz" -C "$build"
+        mv "$build/FFmpeg-n$FFMPEG_VERSION" "$src"
+    fi
+    for f in bink2.c bink2f.c bink2g.c; do
+        curl -fsSL --retry 3 "$FORK/$COMMIT/libavcodec/$f" -o "$src/libavcodec/$f"
+    done
     # The changes, made once, when the source is unpacked.
-    patch -d "$src" -p1 < "$here/chroma-mc.patch"
-    patch -d "$src" -p1 < "$here/alpha.patch"
-    patch -d "$src" -p1 < "$here/inter-dc.patch"
-    patch -d "$src" -p1 < "$here/block-flags.patch"
+    for p in chroma-mc alpha inter-dc block-flags ffmpeg-7.1; do
+        patch -d "$src" -p1 < "$here/$p.patch"
+    done
     cat "$here/bink2-reference.c" >> "$src/libavcodec/bink2.c"
 fi
 
 inner=$(cat <<SCRIPT
 set -euo pipefail
-cd /src/build/FFmpeg-bink2-$COMMIT
+cd /src/build/ffmpeg-$FFMPEG_VERSION
 if [ ! -f ffbuild/config.mak ]; then
     emconfigure ./configure \
         --cc=emcc --cxx=em++ --ar=emar --ranlib=emranlib --nm=emnm \
