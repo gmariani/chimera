@@ -26,7 +26,7 @@ export function LinksTab({ links, onShowFiles }: { links: Link[]; onShowFiles: (
             </p>
 
             {missing.length > 0 && (
-                <section className='mb-4'>
+                <section className='mb-4 links-missing'>
                     <h3 className='h6 mb-2'>Not found ({missing.length})</h3>
                     <p className='small mb-2'>These would add to what's shown. Add the archive that holds them (any archive will do, they're found by name) and this file updates.</p>
                     <div className='mb-2'>

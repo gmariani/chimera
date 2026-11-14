@@ -254,6 +254,28 @@ describe('maps with real tiles', () => {
         expect(images(preview.items[1].preview).legend).toEqual([{ label: 'Clear', index: 0 }]);
     });
 
+    it('says which cells name a tile their template lacks, and still reads the map', () => {
+        // As in SCB07EC.BIN: "0,,Mar" written over cells (63, 49) to (1, 50), outside the playable area. "0" (0x30) is
+        // template S36, which has 4 tiles; "," is tile 44. "," (0x2C) is S32, "M" tile 77; "a" is D05, "r" tile 114.
+        const bin = new Uint8Array(8192).fill(0xff);
+        for (let i = 1; i < 8192; i += 2) bin[i] = 0;
+        bin.set(new TextEncoder().encode('0,,Mar'), 3199 * 2);
+        expect(detect(bin, 'scb07ec.bin').id).toBe('map-td');
+        const ini = new TextEncoder().encode('[MAP]\nTheater=DESERT\nX=4\nY=4\nWidth=55\nHeight=56\n');
+        const parsed = mapTd.parse(bin, { name: 'scb07ec.bin', names: [], find: (n) => (n === 'scb07ec.ini' ? [{ data: ini, source: 'GENERAL.MIX' }] : []) });
+        expect(parsed.warnings).toEqual([
+            '3 cells name a tile its template doesn\'t have: (63, 49) S36, tile 44: not one of its 4 tiles; (0, 50) S32, tile 77: not one of its 4 tiles; (1, 50) D05, tile 114: not one of its 12 tiles. All are outside the playable area, so the game never shows them. Their bytes read as the text "0,,Mar". They\'re drawn as clear ground.',
+        ]);
+        expect(parsed.fields[50].children![0].value).toBe('S32, tile 77: not one of its 4 tiles');
+    });
+
+    it("doesn't take text of a map's size for a map", () => {
+        // Text's bytes are all below 216, so each could be a template; but text has no clear cells (0xFF).
+        const text = new TextEncoder().encode('[Basic]\nName=Not a map\n'.repeat(400)).subarray(0, 8192);
+        expect(text.length).toBe(8192);
+        expect(detect(text, 'notes.bin').id).not.toBe('map-td');
+    });
+
     it("says which archive would draw it when the tiles aren't open", () => {
         const parsed = mapTd.parse(new Uint8Array(8192).fill(0xff), { name: 'scg01ea.bin', names: [], find: () => [] });
         expect(parsed.wanted).toMatch(/SCG01EA\.INI/);

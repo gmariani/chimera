@@ -14,6 +14,14 @@ import { emptyWalk, gameArchives, gameRoots, namesFor, walkArchive } from '../te
  */
 const roots = gameRoots();
 
+/** What's really wrong with files the games ship, which the readers rightly say: these warnings are expected. */
+const QUIRKS: { problem: RegExp; why: string }[] = [
+    {
+        problem: /^GENERAL\.MIX › scb07ec\.bin \(map-td\): 3 cells name a tile its template doesn't have/,
+        why: 'SCB07EC.BIN, a Nod mission in GENERAL.MIX on both TD CDs, has the text "0,,Mar" written over three cells outside its playable area.',
+    },
+];
+
 describe.skipIf(!roots.length)('game data', () => {
     it.each(gameArchives(roots).map(({ root, path, label }) => [label, root, path]))(
         '%s',
@@ -42,7 +50,7 @@ describe.skipIf(!roots.length)('game data', () => {
             console.log(
                 `${label}: ${walked.archives} archives (${walked.encrypted} encrypted), ${walked.named}/${walked.files} named, ${JSON.stringify(walked.types)}${misnamed.length ? `; named for a format they aren't: ${misnamed.join('; ')}` : ''}`
             );
-            expect(walked.problems).toEqual([]);
+            expect(walked.problems.filter((p) => !QUIRKS.some((q) => q.problem.test(p)))).toEqual([]);
         },
         600_000
     );

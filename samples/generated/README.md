@@ -46,6 +46,8 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `program.pif` | Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections | 545 bytes |
 | `strings-dune2.eng` | Dune II string table, compressed as the game does | 291 bytes |
 | `strings-dos.ger` | C&C-style string table, plain, with accented letters in DOS characters | 42 bytes |
+| `record.bin` | TD recorded game: a power plant built and placed, an infantryman sent across | 222 bytes |
+| `map-td.bin` | TD map terrain: clear around the edges, a road with a bend and a ford, rough ground, boulders | 8,192 bytes |
 | `palette.pal` | VGA palette: the 16 EGA colors, then a gray ramp | 768 bytes |
 | `dune.cfg` | Dune II settings: MT-32 music, AdLib effects, Sound Blaster Pro voices, in German | 10 bytes |
 | `options.cfg` | Dune II game options, the game’s defaults | 10 bytes |

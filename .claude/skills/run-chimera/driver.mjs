@@ -24,6 +24,8 @@ const TIMEOUT = 60_000;
 const commands = {
     // open <path>: opens a file from disk, as the Open button does (paths relative to where the driver runs).
     open: (path) => page.setInputFiles('input[type=file]', resolve(path)),
+    // add <path>: adds a file to the files in use, as an "Add files…" button does (the first one on the page; the Links tab has one).
+    add: (path) => page.locator('button:has-text("Add files") ~ input[type=file]').first().setInputFiles(resolve(path), { timeout: TIMEOUT }),
     // entry <name>: opens a file from the Contents tab by its name (the row's "Open <name>" button).
     entry: async (name) => {
         const tab = page.locator('.nav-link', { hasText: 'Contents' });

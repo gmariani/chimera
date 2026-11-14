@@ -538,7 +538,9 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
             const id = templates[cell];
             const set = isClear(id) ? null : tileSet(id);
             const clearIcon = (x & 3) | ((y & 3) << 2);
-            const tile = set && set.cells[icons[cell]] !== EMPTY_CELL ? set.tiles[set.cells[icons[cell]]] : clear.tiles[clear.cells[clearIcon % clear.cells.length]];
+            // A tile the template doesn't have (stray bytes in the map) is drawn as clear ground, as OpenRA's importer does.
+            const own = set && icons[cell] < set.cells.length && set.cells[icons[cell]] !== EMPTY_CELL ? set.tiles[set.cells[icons[cell]]] : undefined;
+            const tile = own ?? clear.tiles[clear.cells[clearIcon % clear.cells.length]];
             if (tile) blit(tile, TILE, TILE, cx * TILE, cy * TILE, false);
         }
     }

@@ -140,6 +140,14 @@ describe('MIX parsing', () => {
         });
     }
 
+    it("prefers the games' real file names to names guessed from INIs", () => {
+        // TD's hash collides: t06.bik has the same ID as s22.des, one of DESERT.MIX's shore tile sets. "T06" is a tree in
+        // TD's mission INIs ("2283=T06,None"), so it's tried with every extension; it mustn't hide the real name.
+        expect(classicId('t06.bik')).toBe(classicId('s22.des'));
+        const parsed = parseMix(buildMix([['s22.des', Uint8Array.of(1, 2, 3)]], { layout: 'td' }), { name: null, names: ['t06.bik'] });
+        expect(parsed.entries!.map((e) => e.name)).toEqual(['s22.des']);
+    });
+
     it('checks the checksum against the body', () => {
         const good = parseMix(buildMix(files, { layout: 'ra', checksum: true }), { name: null, names: [] });
         expect(good.summary).toContainEqual(['Checksum', 'SHA-1, matches']);

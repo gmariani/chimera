@@ -266,16 +266,22 @@ const TD_TEMPLATE_COUNT = 216;
 
 /**
  * TD map grids: 64 × 64 cells of template and tile; 0xFF (or template 0) is
- * clear ground. Every cell must name a template TD has, and a tile within reach
- * of one; 4,096 of those in a row don't happen by chance.
+ * clear ground. Every cell's template must be one TD has, or clear, and some of
+ * the grid must be clear: the cells outside the playable area are, in all 98
+ * maps the games ship (2,033 at the least), where plain text has no 0xFF bytes
+ * to give. Which tile of its template a cell names is left to the reader, which
+ * says when one is out of range: SCB07EC.BIN, a Nod mission, has the text
+ * "0,,Mar" written over three cells outside its playable area.
  */
 export function sniffMapTd(data: Uint8Array): boolean {
     if (data.length !== 8192) return false;
+    let clear = false;
     for (let i = 0; i < data.length; i += 2) {
         const template = data[i];
-        if (template !== 0xff && (template >= TD_TEMPLATE_COUNT || data[i + 1] >= 64)) return false;
+        if (template === 0xff) clear = true;
+        else if (template >= TD_TEMPLATE_COUNT) return false;
     }
-    return true;
+    return clear;
 }
 
 /**
@@ -637,4 +643,83 @@ export function sniffXmi(data: Uint8Array): boolean {
     const id = b.ascii(0, 4);
     const type = b.ascii(8, 4);
     return data.length > 20 && ((id === 'FORM' && (type === 'XDIR' || type === 'XMID')) || (id === 'CAT ' && type === 'XMID'));
+}
+
+/** TD's recorded games (RECORD.BIN): a 101-byte header, then a record of every frame. */
+export const TD_RECORDING_HEADER = 101;
+/** Each event as the 1995 game stores it: type, packed frame, player ID, then 7 bytes of data. */
+export const TD_EVENT_SIZE = 13;
+/** One past TD's last event type (LAST_EVENT in EVENT.H). */
+const TD_EVENT_TYPES = 27;
+
+/** Where one recorded frame's parts are. */
+export interface RecordedFrame {
+    index: number;
+    start: number;
+    /** The view's top left, as a COORDINATE: x in the low 16 bits, y in the high, in 256ths of a cell. */
+    view: number;
+    /** The selected objects, as TARGETs. */
+    selected: number[];
+    /** Where the event count is, or -1 for a frame without one (frame 0, and maybe the last). */
+    eventsAt: number;
+    events: number;
+    end: number;
+}
+
+/**
+ * Walks a TD recording, frame by frame, checking each against itself: the sum of the selected objects matches the one
+ * stored, and every event is a type TD has, for the frame it's recorded in. Stops at the first frame that doesn't fit
+ * (or the end of the file), and says why.
+ */
+export function walkTdRecording(data: Uint8Array, visit?: (frame: RecordedFrame) => void): { frames: number; events: number; end: number; problem?: string } {
+    const v = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    let at = TD_RECORDING_HEADER;
+    let frames = 0;
+    let events = 0;
+    const stop = (problem: string) => ({ frames, events, end: at, problem: `Frame ${frames.toLocaleString('en-US')} (at byte ${at.toLocaleString('en-US')}) ${problem}` });
+    if (data.length < TD_RECORDING_HEADER + 12)
+        return { frames, events, end: Math.min(at, data.length), problem: `It's ${data.length.toLocaleString('en-US')} bytes, too short for the header and a frame.` };
+    while (at < data.length) {
+        if (at + 12 > data.length) return stop('is cut short: the view and selection need 12 bytes.');
+        const view = v.getUint32(at, true);
+        const count = v.getInt32(at + 4, true);
+        const sum = v.getUint32(at + 8, true);
+        if (count < 0 || at + 12 + count * 2 > data.length) return stop(`says ${count.toLocaleString('en-US')} objects are selected, more than the rest of the file holds.`);
+        const selected: number[] = [];
+        let total = 0;
+        for (let i = 0; i < count; i++) {
+            const target = v.getUint16(at + 12 + i * 2, true);
+            selected.push(target);
+            total = (total + target) >>> 0;
+        }
+        if (total !== sum) return stop(`has ${count.toLocaleString('en-US')} selected objects that add up to ${total}, not the ${sum} stored with them.`);
+        let end = at + 12 + count * 2;
+        let eventsAt = -1;
+        let n = 0;
+        // Network games record no events for frame 0; the file can end after a frame's view and selection.
+        if (frames > 0 && end < data.length) {
+            if (end + 4 > data.length) return stop('is cut short: the event count needs 4 bytes.');
+            n = v.getInt32(end, true);
+            if (n < 0 || end + 4 + n * TD_EVENT_SIZE > data.length) return stop(`says it has ${n.toLocaleString('en-US')} events, more than the rest of the file holds.`);
+            for (let i = 0; i < n; i++) {
+                const e = end + 4 + i * TD_EVENT_SIZE;
+                if (data[e] >= TD_EVENT_TYPES) return stop(`has an event of type ${data[e]}, which TD doesn't have.`);
+                const frame = v.getUint32(e + 1, true) & 0x7ffffff;
+                if (frame !== frames) return stop(`has an event for frame ${frame.toLocaleString('en-US')}.`);
+            }
+            eventsAt = end;
+            end += 4 + n * TD_EVENT_SIZE;
+        }
+        visit?.({ index: frames, start: at, view, selected, eventsAt, events: n, end });
+        frames++;
+        events += n;
+        at = end;
+    }
+    return { frames, events, end: at };
+}
+
+/** A TD recording: every frame fits, to the end of the file, and someone did something (no signature to go by). */
+export function sniffTdRecording(data: Uint8Array): boolean {
+    const walk = walkTdRecording(data);
+    return !walk.problem && walk.events > 0;
 }

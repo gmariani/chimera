@@ -158,10 +158,14 @@ function resolveNames(mix: MixLayout, data: Uint8Array, extra: readonly string[]
     }
     const databaseHashes = hashNames(database);
 
+    // Which name wins when several hash to the same ID: the archive's own list, then the games' real file names, then the
+    // names given or guessed (the guesses from INIs are tens of thousands of words, each with every extension). TD and RA's
+    // hash collides easily: t06.bik has the same ID as s22.des, DESERT.MIX's shore tiles, so a guess before the built-in
+    // names hid the real ones (and a desert map couldn't find its tiles).
     const pick = (scheme: IdScheme) => {
         const names = new Map<number, string>();
         let fromDatabase = 0;
-        for (const source of [databaseHashes, extraHashes!, builtInHashes!]) {
+        for (const source of [databaseHashes, builtInHashes!, extraHashes!]) {
             for (const id of ids) {
                 const name = source[scheme].get(id);
                 if (name !== undefined && !names.has(id)) {

@@ -37,6 +37,7 @@ import {
     sniffMentat,
     sniffIni,
     sniffMapTd,
+    sniffTdRecording,
     sniffPak,
     sniffPal,
     sniffPcx,
@@ -155,6 +156,14 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'dune2-cfg', name: 'Settings (Dune II DUNE.CFG)', extensions: ['cfg'], sniff: sniffDuneCfg, byNameAlone: false, load: parserOf(() => import('./westwood/dune2-cfg')) },
     { id: 'dune2-options', name: 'Game options (Dune II OPTIONS.CFG)', extensions: ['cfg'], sniff: sniffDuneOptions, byNameAlone: false, load: parserOf(() => import('./westwood/dune2-cfg')) },
     { id: 'map-td', name: 'Map terrain (TD)', extensions: ['bin'], sniff: sniffMapTd, byNameAlone: false, companions: true, load: parserOf(() => import('./westwood/map-td')) },
+    {
+        id: 'recording-td',
+        name: 'Recorded game (TD)',
+        extensions: ['bin'],
+        sniff: sniffTdRecording,
+        byNameAlone: false,
+        load: parserOf(() => import('./westwood/recording-td')),
+    },
     { id: 'ini', name: 'Settings (INI)', extensions: ['ini'], sniff: sniffIni, companions: true, load: parserOf(() => import('./ini')) },
     { id: 'text', name: 'Text', extensions: ['txt', 'ini', 'eng', 'ger', 'fre', 'csv'], sniff: sniffText, load: parserOf(() => import('./text')) },
 ];

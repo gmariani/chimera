@@ -52,6 +52,14 @@ export function Inspector({
     const allNames = library.names;
     const state = useParsed(file, allNames, { version: library.version, near });
     const [tab, setTab] = useRemembered<TabKey | null>(memory, 'tab', null);
+    // "See which": the linked files' list of what's missing, scrolled into view once it's shown (it may be the tab already).
+    const [reveal, setReveal] = useState(0);
+    const views = useRef<HTMLElement>(null);
+    useEffect(() => {
+        if (!reveal) return;
+        const frame = requestAnimationFrame(() => (views.current?.querySelector('.links-missing') ?? views.current)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+        return () => cancelAnimationFrame(frame);
+    }, [reveal]);
     const { add } = usePalettes();
 
     // Files opened from disk, and what's in them, are there for other files to use (a map's tiles).
@@ -192,7 +200,13 @@ export function Inspector({
                                     {missing} file{missing === 1 ? '' : 's'} this would use {missing === 1 ? "isn't" : "aren't"} in the files in use, so {missing === 1 ? "it isn't" : "they aren't"}{' '}
                                     shown.
                                 </span>
-                                <Button size='sm' variant='outline-light' onClick={() => setTab('links')}>
+                                <Button
+                                    size='sm'
+                                    variant='outline-light'
+                                    onClick={() => {
+                                        setTab('links');
+                                        setReveal((n) => n + 1);
+                                    }}>
                                     See which
                                 </Button>
                             </Alert>
@@ -203,7 +217,7 @@ export function Inspector({
 
             {parsed && (
                 <Tab.Container activeKey={active} onSelect={(key) => key && setTab(key as TabKey)} mountOnEnter>
-                    <section className='frame-section'>
+                    <section className='frame-section' ref={views}>
                         {/* The view's bar: its name on the left, the switch between views on the right. */}
                         <SectionBar index={viewIndex} title={labels[active]}>
                             <Nav variant='pills' className='bar-tabs' role='tablist'>

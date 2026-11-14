@@ -836,6 +836,78 @@ export function stringTable(compressed: boolean): Uint8Array {
     return bytes(offsets, encoded.flat());
 }
 
+/**
+ * TD map terrain (.bin): 64 × 64 cells, row by row, two bytes each: the template, then which of its tiles (across, then
+ * down). 0xFF is clear ground, as everything outside a mission's playable area is. Each template is placed whole, as the
+ * map editor does, and only ones every theater but jungle has (template IDs and sizes from CDATA.CPP).
+ */
+export function tdMap(): Uint8Array {
+    const cells = new Uint8Array(64 * 64 * 2);
+    for (let i = 0; i < cells.length; i += 2) cells[i] = 0xff;
+    const place = (template: number, width: number, height: number, x: number, y: number) => {
+        for (let j = 0; j < height; j++) {
+            for (let i = 0; i < width; i++) {
+                const at = ((y + j) * 64 + x + i) * 2;
+                cells[at] = template;
+                cells[at + 1] = j * width + i;
+            }
+        }
+    };
+    // A road across (D10, 4 × 2), a ford where a stream would cross it (FORD1, 3 × 3), rough ground (P07, 4 × 2) and
+    // a bend of road (D05, 3 × 4), all inside the middle of the map, with boulders (B1, B2) scattered about.
+    for (let x = 12; x < 48; x += 4) place(102, 4, 2, x, 30);
+    place(161, 3, 3, 48, 29);
+    place(97, 3, 4, 20, 32);
+    place(73, 4, 2, 36, 20);
+    place(73, 4, 2, 16, 40);
+    for (const [x, y] of [
+        [14, 22],
+        [30, 24],
+        [42, 38],
+        [26, 44],
+    ])
+        place(82, 1, 1, x, y);
+    place(83, 2, 1, 40, 26);
+    return cells;
+}
+
+/**
+ * A TD recorded game (RECORD.BIN): a 101-byte header with the player's name at byte 6, then each frame's view (x and y
+ * in 256ths of a cell), its selection (a count, the sum of their TARGETs, the TARGETs) and, after frame 0, its events:
+ * a type, the frame (with the house ID in bits 27 to 30), a player ID and 7 bytes of data.
+ */
+export function tdRecording(): Uint8Array {
+    const header = new Array(101).fill(0);
+    header.splice(6, 7, ...text('CHIMERA'));
+    const view = (x: number, y: number) => u32(((y << 8) << 16) | (x << 8));
+    const selection = (targets: number[]) => [...u32(targets.length), ...u32(targets.reduce((a, b) => a + b, 0)), ...targets.flatMap(u16)];
+    const event = (type: number, frame: number, data: number[]) => [type, ...u32(frame | (6 << 27)), 0, ...data, ...new Array(7 - data.length).fill(0)];
+    const events = (list: number[][]) => [...u32(list.length), ...list.flat()];
+    const infantry = 0x3000 | 4;
+    const cell = (x: number, y: number) => 0x1000 | (y * 64 + x);
+    return bytes(
+        header,
+        // Frame 0: the view only (network games record no events for it).
+        view(20, 30),
+        selection([]),
+        // Frame 1: start building a power plant (a building type, number 12).
+        view(20, 30),
+        selection([]),
+        events([event(10, 1, [8, ...u32(12)])]),
+        // Frame 2: an infantryman selected, and sent to cell (25, 33).
+        view(20, 30),
+        selection([infantry]),
+        events([event(2, 2, [...u16(infantry), 2, ...u16(0), ...u16(cell(25, 33))])]),
+        // Frame 3: nothing new; frame 4: the view moves, and the power plant is placed at (22, 32).
+        view(20, 30),
+        selection([infantry]),
+        events([]),
+        view(21, 31),
+        selection([infantry]),
+        events([event(7, 4, [7, ...u16(32 * 64 + 22)])])
+    );
+}
+
 // The list
 
 /** Every sample, in the order they're listed. */
@@ -920,6 +992,8 @@ export function samples(): Sample[] {
         { name: 'program.pif', format: 'pif', about: 'Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections', data: pif() },
         { name: 'strings-dune2.eng', format: 'strings', about: 'Dune II string table, compressed as the game does', data: stringTable(true) },
         { name: 'strings-dos.ger', format: 'strings', about: 'C&C-style string table, plain, with accented letters in DOS characters', data: stringTable(false) },
+        { name: 'record.bin', format: 'recording-td', about: 'TD recorded game: a power plant built and placed, an infantryman sent across', data: tdRecording() },
+        { name: 'map-td.bin', format: 'map-td', about: 'TD map terrain: clear around the edges, a road with a bend and a ford, rough ground, boulders', data: tdMap() },
         { name: 'palette.pal', format: 'pal', about: 'VGA palette: the 16 EGA colors, then a gray ramp', data: palette6() },
         { name: 'dune.cfg', format: 'dune2-cfg', about: 'Dune II settings: MT-32 music, AdLib effects, Sound Blaster Pro voices, in German', data: duneCfg() },
         { name: 'options.cfg', format: 'dune2-options', about: 'Dune II game options, the game’s defaults', data: duneOptions() },
