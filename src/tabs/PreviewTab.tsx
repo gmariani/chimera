@@ -324,7 +324,7 @@ function ImagesPreview({
                 {legend && (
                     <ul className='list-unstyled small mb-3 legend'>
                         {legend.map(({ label, index }) => (
-                            <li key={index} className='d-flex align-items-center gap-2'>
+                            <li key={`${index}-${label}`} className='d-flex align-items-center gap-2'>
                                 <span className='legend-swatch' style={{ background: `rgb(${palette[index * 3]}, ${palette[index * 3 + 1]}, ${palette[index * 3 + 2]})` }} />
                                 {label}
                             </li>

@@ -5,6 +5,7 @@ import { lcw } from './compression';
 import { decodeShp, type Shp } from './shp-frames';
 import { sniffShpTd } from './sniff';
 import { RA_TEMPLATES, TD_TEMPLATES, type Template } from './templates';
+import { describeTdTrigger } from './td-triggers';
 import { RA_REMAP, TD_REMAP, TEAM_COLORS, teamRemap } from './team-colors';
 import { EMPTY_CELL, readTileSet, type TileSet } from './tileset';
 import { expandPalette } from './vga';
@@ -175,7 +176,31 @@ export interface Mission {
     ini?: Ini;
     /** Waypoints 0–7, where players start on a multiplayer map: [player number, cell]. */
     starts: [number, number][];
+    /** The mission's triggers, waypoints and base, as the game reads them (with an INI). */
+    logic?: MissionLogic;
 }
+
+/** What drives a mission: where its triggers fire, its waypoints, and what the computer rebuilds. */
+export interface MissionLogic {
+    /** Every trigger the mission defines, upper case. */
+    triggers: Set<string>;
+    /** [CellTriggers]: cell → the trigger that fires when something enters it. */
+    cells: Map<number, string>;
+    /** [Waypoints]: [number, cell]. */
+    waypoints: [number, number][];
+    /** Objects with a trigger attached: [cell, trigger]. */
+    tagged: [number, string][];
+    /** [Base]: the buildings the computer rebuilds, in order: [index, cell]. */
+    base: [number, number][];
+    /** What each trigger does, in words (TD's; RA's [Trigs] aren't put in words yet). */
+    meanings: Map<string, string>;
+}
+
+/** The waypoints with a fixed meaning (TD's DEFINES.H, WAYPT_HOME on; RA's from 98). */
+export const SPECIAL_WAYPOINTS: Record<'td' | 'ra', Record<number, string>> = {
+    td: { 25: 'Flare', 26: 'Home', 27: 'Reinf' },
+    ra: { 98: 'Home', 99: 'Reinf', 100: 'Drop' },
+};
 
 export interface MapObject {
     kind: 'unit' | 'infantry' | 'building' | 'ship' | 'smudge';
@@ -189,6 +214,8 @@ export interface MapObject {
     sub: number;
     /** Out of 256. */
     health: number;
+    /** The trigger attached to it, as written ("None" for none). */
+    trigger?: string;
 }
 
 /**
@@ -198,13 +225,14 @@ export interface MapObject {
  */
 function readObjects(ini: Ini, size: number): MapObject[] {
     const out: MapObject[] = [];
-    const sections: [MapObject['kind'], string][] = [
-        ['building', 'STRUCTURES'],
-        ['unit', 'UNITS'],
-        ['ship', 'SHIPS'],
-        ['infantry', 'INFANTRY'],
+    // Where each kind keeps its trigger: buildings after their facing, units and ships after their mission, infantry after their facing.
+    const sections: [MapObject['kind'], string, number][] = [
+        ['building', 'STRUCTURES', 5],
+        ['unit', 'UNITS', 6],
+        ['ship', 'SHIPS', 6],
+        ['infantry', 'INFANTRY', 7],
     ];
-    for (const [kind, section] of sections) {
+    for (const [kind, section, triggerAt] of sections) {
         for (const [, value] of ini.entries(section)) {
             const v = value.split(',').map((x) => x.trim());
             const cell = Number(v[3]);
@@ -217,6 +245,7 @@ function readObjects(ini: Ini, size: number): MapObject[] {
                 facing: Number(kind === 'infantry' ? v[6] : v[4]) || 0,
                 sub: kind === 'infantry' ? Number(v[4]) || 0 : 0,
                 health: Number(v[2]) || 256,
+                trigger: v[triggerAt],
             });
         }
     }
@@ -353,6 +382,53 @@ function playableArea(ini: Ini, size: number): Area | undefined {
 /** A map that places nothing but where players start: no units, infantry, buildings or ships. */
 const isMultiplayer = (m: Mission) => !m.objects.some((o) => o.kind !== 'smudge');
 
+/**
+ * A mission's triggers, waypoints and base, read as the games read them. Cell triggers (DisplayClass::Read_INI, TD's
+ * and RA's DISPLAY.CPP): the key is the cell (as atoi reads it), the first line for a cell wins, the trigger must exist,
+ * and TD skips cell 0 (three of TD's missions have a house's Edge= and Credits= lines in [CellTriggers]; the game reads
+ * them as cell 0 and skips them). Waypoints: TD reads 0 to 27, RA 0 to 100. [Base] (BASE.CPP): Count, then 000, 001…,
+ * each "type,place": a COORDINATE in TD, a cell in RA. TD's triggers are [Triggers], RA's [Trigs].
+ */
+export function readLogic(ini: Ini, game: 'td' | 'ra', size: number, objects: MapObject[]): MissionLogic {
+    const triggers = new Set(ini.entries(game === 'td' ? 'Triggers' : 'Trigs').map(([k]) => k.trim().toUpperCase()));
+    const known = (name: string | undefined) => {
+        const n = (name ?? '').trim().toUpperCase();
+        return n && n !== 'NONE' && triggers.has(n) ? n : null;
+    };
+    const cells = new Map<number, string>();
+    for (const [key, value] of ini.entries('CellTriggers')) {
+        const cell = Number.parseInt(key, 10) || 0;
+        const name = known(value);
+        if (name && (cell > 0 || game === 'ra') && cell < size * size && !cells.has(cell)) cells.set(cell, name);
+    }
+    const waypoints: [number, number][] = [];
+    for (let i = 0; i <= (game === 'td' ? 27 : 100); i++) {
+        const cell = Number.parseInt(ini.get('Waypoints', String(i)) ?? '', 10);
+        if (Number.isInteger(cell) && cell >= 0 && cell < size * size) waypoints.push([i, cell]);
+    }
+    const tagged = objects.flatMap((o) => {
+        const name = known(o.trigger);
+        return name ? [[o.cell, name] as [number, string]] : [];
+    });
+    const base: [number, number][] = [];
+    const count = Number.parseInt(ini.get('Base', 'Count') ?? '', 10) || 0;
+    for (let i = 0; i < Math.min(count, 1000); i++) {
+        const place = Number((ini.get('Base', String(i).padStart(3, '0')) ?? '').split(',')[1]);
+        if (!Number.isFinite(place)) continue;
+        // TD: a COORDINATE (x in the low 16 bits, y in the high, in 256ths of a cell); RA: a cell.
+        const cell = game === 'td' ? (place >>> 24) * size + ((place >>> 8) & 0xff) : place;
+        if (cell >= 0 && cell < size * size) base.push([i, cell]);
+    }
+    const meanings = new Map<string, string>();
+    if (game === 'td') {
+        for (const [key, value] of ini.entries('Triggers')) {
+            const said = describeTdTrigger(value);
+            if (said) meanings.set(key.trim().toUpperCase(), said);
+        }
+    }
+    return { triggers, cells, waypoints, tagged, base, meanings };
+}
+
 /** [Waypoints] 0 to 7: on a multiplayer map, where each player starts (missions use them for their scripts). */
 function startCells(ini: Ini, size: number): [number, number][] {
     return ini.entries('Waypoints').flatMap(([key, value]) => {
@@ -384,6 +460,7 @@ export function raMission(ini: Ini): Mission {
         theater: ini.get('Map', 'Theater'),
         ini,
         starts: startCells(ini, RA_SIZE),
+        logic: readLogic(ini, 'ra', RA_SIZE, readObjects(ini, RA_SIZE)),
     };
 }
 
@@ -402,6 +479,7 @@ export function tdMission(bin: Uint8Array, ini: Ini | null): Mission {
         area: ini ? playableArea(ini, TD_SIZE) : undefined,
         theater: ini?.get('Map', 'Theater'),
         starts: ini ? startCells(ini, TD_SIZE) : [],
+        logic: ini ? readLogic(ini, 'td', TD_SIZE, readObjects(ini, TD_SIZE)) : undefined,
     };
 }
 
@@ -458,15 +536,71 @@ const DIGITS = [
     ['###', '#.#', '###', '#.#', '###'],
 ];
 
-export type TileRender = { status: 'drawn'; image: IndexedImage; palette?: Uint8Array; wanted?: string } | { status: 'needs'; wanted: string };
+/** Letters and digits, 3 × 5, for labels drawn on the map (trigger names, waypoints). */
+const GLYPHS: Record<string, string[]> = {
+    A: ['.#.', '#.#', '###', '#.#', '#.#'],
+    B: ['##.', '#.#', '##.', '#.#', '##.'],
+    C: ['.##', '#..', '#..', '#..', '.##'],
+    D: ['##.', '#.#', '#.#', '#.#', '##.'],
+    E: ['###', '#..', '##.', '#..', '###'],
+    F: ['###', '#..', '##.', '#..', '#..'],
+    G: ['.##', '#..', '#.#', '#.#', '.##'],
+    H: ['#.#', '#.#', '###', '#.#', '#.#'],
+    I: ['###', '.#.', '.#.', '.#.', '###'],
+    J: ['..#', '..#', '..#', '#.#', '.#.'],
+    K: ['#.#', '#.#', '##.', '#.#', '#.#'],
+    L: ['#..', '#..', '#..', '#..', '###'],
+    M: ['#.#', '###', '###', '#.#', '#.#'],
+    N: ['##.', '#.#', '#.#', '#.#', '#.#'],
+    O: ['.#.', '#.#', '#.#', '#.#', '.#.'],
+    P: ['##.', '#.#', '##.', '#..', '#..'],
+    Q: ['.#.', '#.#', '#.#', '##.', '.##'],
+    R: ['##.', '#.#', '##.', '#.#', '#.#'],
+    S: ['.##', '#..', '.#.', '..#', '##.'],
+    T: ['###', '.#.', '.#.', '.#.', '.#.'],
+    U: ['#.#', '#.#', '#.#', '#.#', '###'],
+    V: ['#.#', '#.#', '#.#', '#.#', '.#.'],
+    W: ['#.#', '#.#', '###', '###', '#.#'],
+    X: ['#.#', '#.#', '.#.', '#.#', '#.#'],
+    Y: ['#.#', '#.#', '.#.', '.#.', '.#.'],
+    Z: ['###', '..#', '.#.', '#..', '###'],
+    '0': ['###', '#.#', '#.#', '#.#', '###'],
+    '1': ['.#.', '##.', '.#.', '.#.', '###'],
+    '2': ['##.', '..#', '.#.', '#..', '###'],
+    '3': ['##.', '..#', '.#.', '..#', '##.'],
+    '4': ['#.#', '#.#', '###', '..#', '..#'],
+    '5': ['###', '#..', '##.', '..#', '##.'],
+    '6': ['.##', '#..', '###', '#.#', '###'],
+    '7': ['###', '..#', '.#.', '.#.', '.#.'],
+    '8': ['###', '#.#', '###', '#.#', '###'],
+    '9': ['###', '#.#', '###', '..#', '##.'],
+    '-': ['...', '...', '###', '...', '...'],
+};
+
+/** Draws a label on a dark box, 4 pixels to a character, with its top left at (x, y); characters it has no glyph for are a box. */
+function drawLabel(pixels: Uint8Array, width: number, height: number, text: string, x: number, y: number, color: number, back: number) {
+    const chars = [...text.toUpperCase()];
+    const put = (px: number, py: number, c: number) => {
+        if (px >= 0 && py >= 0 && px < width && py < height) pixels[py * width + px] = c;
+    };
+    for (let j = -1; j <= 5; j++) for (let i = -1; i < chars.length * 4; i++) put(x + i, y + j, back);
+    chars.forEach((ch, k) => {
+        const glyph = GLYPHS[ch] ?? ['###', '#.#', '#.#', '#.#', '###'];
+        glyph.forEach((row, gy) => [...row].forEach((c, gx) => c === '#' && put(x + k * 4 + gx, y + gy, color)));
+    });
+}
+
+export type TileRender = { status: 'drawn'; image: IndexedImage; palette?: Uint8Array; wanted?: string; legend?: { label: string; index: number }[] } | { status: 'needs'; wanted: string };
 
 const GAME_NAMES = { td: 'Tiberian Dawn', ra: 'Red Alert' };
 
 /** The map drawn the way the game draws it, from the theater's tile sets and sprites; what it used goes in `links`. */
-export function renderTiles(m: Mission, find: Finder, links: Links, { starts = true }: { starts?: boolean } = {}): TileRender {
+export function renderTiles(m: Mission, find: Finder, links: Links, { starts = true, logic = false }: { starts?: boolean; logic?: boolean } = {}): TileRender {
     const theater = THEATERS[m.game][(m.theater ?? 'TEMPERATE').toUpperCase()];
     if (!theater) return { status: 'needs', wanted: `This map's theater, ${m.theater}, isn't one the app knows how to draw.` };
-    const { size, templates, icons, overlays, terrain, area = wholeMap(size) } = m;
+    // With the mission's logic, the whole grid: its triggers and waypoints are often outside the playable part.
+    const { size, templates, icons, overlays, terrain } = m;
+    const area = logic ? wholeMap(size) : (m.area ?? wholeMap(size));
     const table = m.game === 'td' ? TD_TEMPLATES : RA_TEMPLATES;
     const archive = `${theater.root.toUpperCase()}.MIX`;
 
@@ -690,6 +824,81 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
     }
     for (const o of standing.sort((a, b) => a.y - b.y)) o.draw();
 
+    // The mission's logic, in the colors the game's own map editor draws it (CELL.CPP, under SCENARIO_EDITOR): trigger
+    // names in pink, waypoints in yellow, Home and Reinf in white. The computer's base rebuild order in red, and the
+    // playable part outlined.
+    const legend: { label: string; index: number }[] = [];
+    if (logic && m.logic) {
+        const color = (rgb: [number, number, number], fallback: number) => (palette ? nearest(palette, rgb) : fallback);
+        const [pink, yellow, white, red, cyan, dark] = [
+            color([255, 85, 255], 13),
+            color([255, 255, 85], 14),
+            color([255, 255, 255], 15),
+            color([255, 60, 60], 12),
+            color([0, 255, 255], 11),
+            color([0, 0, 0], 0),
+        ];
+        const at = (cell: number) => [(cell % size) * TILE, Math.floor(cell / size) * TILE];
+        // Each zone cell outlined, its trigger's name in its corner.
+        for (const [cell, name] of m.logic.cells) {
+            const [x, y] = at(cell);
+            for (let i = 0; i < TILE; i++) {
+                for (const [px, py] of [
+                    [x + i, y],
+                    [x + i, y + TILE - 1],
+                    [x, y + i],
+                    [x + TILE - 1, y + i],
+                ])
+                    if (px < width && py < height) pixels[py * width + px] = pink;
+            }
+            drawLabel(pixels, width, height, name, x + 2, y + 2, pink, dark);
+        }
+        for (const [n, cell] of m.logic.waypoints) {
+            const [x, y] = at(cell);
+            const special = SPECIAL_WAYPOINTS[m.game][n];
+            // A dashed box around the cell's middle, so a waypoint shows from afar.
+            const [b0, b1] = [4, TILE - 5];
+            for (let i = b0; i <= b1; i += 2) {
+                for (const [px, py] of [
+                    [x + i, y + b0],
+                    [x + i, y + b1],
+                    [x + b0, y + i],
+                    [x + b1, y + i],
+                ])
+                    if (px < width && py < height) pixels[py * width + px] = special ? white : yellow;
+            }
+            if (special) drawLabel(pixels, width, height, special, x + 1, y + TILE - 7, white, dark);
+            else drawLabel(pixels, width, height, String(n), x + TILE / 2 - String(n).length * 2, y + TILE / 2 - 3, yellow, dark);
+        }
+        for (const [cell, name] of m.logic.tagged) {
+            const [x, y] = at(cell);
+            drawLabel(pixels, width, height, name, x + 2, y + TILE - 7, pink, dark);
+        }
+        for (const [n, cell] of m.logic.base) {
+            const [x, y] = at(cell);
+            drawLabel(pixels, width, height, String(n), x + TILE - 2 - String(n).length * 4, y + 2, red, dark);
+        }
+        // A key to what's drawn, for what this mission has.
+        const specials = Object.entries(SPECIAL_WAYPOINTS[m.game]).filter(([n]) => m.logic!.waypoints.some(([w]) => w === Number(n)));
+        if (m.logic.cells.size || m.logic.tagged.length) legend.push({ label: 'Trigger, on a cell or an object', index: pink });
+        // Then each trigger on the map, and what it does.
+        const shown = [...new Set([...m.logic.cells.values(), ...m.logic.tagged.map(([, name]) => name)])].sort();
+        for (const name of shown) {
+            const said = m.logic.meanings.get(name);
+            if (said) legend.push({ label: `${name}: ${said[0].toUpperCase()}${said.slice(1)}`, index: pink });
+        }
+        if (m.logic.waypoints.some(([n]) => !SPECIAL_WAYPOINTS[m.game][n])) legend.push({ label: 'Waypoint', index: yellow });
+        if (specials.length) legend.push({ label: `${specials.map(([n, name]) => `${name} (${n})`).join(', ')}: waypoints with a fixed use`, index: white });
+        if (m.logic.base.length) legend.push({ label: 'Base rebuild order', index: red });
+        if (m.area) legend.push({ label: 'Playable area', index: cyan });
+        if (m.area) {
+            const [x0, y0, x1, y1] = [m.area.x * TILE, m.area.y * TILE, (m.area.x + m.area.width) * TILE - 1, (m.area.y + m.area.height) * TILE - 1];
+            // Two pixels wide, so it shows with the whole map fitted to the page.
+            for (let x = x0; x <= x1; x++) for (const y of [y0, y0 + 1, y1 - 1, y1]) if (x < width && y < height) pixels[y * width + x] = cyan;
+            for (let y = y0; y <= y1; y++) for (const x of [x0, x0 + 1, x1 - 1, x1]) if (x < width && y < height) pixels[y * width + x] = cyan;
+        }
+    }
+
     // A multiplayer map places nothing but where the players start: each start numbered, as the game's
     // own map preview does. (Missions use the same waypoints for their scripts, so not on those.)
     if (starts && isMultiplayer(m)) {
@@ -734,7 +943,7 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
         if (unseen.size) notes.push(`The map's vehicles and buildings (${some(unseen)}) need their sprites from ${conquer}. Open MAIN.MIX as well to draw them.`);
         if (unseenInfantry.size) notes.push(`Its infantry (${some(unseenInfantry)}) are in ${infantryIn}. Open REDALERT.MIX as well to draw them.`);
     }
-    return { status: 'drawn', image: { width, height, pixels }, palette, wanted: notes.filter(Boolean).join(' ') || undefined };
+    return { status: 'drawn', image: { width, height, pixels }, palette, wanted: notes.filter(Boolean).join(' ') || undefined, legend: legend.length ? legend : undefined };
 }
 
 /** A mission's map as previews (real tiles when they're available, and terrain kinds), with summary rows. */
@@ -746,6 +955,19 @@ export function missionPreviews(
     const { image, counts, unknown } = renderMap(m);
     const summary: [string, string][] = [['Map', `${m.size} × ${m.size} cells${m.area ? `, playable ${m.area.width} × ${m.area.height} at ${m.area.x}, ${m.area.y} (shown)` : ''}`]];
     if (m.theater) summary.push(['Theater', m.theater]);
+    const logic = m.logic;
+    const hasLogic = !!logic && !isMultiplayer(m) && (logic.cells.size > 0 || logic.waypoints.length > 0 || logic.tagged.length > 0 || logic.base.length > 0);
+    if (hasLogic) {
+        const zones = new Set(logic.cells.values()).size;
+        const parts = [
+            `${logic.triggers.size.toLocaleString('en-US')} defined`,
+            zones ? `${zones.toLocaleString('en-US')} on ${logic.cells.size.toLocaleString('en-US')} cells` : '',
+            logic.tagged.length ? `${logic.tagged.length.toLocaleString('en-US')} on objects` : '',
+        ].filter(Boolean);
+        summary.push(['Triggers', parts.join(', ')]);
+        summary.push(['Waypoints', logic.waypoints.length.toLocaleString('en-US')]);
+        if (logic.base.length) summary.push(['Base to rebuild', `${logic.base.length.toLocaleString('en-US')} buildings`]);
+    }
     summary.push(...counts.map(([label, n]) => [label, `${n} cells`] as [string, string]));
     const warnings = unknown ? [`${unknown} map cells use templates the game doesn't define.`] : [];
 
@@ -764,10 +986,15 @@ export function missionPreviews(
                   },
               }
             : undefined;
+    // The whole grid, with where the triggers fire, the waypoints and the base: a picture of its own, so the map above stays as the game shows it.
+    const withLogic = hasLogic ? renderTiles(m, find!, new Links(), { starts: false, logic: true }) : null;
     return {
         wanted: tiles.wanted,
         items: [
             { title: 'Map', preview: { kind: 'images', frames: [tiles.image], palette: tiles.palette, toggle } },
+            ...(withLogic?.status === 'drawn'
+                ? [{ title: 'Triggers and waypoints', preview: { kind: 'images', frames: [withLogic.image], palette: withLogic.palette, legend: withLogic.legend } as Preview }]
+                : []),
             { title: 'Terrain kinds', preview: kinds },
         ],
         summary,

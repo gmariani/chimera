@@ -7,7 +7,8 @@ import mapTd from './map-td';
 import shpTd from './shp-td';
 import strings from './strings';
 import ini from '../ini';
-import { unpackSection } from './map';
+import { readLogic, tdMission, unpackSection } from './map';
+import { Ini } from '../ini-sections';
 import pcx from '../pcx';
 import tiles from './tiles';
 import vqa from './vqa';
@@ -325,6 +326,62 @@ describe('maps with real tiles', () => {
     it("says which archive would draw it when the tiles aren't open", () => {
         const parsed = mapTd.parse(new Uint8Array(8192).fill(0xff), { name: 'scg01ea.bin', names: [], find: () => [] });
         expect(parsed.wanted).toMatch(/SCG01EA\.INI/);
+    });
+});
+
+describe('mission logic on TD and RA maps', () => {
+    it('reads cell triggers, waypoints, triggers on objects and the base as TD does', () => {
+        const text = [
+            '[Triggers]',
+            'atk1=Player Enters,Attack,0,BadGuy,None,0',
+            'hunt=Attacked,Hunt,0,BadGuy,None,0',
+            '[CellTriggers]',
+            '100=atk1',
+            '100=hunt', // The first line for a cell wins.
+            '101=nope', // No such trigger.
+            '0=atk1', // TD skips cell 0, as it skips the house lines some missions have here:
+            'Edge=None',
+            '[Waypoints]',
+            '0=200',
+            '26=300',
+            '27=-1',
+            '28=400', // TD reads 0 to 27.
+            '[STRUCTURES]',
+            '0=BadGuy,NUKE,256,500,0,hunt',
+            '1=BadGuy,PROC,256,600,0,None',
+            '[INFANTRY]',
+            '0=BadGuy,E1,256,700,0,Guard,64,atk1',
+            '[Base]',
+            'Count=2',
+            '000=NUKE,335548416', // A COORDINATE: x 16, y 20.
+            '001=PROC,999', // x 3, y 0.
+        ].join('\n');
+        const ini = new Ini(text);
+        const logic = tdMission(new Uint8Array(8192).fill(0xff), ini).logic!;
+        expect([...logic.cells]).toEqual([[100, 'ATK1']]);
+        expect(logic.waypoints).toEqual([
+            [0, 200],
+            [26, 300],
+        ]);
+        expect(logic.tagged).toEqual([
+            [500, 'HUNT'],
+            [700, 'ATK1'],
+        ]);
+        expect(logic.base).toEqual([
+            [0, 20 * 64 + 16],
+            [1, 3],
+        ]);
+    });
+
+    it("reads RA's: triggers in [Trigs], cell 0 allowed, the base by cell, waypoints to 100", () => {
+        const ini = new Ini(['[Trigs]', 'rnf1=0,2,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0', '[CellTriggers]', '0=rnf1', '[Waypoints]', '98=1000', '100=2000', '[Base]', 'Count=1', '000=POWR,5000'].join('\n'));
+        const logic = readLogic(ini, 'ra', 128, []);
+        expect([...logic.cells]).toEqual([[0, 'RNF1']]);
+        expect(logic.waypoints).toEqual([
+            [98, 1000],
+            [100, 2000],
+        ]);
+        expect(logic.base).toEqual([[0, 5000]]);
     });
 });
 

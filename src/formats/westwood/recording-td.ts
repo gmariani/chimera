@@ -1,5 +1,6 @@
 import { Bytes, bytesLabel, field } from '../../core/bytes';
 import type { Field, FormatParser, TableRow } from '../../core/types';
+import { TD_AIRCRAFT, TD_BUILDINGS, TD_HOUSES, TD_INFANTRY, TD_VEHICLES } from './td-types';
 import { TD_EVENT_SIZE, TD_RECORDING_HEADER, walkTdRecording, type RecordedFrame } from './sniff';
 
 /**
@@ -82,80 +83,7 @@ const KINDS = ['None', 'Cell', 'Unit', 'Infantry', 'Building', 'Terrain', 'Aircr
 /** RTTIType (DEFINES.H), for the kinds an event can name. */
 const RTTI: Record<number, string> = { 1: 'infantry', 2: 'infantry', 3: 'vehicle', 4: 'vehicle', 5: 'aircraft', 6: 'aircraft', 7: 'building', 8: 'building' };
 
-/** HousesType (DEFINES.H). */
-const HOUSES = ['GDI', 'Nod', 'Neutral', 'Special', 'Multiplayer 1', 'Multiplayer 2', 'Multiplayer 3', 'Multiplayer 4', 'Multiplayer 5', 'Multiplayer 6'];
-
-/** What each object type number is (StructType, UnitType, InfantryType, AircraftType in DEFINES.H; names and INI names from BDATA.CPP and the rest). */
-const BUILDINGS = [
-    'Weapons Factory (WEAP)',
-    'Guard Tower (GTWR)',
-    'Advanced Guard Tower (ATWR)',
-    'Obelisk of Light (OBLI)',
-    'Communications Center (HQ)',
-    'Gun Turret (GUN)',
-    'Construction Yard (FACT)',
-    'Tiberium Refinery (PROC)',
-    'Tiberium Silo (SILO)',
-    'Helipad (HPAD)',
-    'SAM Site (SAM)',
-    'Airstrip (AFLD)',
-    'Power Plant (NUKE)',
-    'Advanced Power Plant (NUK2)',
-    'Hospital (HOSP)',
-    'Barracks (PYLE)',
-    'ARCO',
-    'Repair Facility (FIX)',
-    'Bio-Research Laboratory (BIO)',
-    'Hand of Nod (HAND)',
-    'Temple of Nod (TMPL)',
-    'Advanced Communications Center (EYE)',
-    'MISS',
-    ...Array.from({ length: 37 }, (_, i) => `Civilian building (V${String(i + 1).padStart(2, '0')})`),
-    'Sandbags (SBAG)',
-    'Chain-link fence (CYCL)',
-    'Concrete wall (BRIK)',
-    'Barbed wire (BARB)',
-    'Wooden fence (WOOD)',
-];
-const VEHICLES = [
-    'Mammoth Tank (HTNK)',
-    'Medium Tank (MTNK)',
-    'Light Tank (LTNK)',
-    'Stealth Tank (STNK)',
-    'Flame Tank (FTNK)',
-    'Visceroid (VICE)',
-    'APC (APC)',
-    'Rocket Launcher (MSAM)',
-    'Hum-Vee (JEEP)',
-    'Nod Buggy (BGGY)',
-    'Harvester (HARV)',
-    'Artillery (ARTY)',
-    'SSM Launcher (MLRS)',
-    'Hovercraft (LST)',
-    'Mobile HQ (MHQ)',
-    'Gunboat (BOAT)',
-    'Mobile Construction Vehicle (MCV)',
-    'Recon Bike (BIKE)',
-    'Triceratops (TRIC)',
-    'Tyrannosaurus (TREX)',
-    'Velociraptor (RAPT)',
-    'Stegosaurus (STEG)',
-];
-const INFANTRY = [
-    'Minigunner (E1)',
-    'Grenadier (E2)',
-    'Rocket Soldier (E3)',
-    'Flamethrower (E4)',
-    'Chem Warrior (E5)',
-    'Engineer (E6)',
-    'Commando (RMBO)',
-    ...Array.from({ length: 10 }, (_, i) => `Civilian (C${i + 1})`),
-    'Dr. Moebius (MOEBIUS)',
-    'Delphi (DELPHI)',
-    'Dr. Chan (CHAN)',
-];
-const AIRCRAFT = ['Transport Helicopter (TRAN)', 'A-10 (A10)', 'Apache (HELI)', 'C-17 (C17)', 'Orca (ORCA)'];
-const TYPES: Record<number, string[]> = { 2: INFANTRY, 4: VEHICLES, 6: AIRCRAFT, 8: BUILDINGS };
+const TYPES: Record<number, string[]> = { 2: TD_INFANTRY, 4: TD_VEHICLES, 6: TD_AIRCRAFT, 8: TD_BUILDINGS };
 const SPECIAL_WEAPONS = ['nothing', 'Ion Cannon', 'Nuclear Strike', 'Airstrike'];
 
 const cell = (c: number) => `(${c & 63}, ${c >> 6})`;
@@ -180,7 +108,7 @@ function describe(type: number, data: Uint8Array): string {
     const i32 = (at: number) => b.view.getInt32(at, true);
     switch (type) {
         case 1:
-            return `With ${HOUSES[i32(0)] ?? `house ${i32(0)}`}`;
+            return `With ${TD_HOUSES[i32(0)] ?? `house ${i32(0)}`}`;
         case 2: {
             const [whom, mission, to, where] = [u16(0), data[2], u16(3), u16(5)];
             const doing = MISSIONS[mission] ?? `mission ${mission}`;
@@ -206,7 +134,7 @@ function describe(type: number, data: Uint8Array): string {
         case 14:
             return `${SPECIAL_WEAPONS[i32(0)] ?? `special weapon ${i32(0)}`} at ${cell(u16(4))}`;
         case 16:
-            return `Animation ${data[0]} at ${coordinate(b.u32(2))}, for ${HOUSES[data[1]] ?? `house ${data[1]}`}`;
+            return `Animation ${data[0]} at ${coordinate(b.u32(2))}, for ${TD_HOUSES[data[1]] ?? `house ${data[1]}`}`;
         case 22:
             return `Run ${data[6]} frame${data[6] === 1 ? '' : 's'} ahead`;
         default:
