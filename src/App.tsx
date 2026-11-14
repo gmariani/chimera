@@ -59,7 +59,15 @@ export function App() {
             <PaletteProvider>
                 <div className='page'>
                     <TopBar onNew={current ? () => setTrail([]) : undefined} onShowFiles={() => setShowFiles(true)} />
-                    <FilesPanel show={showFiles} onHide={() => setShowFiles(false)} />
+                    <FilesPanel
+                        show={showFiles}
+                        onHide={() => setShowFiles(false)}
+                        onOpen={(file) => {
+                            // The file that's open already, from the top: back to it; anything else opens on its own.
+                            setTrail((t) => (t[0]?.data === file.data ? [t[0]] : [file]));
+                            setShowFiles(false);
+                        }}
+                    />
                     <EngineNotices />
                     {current ? (
                         <main className='frame bd-content'>

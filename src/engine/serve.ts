@@ -51,7 +51,10 @@ export function serve(post: (message: FromWorker, transfer?: Transferable[]) => 
             case 'images':
             case 'picture': {
                 const { toggle, ...rest } = p;
-                return toggle ? ({ ...rest, toggle: { label: toggle.label, off: handle(() => toggle.off()) } } as WirePreview) : (rest as WirePreview);
+                if (!toggle) return rest as WirePreview;
+                // An images switch can start off, and carry a key to what it draws.
+                const extra = 'startsOff' in toggle || 'legend' in toggle ? { startsOff: toggle.startsOff, legend: toggle.legend } : {};
+                return { ...rest, toggle: { label: toggle.label, off: handle(() => toggle.off()), ...extra } } as WirePreview;
             }
             case 'video': {
                 const { frame, ...rest } = p;

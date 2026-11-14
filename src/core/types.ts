@@ -106,8 +106,12 @@ export type Preview =
           legend?: { label: string; index: number }[];
           /** The palette entries the game recolors for the owner's team, first and last. */
           remap?: [number, number];
-          /** A switch for something drawn over the pictures, on in `frames` (a multiplayer map's start positions): the pictures without it are made when it's turned off. */
-          toggle?: { label: string; off(): IndexedImage[] };
+          /**
+           * A switch for something drawn over the pictures, on in `frames` (a multiplayer map's start positions): the
+           * pictures without it are made when it's turned off. `startsOff` shows those first (a mission's triggers and
+           * waypoints, there to turn on); `legend` is a key to what it draws, shown while it's on.
+           */
+          toggle?: { label: string; off(): IndexedImage[]; startsOff?: boolean; legend?: { label: string; index: number }[] };
       }
     | { kind: 'palette'; /** 256 colors as 8-bit RGB. */ colors: Uint8Array }
     /** A true-color picture. */

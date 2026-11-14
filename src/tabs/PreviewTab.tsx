@@ -37,7 +37,7 @@ function OffNote({ waiting, error }: { waiting: boolean; error: string | null })
     if (waiting)
         return (
             <p className='small mb-3'>
-                <Spinner animation='border' size='sm' className='me-1' /> Drawing…
+                <Spinner as='span' animation='border' size='sm' className='me-1' /> Drawing…
             </p>
         );
     if (error) return <p className='small text-danger mb-3'>Couldn't draw it that way: {error}</p>;
@@ -195,7 +195,7 @@ function ImagesPreview({
     fileName,
 }: {
     frames: IndexedImage[];
-    toggle?: { label: string; off(): Promise<IndexedImage[]> };
+    toggle?: { label: string; off(): Promise<IndexedImage[]>; startsOff?: boolean; legend?: { label: string; index: number }[] };
     ownPalette?: Uint8Array;
     transparentIndex?: number;
     shadowIndex?: number;
@@ -205,9 +205,11 @@ function ImagesPreview({
     fileName: string;
 }) {
     // With the switch off, the pictures without what it draws (made the first time, then kept).
-    const [on, setOn] = useState(true);
+    const [on, setOn] = useState(!toggle?.startsOff);
     const off = useOff(toggle, on);
     const frames = on || !toggle || !off.other ? framesOn : off.other;
+    // The picture's own key, and the switch's while it's on.
+    const keys = [...(legend ?? []), ...(on && toggle?.legend ? toggle.legend : [])];
     const { current, add } = usePalettes();
     const [useOwn, setUseOwn] = useState(true);
     const team = useTeamColor(ownPalette && useOwn ? ownPalette : current.colors, remap);
@@ -321,9 +323,9 @@ function ImagesPreview({
                 {toggle && <Form.Check type='switch' id='images-toggle' className='mb-3' label={toggle.label} checked={on} onChange={(e) => setOn(e.target.checked)} />}
                 <OffNote waiting={off.waiting} error={off.error} />
 
-                {legend && (
+                {keys.length > 0 && (
                     <ul className='list-unstyled small mb-3 legend'>
-                        {legend.map(({ label, index }) => (
+                        {keys.map(({ label, index }) => (
                             <li key={`${index}-${label}`} className='d-flex align-items-center gap-2'>
                                 <span className='legend-swatch' style={{ background: `rgb(${palette[index * 3]}, ${palette[index * 3 + 1]}, ${palette[index * 3 + 2]})` }} />
                                 {label}

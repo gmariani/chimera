@@ -598,9 +598,8 @@ const GAME_NAMES = { td: 'Tiberian Dawn', ra: 'Red Alert' };
 export function renderTiles(m: Mission, find: Finder, links: Links, { starts = true, logic = false }: { starts?: boolean; logic?: boolean } = {}): TileRender {
     const theater = THEATERS[m.game][(m.theater ?? 'TEMPERATE').toUpperCase()];
     if (!theater) return { status: 'needs', wanted: `This map's theater, ${m.theater}, isn't one the app knows how to draw.` };
-    // With the mission's logic, the whole grid: its triggers and waypoints are often outside the playable part.
     const { size, templates, icons, overlays, terrain } = m;
-    const area = logic ? wholeMap(size) : (m.area ?? wholeMap(size));
+    const area = m.area ?? wholeMap(size);
     const table = m.game === 'td' ? TD_TEMPLATES : RA_TEMPLATES;
     const archive = `${theater.root.toUpperCase()}.MIX`;
 
@@ -830,18 +829,23 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
     const legend: { label: string; index: number }[] = [];
     if (logic && m.logic) {
         const color = (rgb: [number, number, number], fallback: number) => (palette ? nearest(palette, rgb) : fallback);
-        const [pink, yellow, white, red, cyan, dark] = [
-            color([255, 85, 255], 13),
-            color([255, 255, 85], 14),
-            color([255, 255, 255], 15),
-            color([255, 60, 60], 12),
-            color([0, 255, 255], 11),
-            color([0, 0, 0], 0),
-        ];
-        const at = (cell: number) => [(cell % size) * TILE, Math.floor(cell / size) * TILE];
+        const [pink, yellow, white, red, dark] = [color([255, 85, 255], 13), color([255, 255, 85], 14), color([255, 255, 255], 15), color([255, 60, 60], 12), color([0, 0, 0], 0)];
+        // Drawn over the playable part, as the map shows it: anything outside it is named in the key instead.
+        const at = (cell: number) => {
+            const [cx, cy] = [cell % size, Math.floor(cell / size)];
+            return inArea(cx, cy) ? [(cx - area.x) * TILE, (cy - area.y) * TILE] : null;
+        };
+        const outside: string[] = [];
+        const where = (cell: number) => `(${cell % size}, ${Math.floor(cell / size)})`;
         // Each zone cell outlined, its trigger's name in its corner.
+        const zonesOutside = new Map<string, number>();
         for (const [cell, name] of m.logic.cells) {
-            const [x, y] = at(cell);
+            const p = at(cell);
+            if (!p) {
+                zonesOutside.set(name, (zonesOutside.get(name) ?? 0) + 1);
+                continue;
+            }
+            const [x, y] = p;
             for (let i = 0; i < TILE; i++) {
                 for (const [px, py] of [
                     [x + i, y],
@@ -853,9 +857,15 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
             }
             drawLabel(pixels, width, height, name, x + 2, y + 2, pink, dark);
         }
+        for (const [name, n] of zonesOutside) outside.push(`${name}'s zone (${n.toLocaleString('en-US')} cell${n === 1 ? '' : 's'})`);
         for (const [n, cell] of m.logic.waypoints) {
-            const [x, y] = at(cell);
             const special = SPECIAL_WAYPOINTS[m.game][n];
+            const p = at(cell);
+            if (!p) {
+                outside.push(`waypoint ${n}${special ? ` (${special})` : ''} at ${where(cell)}`);
+                continue;
+            }
+            const [x, y] = p;
             // A dashed box around the cell's middle, so a waypoint shows from afar.
             const [b0, b1] = [4, TILE - 5];
             for (let i = b0; i <= b1; i += 2) {
@@ -871,12 +881,14 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
             else drawLabel(pixels, width, height, String(n), x + TILE / 2 - String(n).length * 2, y + TILE / 2 - 3, yellow, dark);
         }
         for (const [cell, name] of m.logic.tagged) {
-            const [x, y] = at(cell);
-            drawLabel(pixels, width, height, name, x + 2, y + TILE - 7, pink, dark);
+            const p = at(cell);
+            if (p) drawLabel(pixels, width, height, name, p[0] + 2, p[1] + TILE - 7, pink, dark);
+            else outside.push(`${name} on an object at ${where(cell)}`);
         }
         for (const [n, cell] of m.logic.base) {
-            const [x, y] = at(cell);
-            drawLabel(pixels, width, height, String(n), x + TILE - 2 - String(n).length * 4, y + 2, red, dark);
+            const p = at(cell);
+            if (p) drawLabel(pixels, width, height, String(n), p[0] + TILE - 2 - String(n).length * 4, p[1] + 2, red, dark);
+            else outside.push(`base building ${n} at ${where(cell)}`);
         }
         // A key to what's drawn, for what this mission has.
         const specials = Object.entries(SPECIAL_WAYPOINTS[m.game]).filter(([n]) => m.logic!.waypoints.some(([w]) => w === Number(n)));
@@ -890,13 +902,7 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
         if (m.logic.waypoints.some(([n]) => !SPECIAL_WAYPOINTS[m.game][n])) legend.push({ label: 'Waypoint', index: yellow });
         if (specials.length) legend.push({ label: `${specials.map(([n, name]) => `${name} (${n})`).join(', ')}: waypoints with a fixed use`, index: white });
         if (m.logic.base.length) legend.push({ label: 'Base rebuild order', index: red });
-        if (m.area) legend.push({ label: 'Playable area', index: cyan });
-        if (m.area) {
-            const [x0, y0, x1, y1] = [m.area.x * TILE, m.area.y * TILE, (m.area.x + m.area.width) * TILE - 1, (m.area.y + m.area.height) * TILE - 1];
-            // Two pixels wide, so it shows with the whole map fitted to the page.
-            for (let x = x0; x <= x1; x++) for (const y of [y0, y0 + 1, y1 - 1, y1]) if (x < width && y < height) pixels[y * width + x] = cyan;
-            for (let y = y0; y <= y1; y++) for (const x of [x0, x0 + 1, x1 - 1, x1]) if (x < width && y < height) pixels[y * width + x] = cyan;
-        }
+        if (outside.length) legend.push({ label: `Outside the playable area, so not shown: ${outside.join('; ')}`, index: dark });
     }
 
     // A multiplayer map places nothing but where the players start: each start numbered, as the game's
@@ -976,7 +982,7 @@ export function missionPreviews(
     const tiles = find ? renderTiles(m, find, links) : null;
     if (tiles?.status !== 'drawn') return { items: [{ title: 'Terrain kinds', preview: kinds }], summary, warnings, wanted: tiles?.wanted };
     // The start positions can be turned off: the map is drawn again without them.
-    const toggle =
+    const starts =
         isMultiplayer(m) && m.starts.length
             ? {
                   label: 'Start positions',
@@ -986,15 +992,16 @@ export function missionPreviews(
                   },
               }
             : undefined;
-    // The whole grid, with where the triggers fire, the waypoints and the base: a picture of its own, so the map above stays as the game shows it.
+    // A mission's triggers and waypoints, there to turn on over the map as the game shows it, with a key to them.
     const withLogic = hasLogic ? renderTiles(m, find!, new Links(), { starts: false, logic: true }) : null;
+    const map: Preview =
+        withLogic?.status === 'drawn'
+            ? { kind: 'images', frames: [withLogic.image], palette: tiles.palette, toggle: { label: 'Triggers and waypoints', startsOff: true, legend: withLogic.legend, off: () => [tiles.image] } }
+            : { kind: 'images', frames: [tiles.image], palette: tiles.palette, toggle: starts };
     return {
         wanted: tiles.wanted,
         items: [
-            { title: 'Map', preview: { kind: 'images', frames: [tiles.image], palette: tiles.palette, toggle } },
-            ...(withLogic?.status === 'drawn'
-                ? [{ title: 'Triggers and waypoints', preview: { kind: 'images', frames: [withLogic.image], palette: withLogic.palette, legend: withLogic.legend } as Preview }]
-                : []),
+            { title: 'Map', preview: map },
             { title: 'Terrain kinds', preview: kinds },
         ],
         summary,

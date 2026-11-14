@@ -34,7 +34,7 @@ export interface Transport {
 /** A preview, with what it decodes on demand coming from the worker (so it's asynchronous). */
 export type UiPreview =
     | Exclude<Preview, { kind: 'images' | 'picture' | 'video' | 'stack' }>
-    | (Omit<Extract<Preview, { kind: 'images' }>, 'toggle'> & { toggle?: { label: string; off(): Promise<IndexedImage[]> } })
+    | (Omit<Extract<Preview, { kind: 'images' }>, 'toggle'> & { toggle?: { label: string; off(): Promise<IndexedImage[]>; startsOff?: boolean; legend?: { label: string; index: number }[] } })
     | (Omit<Extract<Preview, { kind: 'picture' }>, 'toggle'> & { toggle?: { label: string; off(): Promise<Uint8Array> } })
     | (Omit<Extract<Preview, { kind: 'video' }>, 'frame'> & { frame(index: number, playing?: boolean): Promise<VideoFrame> })
     | { kind: 'stack'; items: { title: string; preview: UiPreview }[] };
@@ -312,7 +312,10 @@ export class Engine {
                     const { toggle, ...rest } = p;
                     if (!toggle) return rest;
                     handles.push(toggle.off);
-                    return { ...rest, toggle: { label: toggle.label, off: () => this.call<IndexedImage[]>('Drawing the other view', toggle.off, generation) } };
+                    return {
+                        ...rest,
+                        toggle: { label: toggle.label, startsOff: toggle.startsOff, legend: toggle.legend, off: () => this.call<IndexedImage[]>('Drawing the other view', toggle.off, generation) },
+                    };
                 }
                 case 'picture': {
                     const { toggle, ...rest } = p;

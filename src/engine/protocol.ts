@@ -46,7 +46,7 @@ export type WireEntry = Omit<Entry, 'data'> & { data: { offset: number; length: 
 /** A preview, with each function it has replaced by a handle. */
 export type WirePreview =
     | Exclude<Preview, { kind: 'images' | 'picture' | 'video' | 'stack' }>
-    | (Omit<Extract<Preview, { kind: 'images' }>, 'toggle'> & { toggle?: { label: string; off: number } })
+    | (Omit<Extract<Preview, { kind: 'images' }>, 'toggle'> & { toggle?: { label: string; off: number; startsOff?: boolean; legend?: { label: string; index: number }[] } })
     | (Omit<Extract<Preview, { kind: 'picture' }>, 'toggle'> & { toggle?: { label: string; off: number } })
     | (Omit<Extract<Preview, { kind: 'video' }>, 'frame'> & { frame: number })
     | { kind: 'stack'; items: { title: string; preview: WirePreview }[] };

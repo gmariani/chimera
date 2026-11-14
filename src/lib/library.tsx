@@ -22,6 +22,8 @@ interface LibraryState {
     remove(id: string): void;
     /** The id of the file in the session with these bytes, if it's there. */
     idOf(data: Uint8Array): string | undefined;
+    /** A session file's bytes, by its id: to open it again. */
+    dataOf(id: string): Uint8Array | undefined;
 }
 
 const LibraryContext = createContext<LibraryState | null>(null);
@@ -66,8 +68,9 @@ export function LibraryProvider({ names: userNames, children }: { names: readonl
     }, []);
 
     const idOf = useCallback((data: Uint8Array) => ids.current.get(data), []);
+    const dataOf = useCallback((id: string) => [...ids.current].find(([, owner]) => owner === id)?.[0], []);
 
-    const value = useMemo(() => ({ names, version, files: session, add, remove, idOf }), [names, version, session, add, remove, idOf]);
+    const value = useMemo(() => ({ names, version, files: session, add, remove, idOf, dataOf }), [names, version, session, add, remove, idOf, dataOf]);
     return <LibraryContext.Provider value={value}>{children}</LibraryContext.Provider>;
 }
 
