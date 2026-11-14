@@ -1,4 +1,4 @@
-Chimera's fix to the fork's Bink 2 decoder (wasm/bink2/build.sh applies it).
+Chimera's fix to the fork's Bink 2 decoder (wasm/bink/build.sh applies it).
 
 Alpha: frame flag 0x80000 means the frame carries no alpha data, and its whole
 alpha plane is then one value, the frame flags' top byte (0 where an interface

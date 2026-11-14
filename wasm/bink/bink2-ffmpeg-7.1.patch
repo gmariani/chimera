@@ -1,4 +1,4 @@
-Chimera's port of the fork's Bink 2 decoder to FFmpeg 7.1 (wasm/bink2/build.sh
+Chimera's port of the fork's Bink 2 decoder to FFmpeg 7.1 (wasm/bink/build.sh
 applies it, after the fixes, to the fork's three decoder files copied into
 FFmpeg 7.1's source).
 

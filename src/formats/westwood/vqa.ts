@@ -17,10 +17,13 @@ import { append } from '../../core/math';
  * version 2 alternates bytes between the channels; version 3 puts each chunk's
  * left channel in its first half and the right in its second.
  *
- * Tiberian Sun's movies are version 3 in high color (flag 0x10): the codebook
- * holds 15-bit RGB pixels, and each frame is a list of 16-bit commands (VPRZ,
- * VPTR) that skip blocks (keeping the last frame's) or write codebook blocks,
- * one or many times.
+ * High-color movies (flag 0x10) are Tiberian Sun's, version 3, and Dune
+ * 2000's, which say version 2: the codebook holds 15-bit RGB pixels, there's no
+ * palette (the header's color count is 0), and each frame is a list of 16-bit
+ * commands (VPRZ, VPTR) that skip blocks (keeping the last frame's) or write
+ * codebook blocks, one or many times. The Multimedia Wiki's VQA page
+ * (https://wiki.multimedia.cx/index.php/VQA) has Dune 2000's movies as "version
+ * 2, but HiColor"; the flag is the only thing in the header that tells.
  */
 
 const CHUNKS: Record<string, string> = {
@@ -408,8 +411,14 @@ const parser: FormatParser = {
         const flags = h >= 0 ? b.u16(h + 2) : 0;
         if (vqhd) {
             listed.find((c) => c.name === 'VQHD')!.children = [
-                field('Version', h, 2, b.u16(h), "2 for TD and RA; 3 for Tiberian Sun's high-color movies."),
-                field('Flags', h + 2, 2, `0x${flags.toString(16)}`, 'Bit 0: has sound. Bit 4: high color (15-bit codebook, no palette).'),
+                field('Version', h, 2, b.u16(h), "2 for TD, RA and Dune 2000; 3 for Tiberian Sun's movies."),
+                field(
+                    'Flags',
+                    h + 2,
+                    2,
+                    `0x${flags.toString(16)}`,
+                    'Bit 0: has sound. Bit 2: drawn over another movie. Bit 4: high color (15-bit codebook, no palette), in Tiberian Sun and Dune 2000.'
+                ),
                 field('Frames', h + 4, 2, b.u16(h + 4)),
                 field('Width', h + 6, 2, b.u16(h + 6)),
                 field('Height', h + 8, 2, b.u16(h + 8)),
@@ -428,10 +437,19 @@ const parser: FormatParser = {
         }
 
         const warnings: string[] = [];
-        const highColor = header.version === 3 && (flags & 0x10) !== 0;
+        // Dune 2000's high-color movies are version 2, Tiberian Sun's version 3.
+        const highColor = (header.version === 2 || header.version === 3) && (flags & 0x10) !== 0;
         const fits = header.width > 0 && header.blockWidth > 0 && header.blockHeight > 0 && header.width % header.blockWidth === 0 && header.height % header.blockHeight === 0;
         const drawable = fits && ((header.version === 2 && [2, 4].includes(header.blockHeight)) || highColor);
         if (!drawable) warnings.push(`Version ${header.version} movies${header.version === 3 ? ' in 256 colors' : ''} aren't decoded yet; the chunks are still listed.`);
+        // What the frames are drawn from: block commands in high color, block pointers in 256 colors.
+        const drawnFrom = highColor ? ['VPRZ', 'VPTR'] : ['VPTZ', 'VPT0', 'VPTR'];
+        if (drawable && frameChunks.length && !frameChunks.some((f) => f.some((c) => drawnFrom.includes(c.id)))) {
+            const found = [...new Set(frameChunks.flat().map((c) => c.id))].join(', ') || 'none';
+            warnings.push(
+                `None of the ${frameChunks.length.toLocaleString('en-US')} frames has the ${drawnFrom.join(' or ')} chunk a ${highColor ? 'high-color' : '256-color'} movie is drawn from (they hold ${found}), so there's no picture to show.`
+            );
+        }
         if (listed.length >= MAX_LISTED) warnings.push(`Only the first ${MAX_LISTED} chunks are listed (${frameChunks.length} frames).`);
 
         let sound: AudioClip | undefined;

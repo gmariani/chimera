@@ -1,4 +1,4 @@
-Chimera's fix to the fork's Bink 2 decoder (wasm/bink2/build.sh applies it).
+Chimera's fix to the fork's Bink 2 decoder (wasm/bink/build.sh applies it).
 
 Chroma motion compensation: for a vector with a fraction in both directions,
 the fork filtered across, rounded, then filtered down and rounded again, which

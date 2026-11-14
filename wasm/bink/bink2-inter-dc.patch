@@ -1,4 +1,4 @@
-Chimera's fix to the fork's Bink 2 decoder (wasm/bink2/build.sh applies it).
+Chimera's fix to the fork's Bink 2 decoder (wasm/bink/build.sh applies it).
 
 Inter DC range: the fork clamped a residual block's DC to -1023..1023, which
 is -128..127 as pixels, where a residual can be a plane's whole range. A cut

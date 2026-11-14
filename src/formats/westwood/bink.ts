@@ -3,7 +3,6 @@ import { checkPixels } from '../../core/limits';
 import type { AudioClip, FormatParser, VideoFrame } from '../../core/types';
 import { wav } from './adpcm';
 import type { BinkWasm } from './bink-wasm/bink.mjs';
-import type { Bink2Wasm } from './bink2-wasm/bink2.mjs';
 
 /**
  * Bink video (RAD Game Tools), which RA2 uses for its movies, and Bink 2 ("KB2"),
@@ -17,8 +16,7 @@ import type { Bink2Wasm } from './bink2-wasm/bink2.mjs';
  * (wasm/bink), which load only when a Bink file is opened. Bink 2's sound is the
  * same Bink audio. Its video has no decoder in FFmpeg (RAD never published the
  * format): it's decoded by Paul B Mahol's unmerged one, taken from a fork of
- * FFmpeg with fixes of ours and built into FFmpeg 7.1 (wasm/bink2), in a
- * module of its own.
+ * FFmpeg with fixes of ours and built into the same FFmpeg, in the same module.
  */
 
 const AUDIO_STEREO = 0x2000;
@@ -27,27 +25,18 @@ const AUDIO_DCT = 0x1000;
 const ALPHA = 0x100000;
 
 let wasm: BinkWasm | null = null;
-let wasm2: Bink2Wasm | null = null;
 let loading: Promise<void> | null = null;
 
 /** Loads the decoders; the format registry waits for this before parsing. */
 export function ready(): Promise<void> {
-    loading ??= Promise.all([
-        import('./bink-wasm/bink.mjs')
-            .then((m) => m.default())
-            .then((w) => {
-                wasm = w;
-            }),
-        import('./bink2-wasm/bink2.mjs')
-            .then((m) => m.default())
-            .then((w) => {
-                wasm2 = w;
-            }),
-    ])
+    loading ??= import('./bink-wasm/bink.mjs')
+        .then((m) => m.default())
+        .then((w) => {
+            wasm = w;
+        })
         .catch(() => {
             // Without the decoders the header is still shown.
-        })
-        .then(() => undefined);
+        });
     return loading;
 }
 
@@ -109,18 +98,11 @@ function packets(data: Uint8Array, l: Layout, i: number): { audio: Uint8Array[];
     return { audio, video: data.subarray(at, end) };
 }
 
-/** What both decoder modules have for their memory. */
-interface Memory {
-    HEAPU8: Uint8Array;
-    _malloc(size: number): number;
-    _free(pointer: number): void;
-}
-
 /** Copies bytes into the decoders' memory (growing a reused buffer), returning where. */
 class Input {
     private pointer = 0;
     private size = 0;
-    constructor(private readonly w: Memory) {}
+    constructor(private readonly w: BinkWasm) {}
     put(bytes: Uint8Array): number {
         if (bytes.length > this.size) {
             if (this.pointer) this.w._free(this.pointer);
@@ -135,45 +117,6 @@ class Input {
         this.pointer = this.size = 0;
     }
 }
-
-/** The video decoders' common calls: Bink 1's in one module, Bink 2's in another. */
-interface Codec {
-    w: Memory;
-    open(l: Layout): number;
-    /** 1 for a frame, written to rgba unless that's 0, 2^shift times smaller each way; negative on error. */
-    decode(decoder: number, data: number, size: number, key: boolean, rgba: number, shift: number): number;
-    /** The codec can draw a frame smaller, for playing large movies. */
-    canShrink: boolean;
-    save(decoder: number): number;
-    restore(decoder: number, saved: number): number;
-    forget(saved: number): void;
-    flush(decoder: number): void;
-    close(decoder: number): void;
-}
-
-const bink1 = (w: BinkWasm): Codec => ({
-    w,
-    open: (l) => w._video_open(l.tag, l.flags, l.width, l.height),
-    decode: (d, data, size, _key, rgba) => w._video_decode(d, data, size, rgba),
-    canShrink: false,
-    save: (d) => w._video_save(d),
-    restore: (d, saved) => w._video_restore(d, saved),
-    forget: (saved) => w._video_forget(saved),
-    flush: (d) => w._decoder_flush(d),
-    close: (d) => w._decoder_close(d),
-});
-
-const bink2 = (w: Bink2Wasm): Codec => ({
-    w,
-    open: (l) => w._video_open(l.tag, l.flags, l.width, l.height),
-    decode: (d, data, size, key, rgba, shift) => w._video_decode(d, data, size, key ? 1 : 0, rgba, shift, 0),
-    canShrink: true,
-    save: (d) => w._video_save(d),
-    restore: (d, saved) => w._video_restore(d, saved),
-    forget: (saved) => w._video_forget(saved),
-    flush: (d) => w._decoder_flush(d),
-    close: (d) => w._decoder_close(d),
-});
 
 /** Keep the decoder's state at least this often while playing, so a jump only decodes from the nearest one... */
 const SNAPSHOT_EVERY = 100;
@@ -205,7 +148,7 @@ class Player {
     errors = 0;
 
     constructor(
-        private readonly codec: Codec,
+        private readonly w: BinkWasm,
         private readonly data: Uint8Array,
         private readonly l: Layout
     ) {
@@ -222,20 +165,20 @@ class Player {
         // oxlint-disable-next-line typescript/no-this-alias
         current = this;
         if (this.decoder) return;
-        this.decoder = this.codec.open(this.l);
+        this.decoder = this.w._video_open(this.l.tag, this.l.flags, this.l.width, this.l.height);
         if (!this.decoder) throw new Error("The Bink decoder wouldn't open this video.");
-        this.rgba = this.codec.w._malloc(this.l.width * this.l.height * 4);
-        this.input = new Input(this.codec.w);
+        this.rgba = this.w._malloc(this.l.width * this.l.height * 4);
+        this.input = new Input(this.w);
         this.position = -1;
     }
 
     /** Lets the decoder and snapshots go; opening again starts afresh. */
     close() {
         if (!this.decoder) return;
-        for (const saved of this.snapshots.values()) this.codec.forget(saved);
+        for (const saved of this.snapshots.values()) this.w._video_forget(saved);
         this.snapshots.clear();
-        this.codec.close(this.decoder);
-        this.codec.w._free(this.rgba);
+        this.w._decoder_close(this.decoder);
+        this.w._free(this.rgba);
         this.input?.free();
         this.decoder = this.rgba = 0;
         this.input = null;
@@ -243,10 +186,10 @@ class Player {
 
     private decode(i: number, draw: boolean, shift = 0) {
         const video = packets(this.data, this.l, i).video;
-        if (video.length && this.codec.decode(this.decoder, this.input!.put(video), video.length, this.l.frames[i].key, draw ? this.rgba : 0, shift) < 0) this.errors++;
+        if (video.length && this.w._video_decode(this.decoder, this.input!.put(video), video.length, this.l.frames[i].key ? 1 : 0, draw ? this.rgba : 0, shift, 0) < 0) this.errors++;
         this.position = i;
         if (i % this.every === 0 && i > 0 && !this.snapshots.has(i)) {
-            const saved = this.codec.save(this.decoder);
+            const saved = this.w._video_save(this.decoder);
             if (saved) this.snapshots.set(i, saved);
         }
     }
@@ -260,19 +203,20 @@ class Player {
         for (const at of this.snapshots.keys()) if (at < index && at >= key && at > snapshot) snapshot = at;
         const best = Math.max(key - 1, snapshot);
         if (!(this.position >= best && this.position < index)) {
-            if (snapshot >= key && this.codec.restore(this.decoder, this.snapshots.get(snapshot)!) >= 0) {
+            if (snapshot >= key && this.w._video_restore(this.decoder, this.snapshots.get(snapshot)!) >= 0) {
                 this.position = snapshot;
             } else {
-                this.codec.flush(this.decoder);
+                this.w._decoder_flush(this.decoder);
                 this.position = key - 1;
             }
         }
         while (this.position < index - 1) this.decode(this.position + 1, false);
-        const shift = playing && this.codec.canShrink && this.l.width * this.l.height > PLAY_SMALLER_ABOVE ? 1 : 0;
+        // Only Bink 2's decoding draws smaller (Bink 1's movies are all small).
+        const shift = playing && this.l.two && this.l.width * this.l.height > PLAY_SMALLER_ABOVE ? 1 : 0;
         this.decode(index, true, shift);
         const [width, height] = [(this.l.width + (1 << shift) - 1) >> shift, (this.l.height + (1 << shift) - 1) >> shift];
         // A copy of its own, handed over to the page whole.
-        const rgba = this.codec.w.HEAPU8.slice(this.rgba, this.rgba + width * height * 4);
+        const rgba = this.w.HEAPU8.slice(this.rgba, this.rgba + width * height * 4);
         return shift ? { rgba, width, height } : { rgba };
     }
 }
@@ -334,11 +278,9 @@ const parser: FormatParser = {
             try {
                 checkPixels(l.width, l.height, 'The movie');
                 if (count && !l.frames[0].key) warnings.push("The first frame isn't marked as a keyframe, which every Bink movie starts with: there's nothing for it to be drawn over.");
-                if (!l.two) player = new Player(bink1(wasm), data, l);
-                else if (wasm2) player = new Player(bink2(wasm2), data, l);
-                else warnings.push("The Bink 2 video decoder couldn't be loaded, so the picture can't be shown. The sound plays.");
+                player = new Player(wasm, data, l);
                 // The first frame is decoded now, as it's the first shown: a movie whose picture can't be decoded says so.
-                if (player && count) {
+                if (count) {
                     player.frame(0);
                     if (player.errors) warnings.push("The first frame doesn't decode: the video is damaged, or isn't what the header says.");
                 }

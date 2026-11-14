@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Preview } from '../../core/types';
+import type { Preview, VideoFrame } from '../../core/types';
 import { detect } from '../index';
 import { Ini } from '../ini-sections';
 import { namesFromBinary, namesFromText } from '../mix/names';
@@ -210,23 +210,40 @@ describe('1-bit fonts', () => {
 });
 
 describe('high-color VQA', () => {
-    it('draws codebook blocks and keeps skipped ones', () => {
-        const chunk = (id: string, body: number[]) => [...id].map((c) => c.charCodeAt(0)).concat([0, 0, body.length >> 8, body.length & 255], body, body.length & 1 ? [0] : []);
-        // 8 × 2 pixels: two 4 × 2 blocks. Codebook entry 1 is all 0x7C00 (pure red in 15 bits).
+    const chunk = (id: string, body: number[]) => [...id].map((c) => c.charCodeAt(0)).concat([0, 0, body.length >> 8, body.length & 255], body, body.length & 1 ? [0] : []);
+    // 8 × 2 pixels: two 4 × 2 blocks. Codebook entry 1 is all 0x7C00 (pure red in 15 bits).
+    const codebook = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...new Array(8).fill([0x00, 0x7c]).flat()];
+    // Frame 1: block 1 once (command 3), then block 1 once. Frame 2: skip 1, block 0 once.
+    const frames = [[...chunk('CBF0', codebook), ...chunk('VPTR', [0x01, 0x60, 0x01, 0x60])], chunk('VPTR', [0x01, 0x00, 0x00, 0x60])];
+    function movie(version: number, flags: number, frameBodies: number[][]) {
         const header = new Array(42).fill(0);
-        Object.assign(header, { 0: 3, 2: 0x10, 4: 2, 6: 8, 8: 2, 10: 4, 11: 2, 12: 15 });
-        const codebook = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...new Array(8).fill([0x00, 0x7c]).flat()];
-        // Frame 1: block 1 once (command 3), then block 1 once. Frame 2: skip 1, block 0 once.
-        const frame1 = [...chunk('CBF0', codebook), ...chunk('VPTR', [0x01, 0x60, 0x01, 0x60])];
-        const frame2 = chunk('VPTR', [0x01, 0x00, 0x00, 0x60]);
-        const body = [...'WVQA'].map((c) => c.charCodeAt(0)).concat(chunk('VQHD', header), chunk('VQFR', frame1), chunk('VQFR', frame2));
-        const data = Uint8Array.from([...'FORM'].map((c) => c.charCodeAt(0)).concat([0, 0, body.length >> 8, body.length & 255], body));
-        const preview = vqa.parse(data, context()).preview;
+        Object.assign(header, { 0: version, 2: flags, 4: frameBodies.length, 6: 8, 8: 2, 10: 4, 11: 2, 12: 15 });
+        const body = [...'WVQA'].map((c) => c.charCodeAt(0)).concat(chunk('VQHD', header), ...frameBodies.map((f) => chunk('VQFR', f)));
+        return Uint8Array.from([...'FORM'].map((c) => c.charCodeAt(0)).concat([0, 0, body.length >> 8, body.length & 255], body));
+    }
+    const red = (f: VideoFrame, x: number) => ('rgba' in f ? f.rgba[x * 4] : -1);
+
+    it('draws codebook blocks and keeps skipped ones', () => {
+        const preview = vqa.parse(movie(3, 0x10, frames), context()).preview;
         if (preview?.kind !== 'video') throw new Error('expected video');
-        const red = (f: ReturnType<typeof preview.frame>, x: number) => ('rgba' in f ? f.rgba[x * 4] : -1);
         expect([red(preview.frame(0), 0), red(preview.frame(0), 4)]).toEqual([255, 255]);
         // The first block was skipped, so it's still red; the second is now black.
         expect([red(preview.frame(1), 0), red(preview.frame(1), 4)]).toEqual([255, 0]);
+    });
+
+    it("draws Dune 2000's, which say version 2", () => {
+        // Dune 2000's movies: version 2 with the high-color flag (and sound and overlay bits: 0x1d), 4 × 2 blocks.
+        const parsed = vqa.parse(movie(2, 0x1d, frames), context());
+        expect(parsed.warnings).toEqual([]);
+        expect(parsed.summary).toContainEqual(['Blocks', '4 × 2, high color (15-bit)']);
+        if (parsed.preview?.kind !== 'video') throw new Error('expected video');
+        expect([red(parsed.preview.frame(0), 0), red(parsed.preview.frame(1), 0), red(parsed.preview.frame(1), 4)]).toEqual([255, 255, 0]);
+    });
+
+    it('says when no frame has anything to draw from', () => {
+        // Without the high-color flag, a 256-color movie's frames need block pointers; these have only (compressed) commands.
+        const { warnings } = vqa.parse(movie(2, 0x01, [[...chunk('CBF0', codebook), ...chunk('VPRZ', [0x80])], chunk('VPRZ', [0x80])]), context());
+        expect(warnings).toEqual([expect.stringMatching(/^None of the 2 frames has the VPTZ or VPT0 or VPTR chunk a 256-color movie is drawn from \(they hold CBF0, VPRZ\)/)]);
     });
 });
 

@@ -6,7 +6,7 @@ import { gameDir } from '../../testing/game-data';
 import { detect } from '../index';
 import png from '../png/index';
 import bink, { ready } from './bink';
-import createBink2 from './bink2-wasm/bink2.mjs';
+import createBink from './bink-wasm/bink.mjs';
 
 const samples = join(__dirname, '../../../samples/westwood');
 
@@ -50,7 +50,7 @@ describe.skipIf(!existsSync(join(samples, 'GDI13.BK2')))("Bink 2 (the Remastered
         ['GDI13.BK2', '319bd4dee07c89200cb213cee32f7da9597835337d9cd01b1099fc54ed9d9fbb'],
     ])('decodes every frame of %s as the native build does', async (name, expected) => {
         const data = new Uint8Array(readFileSync(join(samples, name)));
-        const w = await createBink2();
+        const w = await createBink();
         const v = new DataView(data.buffer, data.byteOffset);
         const [count, width, height, flags, tracks] = [v.getUint32(8, true), v.getUint32(20, true), v.getUint32(24, true), v.getUint32(36, true), v.getUint32(40, true)];
         const index = 48 + tracks * 12;
@@ -270,7 +270,7 @@ describe.skipIf(!MEGS.length)("The Remastered Collection's movies", () => {
     it.skipIf(!process.env.CHIMERA_ALL_MOVIES)(
         'decodes every frame of every movie',
         async () => {
-            const w = await createBink2();
+            const w = await createBink();
             const input = w._malloc(16 << 20);
             const failed: string[] = [];
             let movies = 0;

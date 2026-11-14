@@ -1,4 +1,4 @@
-Chimera's fix to the fork's Bink 2 decoder (wasm/bink2/build.sh applies it).
+Chimera's fix to the fork's Bink 2 decoder (wasm/bink/build.sh applies it).
 
 Block flags: a run of flags read from the file was added to the count without
 checking it against how many flags are left, so a bad run wrote past the end
