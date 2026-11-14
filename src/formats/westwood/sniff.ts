@@ -107,7 +107,7 @@ export function sniffAud(data: Uint8Array): boolean {
     const compression = b.u8(11);
     // Compression 0, plain PCM, stores each chunk as it plays: the first chunk's two sizes match.
     const plain = compression === 0 && b.u16(12) === b.u16(14) && b.u16(12) > 0;
-    return data.length > 20 && rate >= 4000 && rate <= 48000 && b.u8(10) <= 3 && (compression === 1 || compression === 99 || plain) && b.u32(16) === 0xdeaf;
+    return data.length > 20 && rate >= 4000 && rate <= 48000 && b.u8(10) <= 3 && (compression === 1 || compression === 33 || compression === 99 || plain) && b.u32(16) === 0xdeaf;
 }
 
 /**
@@ -337,9 +337,10 @@ function wsaAs(data: Uint8Array, version: WsaVersion): WsaLayout | null {
     const width = b.u16(h.width);
     const height = b.u16(h.height);
     const flags = h.flags < 0 ? 0 : b.u16(h.flags);
-    if (frames === 0 || frames > 4096 || width === 0 || height === 0 || width > 640 || height > 480 || flags > 1) return null;
+    if (frames === 0 || frames > 4096 || width === 0 || height === 0 || width > 640 || height > 480 || flags > 3) return null;
     const tableEnd = h.size + (frames + 2) * 4;
-    const palette = flags === 1;
+    // Bit 0: a palette follows the offsets. Bit 1: the first frame is a delta over a picture from elsewhere (WSA.CPP reads no others).
+    const palette = (flags & 1) !== 0;
     const shift = palette ? 768 : 0;
     if (tableEnd + shift > data.length) return null;
     const offsets: number[] = [];

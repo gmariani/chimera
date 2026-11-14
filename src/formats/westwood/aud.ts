@@ -8,12 +8,16 @@ import { decodeIma, decodeWestwood, wav } from './adpcm';
  * 2000, Blade Runner). A 12-byte header (rate, the size after the header, the
  * decoded size, flags, compression), then chunks of sound, each with a small
  * header ending in 0x0000DEAF. Compression 0 is plain PCM, 1 Westwood's own
- * 8-bit ADPCM, 99 IMA ADPCM (16-bit out). The games read the chunks the same
+ * 8-bit ADPCM, 99 IMA ADPCM (16-bit out). Westwood's sound library also lists
+ * 33, Sonarc (SCOMP_SONARC in TD's SOUNDINT.H), but its decoder isn't in the
+ * source EA released and no game file uses it, so it's read but not played. The games read the chunks the same
  * way whatever the compression (Red Alert's Sample_Copy), so plain PCM is in
  * chunks too. See https://moddingwiki.shikadi.net/wiki/Westwood_AUD_Format.
  */
 
-export const AUD_COMPRESSION: Record<number, string> = { 0: 'None (PCM)', 1: 'Westwood ADPCM', 99: 'IMA ADPCM' };
+export const AUD_COMPRESSION: Record<number, string> = { 0: 'None (PCM)', 1: 'Westwood ADPCM', 33: 'Sonarc', 99: 'IMA ADPCM' };
+/** Westwood's Sonarc: listed by its sound library, its decoder never released. */
+const SONARC = 33;
 
 const parser: FormatParser = {
     parse(data) {
@@ -24,10 +28,12 @@ const parser: FormatParser = {
         const outSize = b.u32(6);
         const flags = b.u8(10);
         const compression = b.u8(11);
-        if (!(compression in AUD_COMPRESSION)) throw new Error(`Compression ${compression} isn't one AUD files use (0, 1 and 99 are).`);
+        if (!(compression in AUD_COMPRESSION)) throw new Error(`Compression ${compression} isn't one AUD files use (0, 1, 33 and 99 are).`);
         if (rate === 0) throw new Error('The sample rate is 0.');
         const channels = flags & 1 ? 2 : 1;
         const warnings: string[] = [];
+        const sonarc = compression === SONARC;
+        if (sonarc) warnings.push("It's compressed with Sonarc (33), which Westwood's sound library lists but whose decoder was never released, so it can't be played. Its chunks are still read.");
 
         // IMA always makes 16-bit sound and Westwood's ADPCM 8-bit, whatever the flag says; plain PCM is what the flag says.
         const flagSixteen = (flags & 2) !== 0;
@@ -70,13 +76,13 @@ const parser: FormatParser = {
                     (pcm as Uint8Array).set(src.subarray(0, n), written);
                     written += n;
                 }
-            } else {
+            } else if (!sonarc) {
                 written = compression === 99 ? decodeIma(src, pcm as Int16Array, state, written) : decodeWestwood(src, pcm as Uint8Array, written, chunkOut);
             }
             claimed += chunkOut;
             // Once the sound's room is full, a chunk can't show what it makes; the header check covers that.
             const made = (written - before) * (sixteen ? 2 : 1);
-            if (made !== chunkOut && written < pcm.length) off.push({ index: chunks.length, says: chunkOut, made, short: chunkOut - made });
+            if (!sonarc && made !== chunkOut && written < pcm.length) off.push({ index: chunks.length, says: chunkOut, made, short: chunkOut - made });
             chunks.push({
                 name: `Chunk ${chunks.length + 1}`,
                 offset: at,
@@ -102,13 +108,14 @@ const parser: FormatParser = {
             );
         }
         if (chunks.length && claimed !== outSize && outSize <= most) warnings.push(`The header says the sound is ${bytesLabel(outSize)}, but its chunks add up to ${bytesLabel(claimed)}.`);
-        const seconds = written / (rate * channels);
+        // Sonarc isn't decoded: its length is what the header says it decodes to.
+        const seconds = sonarc ? outSize / ((flagSixteen ? 2 : 1) * rate * channels) : written / (rate * channels);
 
         return {
             title: 'Audio (AUD)',
             summary: [
                 ['Length', `${seconds.toFixed(2)} s`],
-                ['Format', `${rate.toLocaleString('en-US')} Hz, ${channels === 2 ? 'stereo' : 'mono'}, ${sixteen ? 16 : 8}-bit`],
+                ['Format', `${rate.toLocaleString('en-US')} Hz, ${channels === 2 ? 'stereo' : 'mono'}, ${sixteen || (sonarc && flagSixteen) ? 16 : 8}-bit`],
                 ['Compression', AUD_COMPRESSION[compression]],
                 ['Chunks', chunks.length.toLocaleString('en-US')],
             ],
@@ -127,7 +134,7 @@ const parser: FormatParser = {
                 },
                 { name: `Chunks (${chunks.length})`, offset: 12, length: at - 12, note: 'The game streams sound in small chunks, each decoded in turn.', children: chunks },
             ],
-            preview: { kind: 'audio', wav: wav(pcm.subarray(0, written), rate, channels), sampleRate: rate, channels, bits: sixteen ? 16 : 8, seconds },
+            preview: sonarc ? undefined : { kind: 'audio', wav: wav(pcm.subarray(0, written), rate, channels), sampleRate: rate, channels, bits: sixteen ? 16 : 8, seconds },
             // Anything after the last chunk (or from a chunk without its marker) isn't sound; the usual checks look at it.
             end: at,
             warnings,

@@ -113,7 +113,13 @@ const parser: FormatParser = {
 
         const headerFields: Field[] = [
             field('File size', 0, 2, bytesLabel(fileSize), 'Not counting these two bytes.'),
-            field('Compression', 2, 2, compression, `${method}. 0: none, 1: LZW 12-bit, 2: LZW 14-bit, 3: RLE, 4: LCW.`),
+            field(
+                'Compression',
+                2,
+                2,
+                compression,
+                `${method}. 0: none, 1: LZW 12-bit, 2: LZW 14-bit, 3: RLE, 4: LCW. TD's own code (Uncompress_Data) unpacks only 0 and 4; the others are Dune II's and the Amiga's.`
+            ),
             field(
                 'Decoded size',
                 4,

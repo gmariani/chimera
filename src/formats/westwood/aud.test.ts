@@ -29,6 +29,18 @@ const samples = (c: AudioClip) => {
 };
 
 describe('Westwood AUD', () => {
+    it("reads a Sonarc file's chunks, but doesn't play it", () => {
+        // Compression 33: listed by Westwood's sound library (SOUNDINT.H), its decoder never released.
+        const data = build(33, 2, [[[1, 2, 3, 4], 8]], { rate: 22050 });
+        expect(detect(data, null).id).toBe('aud');
+        const r = parse(data);
+        expect(r.warnings).toEqual(["It's compressed with Sonarc (33), which Westwood's sound library lists but whose decoder was never released, so it can't be played. Its chunks are still read."]);
+        expect(r.preview).toBeUndefined();
+        expect(r.summary).toContainEqual(['Compression', 'Sonarc']);
+        expect(r.summary).toContainEqual(['Format', '22,050 Hz, mono, 16-bit']);
+        expect(r.fields[1].children!.length).toBe(1);
+    });
+
     it('reads compression 0: plain 8-bit PCM, in chunks', () => {
         const data = build(
             0,

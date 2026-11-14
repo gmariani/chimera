@@ -8,7 +8,16 @@ import { expandPalette } from './vga';
 /**
  * Tiberian Dawn / Red Alert sprites. Every frame is the same size; each is
  * either LCW-compressed whole, or a format 40 delta against an earlier frame.
+ *
+ * The header's X and Y are scratch space for the game (Build_Frame in TD's
+ * KEYFRAME.CPP): the Windows version writes 56789 into X once it starts keeping
+ * a sprite's frames unpacked, and the sprite's slot in that cache into Y. A
+ * file has 0 there; one with 56789 in X is taken as already cached, and Y as a
+ * slot, unchecked.
  */
+
+/** What TD95 writes into X once it caches a sprite's frames (UNCOMPRESS_MAGIC_NUMBER in KEYFRAME.CPP). */
+const CACHED = 56789;
 
 const FORMAT_NAMES: Record<number, string> = {
     [SHP_FORMAT_LCW]: 'LCW (a whole frame)',
@@ -25,6 +34,10 @@ const parser: FormatParser = {
         const flags = b.u16(12);
 
         const { headers, palette: embedded, frames, warnings } = decodeShp(data);
+        if (b.u16(2) === CACHED)
+            warnings.push(
+                `X is ${CACHED}, the number the Windows version of the game writes there once it has cached a sprite's frames. It would take this sprite as cached already, and use Y (${b.u16(4)}) as its slot in the cache without checking it: the game would read through whatever that slot holds.`
+            );
         const table = 14 + (count + 2) * 8;
         const frameFields: Field[] = headers.slice(0, count).map((h, i) => {
             const note = (FORMAT_NAMES[h.format] ?? `Unknown format 0x${hex(h.format, 2)}`) + (h.keyframe >= 0 ? ` (frame ${h.keyframe + 1})` : '');
@@ -59,8 +72,8 @@ const parser: FormatParser = {
                     length: 14,
                     children: [
                         field('Frame count', 0, 2, count),
-                        field('X', 2, 2, b.u16(2), 'Usually 0.'),
-                        field('Y', 4, 2, b.u16(4), 'Usually 0.'),
+                        field('X', 2, 2, b.u16(2), `Scratch space for the game: 0 in a file; the Windows version writes ${CACHED} here once it caches the sprite's frames.`),
+                        field('Y', 4, 2, b.u16(4), "Scratch space for the game: 0 in a file; the Windows version keeps the sprite's slot in its frame cache here."),
                         field('Width', 6, 2, width),
                         field('Height', 8, 2, height),
                         field('Largest frame', 10, 2, bytesLabel(b.u16(10)), 'The size of the biggest compressed frame: the buffer the game needs.'),

@@ -4,6 +4,7 @@ import { detect } from '../index';
 import font from './font';
 import lut from './lut';
 import mapTd from './map-td';
+import shpTd from './shp-td';
 import strings from './strings';
 import ini from '../ini';
 import { unpackSection } from './map';
@@ -82,6 +83,29 @@ describe('tile sets', () => {
 });
 
 describe('WSA', () => {
+    /** A 2 × 1 animation of one frame (XORing [3, 4] in), with these flags. */
+    const oneFrame = (flags: number) => {
+        const delta = [0x02, 3, 4, 0x80, 0, 0];
+        const frame = [0x80 | delta.length, ...delta, 0x80];
+        const table = 14 + 3 * 4;
+        return bytes(table + frame.length, (v, b) => {
+            v.setUint16(0, 1, true);
+            v.setUint16(6, 2, true);
+            v.setUint16(8, 1, true);
+            v.setUint16(10, 16, true);
+            v.setUint16(12, flags, true);
+            v.setUint32(14, table, true);
+            v.setUint32(18, table + frame.length, true);
+            b.set(frame, table);
+        });
+    };
+
+    it('says when the first frame is a delta over a picture from elsewhere (flag 2)', () => {
+        const parsed = wsa.parse(oneFrame(2), context());
+        expect(parsed.warnings).toEqual([]);
+        expect(parsed.summary).toContainEqual(['First frame', 'A delta over a picture from elsewhere, which the game has on screen (shown here over a blank screen)']);
+    });
+
     it('applies each frame as a delta on the one before', () => {
         // 2×1 pixels, 2 frames. Frame 1 XORs [3, 4] in; frame 2 XORs [1, 1]. Each is LCW around a format 40 delta.
         const delta1 = [0x02, 3, 4, 0x80, 0, 0];
@@ -104,6 +128,28 @@ describe('WSA', () => {
         expect(images(wsa.parse(data, context()).preview).frames.map((f) => [...f.pixels])).toEqual([
             [3, 4],
             [2, 5],
+        ]);
+    });
+});
+
+describe('TD/RA SHP', () => {
+    it("says when X holds the game's cached-sprite marker", () => {
+        // One 1 × 1 frame, LCW-compressed whole; X is 56789 and Y 7, as the Windows game writes them once it caches a sprite.
+        const frame = [0x81, 5, 0x80];
+        const table = 14 + 3 * 8;
+        const data = bytes(table + frame.length, (v, b) => {
+            v.setUint16(0, 1, true);
+            v.setUint16(2, 56789, true);
+            v.setUint16(4, 7, true);
+            v.setUint16(6, 1, true);
+            v.setUint16(8, 1, true);
+            v.setUint16(10, frame.length, true);
+            v.setUint32(14, table | (0x80 << 24), true);
+            v.setUint32(22, table + frame.length, true);
+            b.set(frame, table);
+        });
+        expect(shpTd.parse(data, context()).warnings).toEqual([
+            "X is 56789, the number the Windows version of the game writes there once it has cached a sprite's frames. It would take this sprite as cached already, and use Y (7) as its slot in the cache without checking it: the game would read through whatever that slot holds.",
         ]);
     });
 });

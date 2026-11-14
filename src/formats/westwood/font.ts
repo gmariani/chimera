@@ -84,7 +84,7 @@ const parser: FormatParser = {
                     offset: info,
                     length: 6,
                     children: [
-                        field('Unknown', info, 3),
+                        field('Unknown', info, 3, undefined, 'TD reads nothing here: its font code and its text printer (SET_FONT.CPP, TXTPRNT.ASM) read only the largest height and width.'),
                         field('Last character', info + 3, 1, b.u8(info + 3)),
                         field('Largest height', info + 4, 1, maxHeight),
                         field('Largest width', info + 5, 1, maxWidth),

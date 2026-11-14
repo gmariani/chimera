@@ -10,6 +10,9 @@ import { expandPalette } from './vga';
  * before, LCW-compressed. A missing first frame means the animation carries on
  * from the last frame of the one before it (Dune II's INTRO8A, B and C); an
  * extra frame at the end takes the last one back to the first, for looping.
+ * Flag 2 (WSA_FRAME_0_IS_DELTA in Westwood's WSA.CPP) says the first frame is a
+ * delta over a picture of its own, which Westwood's ANIMATE tool made from an
+ * .LBM and an .ANM; the game draws it over what's on screen.
  * See https://moddingwiki.shikadi.net/wiki/Westwood_WSA_Format.
  */
 
@@ -25,6 +28,9 @@ const parser: FormatParser = {
         const b = new Bytes(data);
         const warnings: string[] = [];
         const paletteAt = tableEnd;
+        const flags = h.flags >= 0 ? b.u16(h.flags) : 0;
+        // Flag 2: the first frame is a delta over a picture from elsewhere, not over a blank screen.
+        const overPicture = (flags & 2) !== 0;
 
         const screen = new Uint8Array(width * height);
         // What the game has room for, and a byte over so a delta that wants more shows.
@@ -58,7 +64,7 @@ const parser: FormatParser = {
                     start,
                     end - start,
                     bytesLabel(end - start),
-                    `LCW, then a format 40 delta of ${bytesLabel(size)} against ${i ? `frame ${i}` : offsets[0] ? 'a blank screen' : 'the screen'}.`
+                    `LCW, then a format 40 delta of ${bytesLabel(size)} against ${i ? `frame ${i}` : overPicture ? 'the picture it was made over' : offsets[0] ? 'a blank screen' : 'the screen'}.`
                 )
             );
         }
@@ -102,7 +108,16 @@ const parser: FormatParser = {
         headerFields.push(
             field('Largest delta', h.delta, 2, bytesLabel(largest), `The game sets aside this plus ${SLACK} bytes to decompress a frame into. The largest here is ${bytesLabel(biggest)}.`)
         );
-        if (h.flags >= 0) headerFields.push(field('Flags', h.flags, 2, b.u16(h.flags), '1: a palette follows the offsets.'));
+        if (h.flags >= 0)
+            headerFields.push(
+                field(
+                    'Flags',
+                    h.flags,
+                    2,
+                    flags,
+                    '1: a palette follows the offsets. 2: the first frame is a delta over a picture from elsewhere (made from an .LBM by Westwood’s ANIMATE), not over a blank screen.'
+                )
+            );
 
         return {
             title: 'Animation (WSA)',
@@ -112,6 +127,9 @@ const parser: FormatParser = {
                 ['Size', `${width} × ${height}${x || y ? ` at ${x}, ${y}` : ''}`],
                 ['Palette', hasPalette ? 'Included' : 'Uses the game palette'],
                 ...(offsets[0] === 0 ? [['First frame', 'Missing: it carries on from the animation before (shown here over a blank screen)'] as [string, string]] : []),
+                ...(offsets[0] !== 0 && overPicture
+                    ? [['First frame', 'A delta over a picture from elsewhere, which the game has on screen (shown here over a blank screen)'] as [string, string]]
+                    : []),
             ],
             fields: [
                 { name: 'Header', offset: 0, length: h.size, value: h.name, children: headerFields },
