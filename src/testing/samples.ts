@@ -908,6 +908,27 @@ export function tdRecording(): Uint8Array {
     );
 }
 
+/**
+ * An HMI SOS driver library (HMIDRV.386's layout, from SOS.H): a 44-byte header (a name, the driver count, where the
+ * first driver is, the file's size cut to 16 bits), then each driver's 48-byte header (its name, its size plus 92, its
+ * size, the device's ID, the DOS extender) and its code, which starts with a jump past a banner ending in 0x1A and the
+ * device's name. These drivers' code is only that jump and a RET.
+ */
+export function sosLibrary(): Uint8Array {
+    const driver = (name: string, device: number, extender: number, banner: string, deviceName: string) => {
+        const body = [...text(`  ${banner}\r\n`), 0x1a, ...text(deviceName), 0];
+        const code = [0xe9, ...u32(body.length), ...body, 0xc3];
+        const field = [...text(name), ...new Array(32 - name.length).fill(0)];
+        return [...field, ...u32(code.length + 92), ...u32(code.length), ...u32(device), ...u32(extender), ...code];
+    };
+    const drivers = [
+        driver('sbdrv.com', 0xe000, 0x4000, 'HMI DMA Driver For Sound Blaster', 'Sound Blaster 8 Mono'),
+        driver('sbdrvw.com', 0xe000, 0x8000, 'HMI DMA Driver For Sound Blaster', 'Sound Blaster 8 Mono'),
+    ];
+    const size = 44 + drivers.reduce((n, d) => n + d.length, 0);
+    return bytes([...text('3'), ...new Array(31).fill(0)], u32(drivers.length), u32(44), u32(size & 0xffff), ...drivers);
+}
+
 // The list
 
 /** Every sample, in the order they're listed. */
@@ -994,6 +1015,7 @@ export function samples(): Sample[] {
         { name: 'strings-dos.ger', format: 'strings', about: 'C&C-style string table, plain, with accented letters in DOS characters', data: stringTable(false) },
         { name: 'record.bin', format: 'recording-td', about: 'TD recorded game: a power plant built and placed, an infantryman sent across', data: tdRecording() },
         { name: 'map-td.bin', format: 'map-td', about: 'TD map terrain: clear around the edges, a road with a bend and a ford, rough ground, boulders', data: tdMap() },
+        { name: 'hmidrv.386', format: 'sos', about: 'HMI SOS sound driver library: two Sound Blaster drivers, for each DOS extender', data: sosLibrary() },
         { name: 'palette.pal', format: 'pal', about: 'VGA palette: the 16 EGA colors, then a gray ramp', data: palette6() },
         { name: 'dune.cfg', format: 'dune2-cfg', about: 'Dune II settings: MT-32 music, AdLib effects, Sound Blaster Pro voices, in German', data: duneCfg() },
         { name: 'options.cfg', format: 'dune2-options', about: 'Dune II game options, the game’s defaults', data: duneOptions() },
