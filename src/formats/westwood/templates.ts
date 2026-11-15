@@ -75,6 +75,13 @@ function table(text: string, sized: boolean): Template[] {
 export const TD_TEMPLATES = table(TD, true);
 export const RA_TEMPLATES = table(RA, false);
 
+/** How many tiles a TD template has, from its size; template 0 (clear) has 16, the game picking one by the cell's place. */
+export function tdTileCount(id: number): number | null {
+    if (id === 0) return 16;
+    const t = TD_TEMPLATES[id];
+    return t?.width && t.height ? t.width * t.height : null;
+}
+
 /** The file extension each theater's tile sets use. */
 export const THEATER_EXTENSIONS: Record<'td' | 'ra', Record<string, string>> = {
     td: { D: 'des', J: 'jun', T: 'tem', W: 'win' },

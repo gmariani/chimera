@@ -1,6 +1,7 @@
 import { Bytes } from '../../core/bytes';
 import { westwoodRle } from './compression';
 import { pakLayout } from './pak-layout';
+import { tdTileCount } from './templates';
 
 /**
  * Cheap checks for Westwood's asset formats. These run on every file inside an
@@ -261,27 +262,42 @@ export function sniffTiles(data: Uint8Array): boolean {
     return tilesLayout(data) !== null;
 }
 
-/** TD defines templates 0 to 215 (TemplateType in its DEFINES.H). */
-const TD_TEMPLATE_COUNT = 216;
+/** A TD map grid's size: 64 × 64 cells, 2 bytes each. */
+const TD_MAP_BYTES = 64 * 64 * 2;
 
 /**
  * TD map grids: 64 × 64 cells of template and tile; 0xFF (or template 0) is
- * clear ground. Every cell's template must be one TD has, or clear, and some of
- * the grid must be clear: the cells outside the playable area are, in all 98
- * maps the games ship (2,033 at the least), where plain text has no 0xFF bytes
- * to give. Which tile of its template a cell names is left to the reader, which
- * says when one is out of range: SCB07EC.BIN, a Nod mission, has the text
- * "0,,Mar" written over three cells outside its playable area.
+ * clear ground. Every cell's template must be one TD has, or clear. Then
+ * either some of the grid is 0xFF, or every cell names a tile its template has.
+ *
+ * - Westwood's maps clear the cells outside the playable area with 0xFF (all 98
+ *   the games ship, 2,033 cells at the least), where plain text has none to
+ *   give. Which tile a cell names is then left to the reader, which says when
+ *   one is out of range: SCB07EC.BIN, a Nod mission, has the text "0,,Mar"
+ *   written over three cells outside its playable area.
+ * - Maps from the Remastered Collection's editor (its COMMUNITY folder) clear
+ *   them with template 0 instead, and may have no 0xFF at all; every one of
+ *   their tiles fits. Text can't pass that (its bytes name tiles 32 and up; no
+ *   template has more than 48), and some cell has to be terrain other than
+ *   clear, so a file of zeros isn't taken for a map.
  */
 export function sniffMapTd(data: Uint8Array): boolean {
-    if (data.length !== 8192) return false;
-    let clear = false;
+    if (data.length !== TD_MAP_BYTES) return false;
+    let ff = false;
+    let fits = true;
+    let terrain = false;
     for (let i = 0; i < data.length; i += 2) {
         const template = data[i];
-        if (template === 0xff) clear = true;
-        else if (template >= TD_TEMPLATE_COUNT) return false;
+        if (template === 0xff) {
+            ff = true;
+            continue;
+        }
+        const count = tdTileCount(template);
+        if (count === null) return false;
+        if (data[i + 1] >= count) fits = false;
+        if (template !== 0) terrain = true;
     }
-    return clear;
+    return ff || (fits && terrain);
 }
 
 /**

@@ -1,5 +1,9 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Preview } from '../../core/types';
+import { gameDir } from '../../testing/game-data';
+import { tdMap } from '../../testing/samples';
 import { detect } from '../index';
 import font from './font';
 import lut from './lut';
@@ -317,10 +321,36 @@ describe('maps with real tiles', () => {
     });
 
     it("doesn't take text of a map's size for a map", () => {
-        // Text's bytes are all below 216, so each could be a template; but text has no clear cells (0xFF).
+        // Text's bytes are all below 216, so each could be a template; but text has no clear cells (0xFF), and its
+        // bytes name tiles 32 and up, more than any template has.
         const text = new TextEncoder().encode('[Basic]\nName=Not a map\n'.repeat(400)).subarray(0, 8192);
         expect(text.length).toBe(8192);
         expect(detect(text, 'notes.bin').id).not.toBe('map-td');
+    });
+
+    it('takes a map cleared with template 0, as the Remastered editor saves them, when every tile fits', () => {
+        // The sample, with its 0xFF cells made template 0 (their tile bytes are 0 already).
+        const bin = tdMap().map((v) => (v === 0xff ? 0 : v));
+        expect(detect(bin, 'scmc1ea.bin').id).toBe('map-td');
+        expect(mapTd.parse(bin, { name: 'scmc1ea.bin', names: [] }).warnings).toEqual([]);
+        // One tile its template doesn't have, and with no 0xFF to go on, it isn't taken.
+        const off = bin.slice();
+        off[(30 * 64 + 12) * 2 + 1] = 8; // D10 has 8 tiles: 0 to 7.
+        expect(detect(off, 'scmc1ea.bin').id).not.toBe('map-td');
+        // Nor is a file of zeros: all clear, nothing that says it's a map.
+        expect(detect(new Uint8Array(8192), 'scmc1ea.bin').id).not.toBe('map-td');
+    });
+
+    const community = join(gameDir('cncRemastered') ?? '', 'TIBERIAN_DAWN/COMMUNITY');
+    it.skipIf(!existsSync(community))('reads the Remastered Collection’s community maps, some of which have no 0xFF cells', () => {
+        for (const n of [0, 1, 2, 3, 4, 5, 6]) {
+            const name = `SCMC${n}EA.BIN`;
+            const bin = new Uint8Array(readFileSync(join(community, name)));
+            expect(detect(bin, name).id, name).toBe('map-td');
+            const ini = new Uint8Array(readFileSync(join(community, `SCMC${n}EA.INI`)));
+            const parsed = mapTd.parse(bin, { name, names: [], find: (f) => (f.toUpperCase() === `SCMC${n}EA.INI` ? [{ data: ini, source: 'COMMUNITY' }] : []) });
+            expect(parsed.warnings, name).toEqual([]);
+        }
     });
 
     it("says which archive would draw it when the tiles aren't open", () => {

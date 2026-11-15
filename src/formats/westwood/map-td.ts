@@ -3,7 +3,7 @@ import type { FormatParser } from '../../core/types';
 import { Ini } from '../ini-sections';
 import { Links } from '../links';
 import { missionPreviews, tdMission, TD_SIZE } from './map';
-import { TD_TEMPLATES } from './templates';
+import { TD_TEMPLATES, tdTileCount } from './templates';
 
 /**
  * TD map terrain (.bin, next to the mission's .ini): 64 × 64 cells, row by
@@ -18,20 +18,13 @@ import { TD_TEMPLATES } from './templates';
  * cells outside the playable area.
  */
 
-/** How many tiles a template has, from its size; template 0 (clear) has 16, the game picking one by the cell's place. */
-function tileCount(id: number): number | null {
-    if (id === 0) return 16;
-    const t = TD_TEMPLATES[id];
-    return t?.width && t.height ? t.width * t.height : null;
-}
-
 /** The cells that name a template TD doesn't have, or a tile their template doesn't have. */
 function badCells(data: Uint8Array): number[] {
     const bad: number[] = [];
     for (let cell = 0; cell < TD_SIZE * TD_SIZE; cell++) {
         const id = data[cell * 2];
         if (id === 0xff) continue;
-        const count = tileCount(id);
+        const count = tdTileCount(id);
         if (count === null || data[cell * 2 + 1] >= count) bad.push(cell);
     }
     return bad;
@@ -39,7 +32,7 @@ function badCells(data: Uint8Array): number[] {
 
 /** A cell's template and tile, as a person reads them. */
 function describe(id: number, tile: number): string {
-    const count = tileCount(id);
+    const count = tdTileCount(id);
     const name = TD_TEMPLATES[id]?.name ?? `Template ${id}`;
     if (count === null) return `${name} (not a template TD has), tile ${tile}`;
     return tile >= count ? `${name}, tile ${tile}: not one of its ${count} tiles` : `${name}, tile ${tile}`;
