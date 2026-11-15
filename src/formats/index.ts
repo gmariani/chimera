@@ -56,6 +56,7 @@ import {
     sniffVxl,
     sniffWav,
     sniffVqp,
+    sniffBlendTable,
     sniffWsa,
 } from './westwood/sniff';
 
@@ -151,6 +152,7 @@ export const FORMATS: FormatDescriptor[] = [
     // 256 bytes of anything: there's nothing to recognize it by but its name.
     { id: 'gray-remap', name: 'Color remap table (Dune II TBL)', extensions: ['tbl'], sniff: () => false, companions: true, load: parserOf(() => import('./westwood/gray-remap')) },
     { id: 'mrf', name: 'Color remap tables', extensions: ['mrf'], sniff: () => false, load: parserOf(() => import('./westwood/mrf')) },
+    { id: 'blend-table', name: 'Palette blending table (TD)', extensions: ['pal'], sniff: sniffBlendTable, byNameAlone: false, load: parserOf(() => import('./westwood/blend-table')) },
     { id: 'pal', name: 'Palette', extensions: ['pal'], sniff: sniffPal, load: parserOf(() => import('./westwood/pal')) },
     // Dune 2000's missions are .map too, so the name alone says nothing.
     { id: 'icon-map', name: 'Map tile groups (Dune II ICON.MAP)', extensions: ['map'], sniff: sniffIconMap, byNameAlone: false, companions: true, load: parserOf(() => import('./westwood/icon-map')) },

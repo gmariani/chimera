@@ -909,6 +909,32 @@ export function tdRecording(): Uint8Array {
 }
 
 /**
+ * A TD palette blending table, made as the game makes one (Create_Palette_Interpolation_Table in INTERPAL.CPP): the
+ * palette brightened by 30% and capped at 63, then for each pair of colors the first color nearest the halfway point.
+ * The cap makes the top of palette6()'s gray ramp one color, so those blend as the first of them.
+ */
+export function blendTable(palette = palette6()): Uint8Array {
+    const p = palette.map((v) => Math.min(63, v + Math.floor((v * 30) / 100)));
+    const table = new Uint8Array(256 * 256);
+    for (let a = 0; a < 256; a++) {
+        for (let b = 0; b < 256; b++) {
+            const half = [0, 1, 2].map((c) => (p[a * 3 + c] + p[b * 3 + c]) >> 1);
+            let best = 0;
+            let bestDistance = 500000;
+            for (let k = 0; k < 256; k++) {
+                const d = (p[k * 3] - half[0]) ** 2 + (p[k * 3 + 1] - half[1]) ** 2 + (p[k * 3 + 2] - half[2]) ** 2;
+                if (d < bestDistance) {
+                    bestDistance = d;
+                    best = k;
+                }
+            }
+            table[a * 256 + b] = best;
+        }
+    }
+    return table;
+}
+
+/**
  * An HMI SOS driver library (HMIDRV.386's layout, from SOS.H): a 44-byte header (a name, the driver count, where the
  * first driver is, the file's size cut to 16 bits), then each driver's 48-byte header (its name, its size plus 92, its
  * size, the device's ID, the DOS extender) and its code, which starts with a jump past a banner ending in 0x1A and the
@@ -1015,6 +1041,7 @@ export function samples(): Sample[] {
         { name: 'strings-dos.ger', format: 'strings', about: 'C&C-style string table, plain, with accented letters in DOS characters', data: stringTable(false) },
         { name: 'record.bin', format: 'recording-td', about: 'TD recorded game: a power plant built and placed, an infantryman sent across', data: tdRecording() },
         { name: 'map-td.bin', format: 'map-td', about: 'TD map terrain: clear around the edges, a road with a bend and a ford, rough ground, boulders', data: tdMap() },
+        { name: 'sides.pal', format: 'blend-table', about: 'TD palette blending table, made from the EGA colors and a gray ramp as the game makes them', data: blendTable() },
         { name: 'hmidrv.386', format: 'sos', about: 'HMI SOS sound driver library: two Sound Blaster drivers, for each DOS extender', data: sosLibrary() },
         { name: 'palette.pal', format: 'pal', about: 'VGA palette: the 16 EGA colors, then a gray ramp', data: palette6() },
         { name: 'dune.cfg', format: 'dune2-cfg', about: 'Dune II settings: MT-32 music, AdLib effects, Sound Blaster Pro voices, in German', data: duneCfg() },

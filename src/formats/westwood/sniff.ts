@@ -425,6 +425,24 @@ export function sniffVqp(data: Uint8Array): boolean {
     return count > 0 && count < 256 && data.length === 4 + count * VQP_TABLE;
 }
 
+/** A TD blending table's size: a color for each pair of 256 colors. */
+export const BLEND_TABLE = 256 * 256;
+
+/**
+ * TD's blending tables (.pal, 64 KB): the color halfway between each pair of colors, as a 256 × 256 grid. The blend of
+ * a and b is the blend of b and a, so the grid is the same flipped across its diagonal (all 32,640 pairs, in every
+ * table the game ships), which no other file of this size is by chance. A color blended with itself is itself, or a
+ * lower color that's the same (the search keeps the first match). One color everywhere (a file of zeros) blends nothing.
+ */
+export function sniffBlendTable(data: Uint8Array): boolean {
+    if (data.length !== BLEND_TABLE) return false;
+    for (let a = 0; a < 256; a++) {
+        if (data[a * 257] > a) return false;
+        for (let b = 0; b < a; b++) if (data[a * 256 + b] !== data[b * 256 + a]) return false;
+    }
+    return data.some((v) => v !== data[0]);
+}
+
 /** Mostly printable bytes and no NULs: INI files, mission scripts, credits. */
 export function sniffText(data: Uint8Array): boolean {
     if (data.length === 0) return false;

@@ -53,6 +53,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | Color remap tables (TD .mrf) | each table | the palette through each table | PNG |
 | Chronal vortex frames (RA .lut) | every pixel | warp and shading | PNG |
 | VQP palette blending tables | tables | first table | — |
+| TD palette blending tables (the 64 KB .pal files in UPDATE.MIX, for drawing screens at twice the size) | each color's row; where the game uses it; colors the palette it was made from repeats; pairs that blend differently by which comes first | the table as a picture, in the palette picked | — |
 | INI files | sections and entries | text; for rules.ini, a table of every unit and building (name, cost, strength, art) linking to its sprite or voxel model | — |
 | XCC local mix database | names | list | — |
 | JPEG pictures (baseline, extended, progressive; JFIF, EXIF, XMP, ICC, Adobe and other APPn segments) | every segment to the T.81 parameters, EXIF tags | image | PNG, EXIF and JFIF thumbnails |
