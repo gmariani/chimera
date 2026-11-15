@@ -2,6 +2,7 @@ import { Bytes, bytesLabel, field, hex } from '../core/bytes';
 import { checkCount } from '../core/limits';
 import { minOf } from '../core/math';
 import type { Entry, Field, FormatParser, Preview } from '../core/types';
+import { debugInfo } from './debug-info';
 import { decodeDib } from './dib';
 import { neOffset } from './ne-sniff';
 
@@ -361,6 +362,15 @@ const parser: FormatParser = {
         // Real modules have these (DUNE2.ICO keeps a stale copy of a resource entry behind its table), so they're said, not warned
         // about; they're in the structure as "Not pointed to", where anything hidden in them can be seen.
 
+        // Past everything the module points to is nothing it has (installers append their payload there), except the linker's debug info.
+        let end = Math.min(data.length, Math.max(covered, lastEnd));
+        const debug = debugInfo(data, end);
+        if (debug && 'problem' in debug) warnings.push(debug.problem);
+        else if (debug) {
+            filled.push(...debug.fields);
+            end = debug.end;
+        }
+
         // Windows' own types read in lower case ("2 icons"); a module's named types keep theirs ("1 OEMBIN").
         const counts = new Map<string, number>();
         for (const r of resources) {
@@ -381,14 +391,15 @@ const parser: FormatParser = {
                 ['For', `${OS[os] ?? `system ${os}`}${os === 2 ? (data[ne + 0x3f] ? ` ${data[ne + 0x3f]}.${data[ne + 0x3e].toString().padStart(2, '0')}` : ' (no version given)') : ''}`],
                 ['Code', codeless ? 'None: it holds only resources, and can’t run' : `${segments.filter((s) => !s.data).length} code and ${segments.filter((s) => s.data).length} data segments`],
                 ...(imports.length ? [['Imports from', imports.join(', ')] as [string, string]] : []),
+                ...(debug && !('problem' in debug) ? [['Debug info', debug.summary] as [string, string]] : []),
                 ...(stray ? [['Not pointed to', `${bytesLabel(stray)} between the parts aren’t padding, and nothing in the module points to them`] as [string, string]] : []),
                 ['Resources', [...counts].map(([t, n]) => `${n} ${t}${n === 1 || t !== t.toLowerCase() ? '' : 's'}`).join(', ') || 'none'],
             ],
             fields: filled,
             entries,
             preview: items.length ? (items.length === 1 ? items[0].preview : { kind: 'stack', items }) : undefined,
-            // Past everything the module points to is nothing it has (installers append their payload there); the usual checks look at it.
-            end: Math.min(data.length, Math.max(covered, lastEnd)),
+            // Anything after is the usual checks' to look at.
+            end,
             warnings,
         };
     },
