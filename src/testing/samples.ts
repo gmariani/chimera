@@ -63,6 +63,55 @@ export function palette6(): Uint8Array {
     return p;
 }
 
+/** A test pattern for bitmaps: the color of pixel (x, y), as RGB, the same whatever the bits a pixel. */
+export function bitmapColor(bits: 4 | 8 | 24, x: number, y: number): [number, number, number] {
+    if (bits === 24) return [x * 7, y * 20, (x * y) & 255];
+    const index = bits === 4 ? (x + y) & 15 : (x + y * 3) & 255;
+    const p = palette6();
+    return [p[index * 3] << 2, p[index * 3 + 1] << 2, p[index * 3 + 2] << 2];
+}
+
+/**
+ * A Windows bitmap (.bmp) of bitmapColor's pattern, 33 × 10 so each row needs padding: for 4 and 8 bits a pixel with
+ * palette6's colors (16 of them, or all 256), bottom row first; for 24, top row first (a negative height). `pad` adds
+ * the zeros some Windows programs write after the pixels to round the file to a multiple of 4.
+ */
+export function bitmap(bits: 4 | 8 | 24, { pad = false }: { pad?: boolean } = {}): Uint8Array {
+    const [width, height] = [33, 10];
+    const colors = bits === 24 ? 0 : 1 << bits;
+    const stride = ((width * bits + 31) >> 5) * 4;
+    const offset = 14 + 40 + colors * 4;
+    const pixels = stride * height;
+    const unpadded = offset + pixels;
+    const length = pad ? (unpadded + 3) & ~3 : unpadded;
+    const out = new Uint8Array(length);
+    const v = new DataView(out.buffer);
+    out.set([0x42, 0x4d]);
+    v.setUint32(2, length, true);
+    v.setUint32(10, offset, true);
+    v.setUint32(14, 40, true);
+    v.setInt32(18, width, true);
+    v.setInt32(22, bits === 24 ? -height : height, true);
+    v.setUint16(26, 1, true);
+    v.setUint16(28, bits, true);
+    v.setUint32(34, pixels, true);
+    v.setInt32(38, 2835, true);
+    v.setInt32(42, 2835, true);
+    const p = palette6();
+    for (let i = 0; i < colors; i++) out.set([p[i * 3 + 2] << 2, p[i * 3 + 1] << 2, p[i * 3] << 2, 0], 54 + i * 4);
+    for (let y = 0; y < height; y++) {
+        const row = offset + (bits === 24 ? y : height - 1 - y) * stride;
+        for (let x = 0; x < width; x++) {
+            if (bits === 24) {
+                const [r, g, b] = bitmapColor(24, x, y);
+                out.set([b, g, r], row + x * 3);
+            } else if (bits === 8) out[row + x] = (x + y * 3) & 255;
+            else out[row + (x >> 1)] |= ((x + y) & 15) << (x & 1 ? 0 : 4);
+        }
+    }
+    return out;
+}
+
 /**
  * A Miles AIL 2 digital sound driver as Miles laid them out (DMASOUND.ASM): where the function table is, the copyright
  * ending in 0x1A, the table (ending 0xFFFF), the description table and its device names, then the code: here each
@@ -1047,6 +1096,9 @@ export function samples(): Sample[] {
         { name: 'dune.cfg', format: 'dune2-cfg', about: 'Dune II settings: MT-32 music, AdLib effects, Sound Blaster Pro voices, in German', data: duneCfg() },
         { name: 'options.cfg', format: 'dune2-options', about: 'Dune II game options, the game’s defaults', data: duneOptions() },
         { name: 'grayrmap.tbl', format: 'gray-remap', about: 'Dune II-style gray remap for palette.pal: each EGA color to the gray of its brightness', data: grayRemap() },
+        { name: 'bmp-8.bmp', format: 'bmp', about: 'Windows bitmap: 256 colors, bottom row first, padded at the end as Paint pads them', data: bitmap(8, { pad: true }) },
+        { name: 'bmp-4.bmp', format: 'bmp', about: 'Windows bitmap: 16 colors, two pixels a byte', data: bitmap(4) },
+        { name: 'bmp-24.bmp', format: 'bmp', about: 'Windows bitmap: 24-bit, top row first (a negative height)', data: bitmap(24) },
         { name: 'png-rgb.png', format: 'png', about: 'PNG picture: RGB, a color wheel of sorts', data: png(64, 64, (x, y) => [x * 4, y * 4, 255 - (x + y) * 2]) },
     ];
     const byName = (name: string) => out.find((s) => s.name === name)!.data;

@@ -90,6 +90,7 @@ function lower(data: Uint8Array, at: number, text: string): boolean {
 export function signature(data: Uint8Array): Signature | null {
     // Formats read here.
     if (ascii(data, 0, 'GIF')) return { name: 'GIF picture', ext: 'gif', format: 'gif', length: ascii(data, 3, '87a') || ascii(data, 3, '89a') ? 6 : 3 };
+    if (ascii(data, 0, 'BM') && data.length >= 26 && [12, 40, 52, 56, 108, 124].includes(u32le(data, 14))) return { name: 'BMP picture', ext: 'bmp', exts: ['bmp', 'dib'], format: 'bmp', length: 2 };
     if (bytes(data, 0, [0x89, 0x50, 0x4e, 0x47])) return { name: 'PNG picture', ext: 'png', format: 'png', length: 4 };
     if (bytes(data, 0, [0xff, 0xd8, 0xff])) return { name: 'JPEG picture', ext: 'jpg', exts: ['jpg', 'jpeg', 'jpe', 'jfif'], format: 'jpeg', length: 3 };
     if (ascii(data, 0, 'II*\0') || ascii(data, 0, 'MM\0*')) return { name: 'TIFF picture', ext: 'tif', format: 'tiff', length: 4 };
@@ -162,7 +163,6 @@ export function signature(data: Uint8Array): Signature | null {
     if (ascii(data, 0, '{\\rtf')) return { name: 'RTF document', ext: 'rtf', length: 5 };
     if (ascii(data, 0, 'ITSF')) return { name: 'Compiled help (CHM)', ext: 'chm', length: 4, runs: true };
     if (ascii(data, 0, 'SQLite format 3\0')) return { name: 'SQLite database', ext: 'sqlite', length: 16 };
-    if (ascii(data, 0, 'BM') && data.length >= 26 && u32le(data, 2) === data.length) return { name: 'BMP picture', ext: 'bmp', length: 2 };
     if (ascii(data, 0, 'RIFF') && ascii(data, 8, 'WEBP')) return { name: 'WebP picture', ext: 'webp', length: 12 };
     if (ascii(data, 0, 'RIFF') && ascii(data, 8, 'AVI ')) return { name: 'AVI video', ext: 'avi', length: 12 };
     if (ascii(data, 0, 'FLV\x01')) return { name: 'Flash video (FLV)', ext: 'flv', length: 4 };

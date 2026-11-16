@@ -54,6 +54,9 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `dune.cfg` | Dune II settings: MT-32 music, AdLib effects, Sound Blaster Pro voices, in German | 10 bytes |
 | `options.cfg` | Dune II game options, the game’s defaults | 10 bytes |
 | `grayrmap.tbl` | Dune II-style gray remap for palette.pal: each EGA color to the gray of its brightness | 256 bytes |
+| `bmp-8.bmp` | Windows bitmap: 256 colors, bottom row first, padded at the end as Paint pads them | 1,440 bytes |
+| `bmp-4.bmp` | Windows bitmap: 16 colors, two pixels a byte | 318 bytes |
+| `bmp-24.bmp` | Windows bitmap: 24-bit, top row first (a negative height) | 1,054 bytes |
 | `png-rgb.png` | PNG picture: RGB, a color wheel of sorts | 12,420 bytes |
 | `pak-v1.pak` | Westwood PAK, version 1 (Eye of the Beholder), holding three of these | 66,753 bytes |
 | `pak-v2.pak` | Westwood PAK, version 2 (Dune II), holding three of these | 66,752 bytes |

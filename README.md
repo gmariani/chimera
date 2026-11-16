@@ -58,6 +58,7 @@ A universal file inspector that runs in the browser. Open a file to see how it's
 | XCC local mix database | names | list | — |
 | JPEG pictures (baseline, extended, progressive; JFIF, EXIF, XMP, ICC, Adobe and other APPn segments) | every segment to the T.81 parameters, EXIF tags | image | PNG, EXIF and JFIF thumbnails |
 | TIFF pictures (strips and tiles; none, PackBits, LZW, Deflate, JPEG, CCITT fax; bilevel to CMYK, YCbCr and L\*a\*b\*; DNG, NEF and CR2 previews) | header, every IFD and tag | every page | PNG, embedded JPEGs |
+| BMP pictures (Windows bitmaps, 1 to 32 bits a pixel uncompressed; TS's and RA2's launchers and autorun screens, 00000409.256 and .016) | file and bitmap headers, every color, pixels, the padding Windows programs add; sizes that don't agree, colors past the table, bytes nothing points to called out | image | PNG |
 | PNG pictures (every color type and depth, Adam7) | every chunk, text | image | PNG |
 | GIF pictures and animations (87a, 89a; interlaced, transparency, local color tables, every disposal) | header, screen, color tables, every extension and frame | image; animations play with their own timing | PNG frame, all frames |
 | MP3 and other MPEG audio | ID3 tags, frames | player | MP3 |

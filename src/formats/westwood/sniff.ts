@@ -455,11 +455,23 @@ export function sniffText(data: Uint8Array): boolean {
     return printable / sample.length > 0.95;
 }
 
-/** Text with a [section] line near the top. */
+/**
+ * Text with a [section] line near the top, past any comments it opens with: TS's and RA2's art.ini start with 8 to
+ * 15 kB of them. As the games (and ini-sections.ts) read it, a comment after the header is allowed: "[ROCK] ; Rocketeer".
+ */
 export function sniffIni(data: Uint8Array): boolean {
     if (!sniffText(data)) return false;
-    const head = new TextDecoder('latin1').decode(data.subarray(0, 4096));
-    return /^\s*\[[^\]\r\n]+\]\s*$/m.test(head);
+    let at = 0;
+    while (at < data.length) {
+        let c = at;
+        while (c < data.length && (data[c] === 32 || data[c] === 9 || data[c] === 13)) c++;
+        if (c < data.length && data[c] !== 10 && data[c] !== 0x3b) break;
+        const next = data.indexOf(10, c);
+        if (next < 0) return false;
+        at = next + 1;
+    }
+    const head = new TextDecoder('latin1').decode(data.subarray(at, at + 4096));
+    return /^\s*\[[^\]\r\n]+\][ \t]*(?:;[^\r\n]*)?\s*$/m.test(head);
 }
 
 /**

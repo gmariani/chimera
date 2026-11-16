@@ -29,12 +29,17 @@ export interface DibInfo {
     length: number;
     /** Pixels the mask marks as the screen inverted (drawn see-through here). */
     inverted: number;
+    /** Pixels whose color number is past the end of the color table (drawn black here). */
+    beyond: number;
 }
 
 export type Dib = { info: DibInfo; rgba: Uint8Array } | { problem: string };
 
-/** Decodes a DIB at `at` (at most `length` bytes) to RGBA; `masked` for icons and cursors. */
-export function decodeDib(data: Uint8Array, at: number, length: number, masked: boolean): Dib {
+/**
+ * Decodes a DIB at `at` (at most `length` bytes) to RGBA; `masked` for icons and cursors. `pixelsFrom`, from the DIB's
+ * start, is where its pixels are when something else says so (a .bmp file's header); otherwise right after the colors.
+ */
+export function decodeDib(data: Uint8Array, at: number, length: number, masked: boolean, pixelsFrom?: number): Dib {
     const b = new Bytes(data);
     const end = Math.min(data.length, at + length);
     if (at + 12 > end) return { problem: 'it’s too short for a bitmap header' };
@@ -57,15 +62,20 @@ export function decodeDib(data: Uint8Array, at: number, length: number, masked: 
     const colorsAt = size;
     const stride = ((width * bits + 31) >> 5) * 4;
     const maskStride = ((width + 31) >> 5) * 4;
-    const pixelsAt = colorsAt + colors * entry;
+    if (pixelsFrom !== undefined && pixelsFrom < colorsAt + colors * entry)
+        return { problem: `its pixels are said to start at ${pixelsFrom}, inside its own header and colors (which end at ${colorsAt + colors * entry})` };
+    const pixelsAt = pixelsFrom ?? colorsAt + colors * entry;
     const maskAt = masked ? pixelsAt + stride * height : null;
     const total = (maskAt ?? pixelsAt) + (masked ? maskStride : stride) * height;
     if (at + total > end) return { problem: `its ${width} × ${height} pixels run past the end of the data it’s given` };
 
     const rgba = new Uint8Array(width * height * 4);
+    let beyond = 0;
     const color = (i: number) => {
         const c = at + colorsAt + i * entry;
-        return i < colors ? [data[c + 2], data[c + 1], data[c]] : [0, 0, 0];
+        if (i < colors) return [data[c + 2], data[c + 1], data[c]];
+        beyond++;
+        return [0, 0, 0];
     };
     // 32-bit icons carry alpha; if every pixel's is 0, it's an older one that relies on the mask.
     let alpha = false;
@@ -96,5 +106,5 @@ export function decodeDib(data: Uint8Array, at: number, length: number, masked: 
             rgba.set([rgb[0], rgb[1], rgb[2], a], o);
         }
     }
-    return { info: { width, height, bits, colors, headerSize: size, colorsAt, pixelsAt, maskAt, length: total, inverted }, rgba };
+    return { info: { width, height, bits, colors, headerSize: size, colorsAt, pixelsAt, maskAt, length: total, inverted, beyond }, rgba };
 }

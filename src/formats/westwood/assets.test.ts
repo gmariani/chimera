@@ -201,6 +201,31 @@ describe('PCX', () => {
     });
 });
 
+describe('INI', () => {
+    const text = (s: string) => new TextEncoder().encode(s);
+    it('finds the first section past a long comment at the top, with a comment of its own after it', () => {
+        // As TS's and RA2's art.ini: 8 to 15 kB of comments, then "[ROCK] ; Rocketeer".
+        const comments = '; This file controls the art.\r\n;\r\n'.repeat(400);
+        expect(comments.length).toBeGreaterThan(8192);
+        expect(detect(text(`${comments}\r\n[ROCK] ; Rocketeer\r\nCameo=JJETICON\r\n`), 'art.ini').id).toBe('ini');
+        expect(detect(text('[General]\nName=x\n'), 'a.ini').id).toBe('ini');
+    });
+
+    it('leaves text that only has brackets in it, or nothing but comments, as text', () => {
+        expect(detect(text('; Only comments\r\n; and nothing else\r\n'), 'a.ini').id).toBe('text');
+        expect(detect(text(`${'; note\n'.repeat(2000)}Read me [first] please.\n`), 'a.ini').id).toBe('text');
+        expect(detect(text('[Section] then words\n'), 'a.ini').id).toBe('text');
+    });
+
+    const ts = gameDir('tiberianSun');
+    it.skipIf(!ts || !existsSync(join(ts, 'patch.mix')))('takes TS’s art.ini as INI', async () => {
+        const { default: mix } = await import('../mix/index');
+        const art = mix.parse(new Uint8Array(readFileSync(join(ts!, 'patch.mix'))), context('patch.mix')).entries!.find((e) => e.name?.toLowerCase() === 'art.ini')!;
+        expect(detect(art.data, art.name).id).toBe('ini');
+        expect(ini.parse(art.data, context('art.ini')).summary[0][0]).toBe('Sections');
+    });
+});
+
 describe('RA map packs', () => {
     it('joins LCW blocks of a 4-byte header each', () => {
         // Two blocks: "aaaa" as a fill, then "bc" as literals.
