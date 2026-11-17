@@ -102,6 +102,8 @@ export function signature(data: Uint8Array): Signature | null {
     if (ascii(data, 0, 'ID3')) return { name: 'MP3 sound', ext: 'mp3', format: 'mp3', length: 3 };
     if (ascii(data, 0, 'OTTO') || ascii(data, 0, 'ttcf')) return { name: 'OpenType font', ext: 'otf', exts: ['otf', 'ttc', 'otc', 'ttf'], format: 'sfnt', length: 4 };
     if (bytes(data, 0, [0x13, 0x5d, 0x65, 0x8c])) return { name: 'InstallShield 3 archive', ext: 'z', exts: ['z', 'lib'], format: 'installshield-z', length: 4 };
+    if (bytes(data, 0, [0xb8, 0xc9, 0x0c, 0x00])) return { name: 'InstallShield script', ext: 'ins', format: 'installshield-ins', length: 4 };
+    if (bytes(data, 0, [0x2a, 0xab, 0x79, 0xd8])) return { name: 'InstallShield 3 setup files', ext: 'ex_', format: 'installshield-engine', length: 4 };
     if (ascii(data, 0, 'BIK') || ascii(data, 0, 'KB2')) return { name: 'Bink video', ext: 'bik', format: 'bink', length: 3 };
 
     // Programs.

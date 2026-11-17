@@ -62,4 +62,6 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `pak-v2.pak` | Westwood PAK, version 2 (Dune II), holding three of these | 66,752 bytes |
 | `pak-v3.pak` | Westwood PAK, version 3 (Kyrandia 2 and 3), holding three of these | 66,757 bytes |
 | `installshield.z` | InstallShield 3 archive: two directories, two files imploded and one stored, three of these | 2,504 bytes |
+| `installshield.ins` | InstallShield 3 script: two system strings and two of its own, a number, a structure, a function of its own and one in a DLL, four bytes of code | 198 bytes |
+| `installshield.ex_` | InstallShield 3 setup files: two of these, imploded, each with the second name setup unpacks it as | 1,456 bytes |
 | `installshield.pkg` | InstallShield 3 package list: the files of installshield.z, in its two groups, at their unpacked sizes | 118 bytes |

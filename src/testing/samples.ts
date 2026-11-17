@@ -180,6 +180,106 @@ export function installShieldZ(dirs: { name: string; files: { name: string; data
 }
 
 /**
+ * An InstallShield 3 script (SETUP.INS) laid out as Counterstrike's are: B8 C9 0C 00, version 3.00.065, the sum of
+ * every byte after it, Stirling's notice; how many labels; a size for each string variable (512 for the system's);
+ * the system's string and number variables; the structures; the functions (each `dll` one in a DLL, else the
+ * script's own, its parameters as [type, flags]); 0; the code given; and the compiler's version, its length last.
+ */
+export function installShieldScript({
+    strings = ['SRCDIR', 'TARGETDIR'],
+    own = [0xffff, 200],
+    numbers = ['LAST_RESULT'],
+    ownNumbers = 3,
+    structures = [{ name: 'RECT', members: [[4, 4, 'left'] as [number, number, string]] }],
+    functions = [{ params: [[4, 5]] as [number, number][] }, { dll: ['USER', 'ShowWindow'] as [string, string], returns: 6, params: [[7, 0]] as [number, number][] }],
+    code = [0x2e, 0x00, 0x01, 0x00],
+    compiler = '3.00.076',
+}: {
+    strings?: string[];
+    own?: number[];
+    numbers?: string[];
+    ownNumbers?: number;
+    structures?: { name: string; members: [number, number, string][] }[];
+    functions?: { dll?: [string, string]; returns?: number; params: [number, number][] }[];
+    code?: number[];
+    compiler?: string;
+} = {}): Uint8Array {
+    const bytes: number[] = [0xb8, 0xc9, 0x0c, 0x00, 0x16, 0x00, 0x34, 0x12, 0, 0, 0, 0];
+    const u16 = (...vs: number[]) => vs.forEach((v) => bytes.push(v & 255, v >> 8));
+    const text = (s: string) => bytes.push(...Array.from(s, (c) => c.charCodeAt(0)));
+    const name = (s: string) => {
+        u16(s.length);
+        text(s);
+    };
+    const notice = '\r\nStirling Technologies, Inc.  (c) 1990-1994\r\n\r\n';
+    bytes.push(notice.length);
+    text(notice);
+    u16(10, strings.length + own.length, ...strings.map(() => 0x200), ...own, strings.length);
+    strings.forEach((s, i) => {
+        u16(i);
+        name(s);
+    });
+    u16(numbers.length + ownNumbers, numbers.length);
+    numbers.forEach((s, i) => {
+        u16(i);
+        name(s);
+    });
+    u16(structures.length);
+    for (const s of structures) {
+        u16(0);
+        name(s.name);
+        u16(s.members.length);
+        for (const [type, size, member] of s.members) {
+            u16(type, size);
+            name(member);
+        }
+    }
+    u16(functions.length);
+    for (const f of functions) {
+        if (f.dll) {
+            u16(1, f.returns ?? 4);
+            name(f.dll[0]);
+            name(f.dll[1]);
+        } else u16(2, 0, 0, 0);
+        u16(f.params.length, ...f.params.flat());
+    }
+    u16(0);
+    bytes.push(...code);
+    text(compiler);
+    bytes.push(compiler.length);
+    const sum = bytes.slice(12).reduce((n, v) => n + v, 0);
+    bytes.splice(8, 4, sum & 255, (sum >> 8) & 255, (sum >> 16) & 255, sum >>> 24);
+    return Uint8Array.from(bytes);
+}
+
+/**
+ * InstallShield 3's setup files (_INST32I.EX_) laid out as Counterstrike's are: 2A AB 79 D8 00 01 00 00, the
+ * copyright cut off at 70 bytes, how many files, 0; each file's entry (where its data is, its sizes, 8 zeros, its two
+ * names), then each file's data, imploded, one after another.
+ */
+export function installShieldEngine(files: { name: string; alias: string; data: Uint8Array }[]): Uint8Array {
+    const latin1 = (s: string) => Array.from(s, (c) => c.charCodeAt(0));
+    const packed = files.map((f) => implode(f.data));
+    const header = [0x2a, 0xab, 0x79, 0xd8, 0, 1, 0, 0, ...latin1('Copyright (c) 1990-1995 Stirling Technologies, Inc. All Rights Reserve'), files.length, 0, 0, 0];
+    let at = header.length + files.reduce((n, f) => n + 24 + f.name.length + f.alias.length, 0);
+    const u16 = (v: number) => [v & 255, v >> 8];
+    const u32 = (v: number) => [v & 255, (v >> 8) & 255, (v >> 16) & 255, v >>> 24];
+    const entries = files.flatMap((f, i) => {
+        const e = [...u32(at), ...u32(packed[i].length), ...u32(f.data.length), 0, 0, 0, 0, 0, 0, 0, 0, ...u16(f.name.length), ...latin1(f.name), ...u16(f.alias.length), ...latin1(f.alias)];
+        at += packed[i].length;
+        return e;
+    });
+    const out = new Uint8Array(at);
+    out.set([...header, ...entries]);
+    let p = header.length + entries.length;
+    for (const d of packed) {
+        out.set(d, p);
+        p += d.length;
+    }
+    return out;
+}
+
+/**
  * An InstallShield 3 package list (SETUP.PKG) laid out as Counterstrike's three are: 4A A3, where the list of archives
  * are, 2; a block for each archive (its length, its groups, its files, each name followed by a zero); then each disk's
  * list (0, the disk, how many): on disk 1 the archives (each its name, 1 and 1, where its block starts), and on each
@@ -1253,6 +1353,21 @@ export function samples(): Sample[] {
                     ],
                 },
                 { name: 'SOUNDS', files: [{ name: 'TONE.VOC', data: archived[1][1] }] },
+            ]),
+        },
+        {
+            name: 'installshield.ins',
+            format: 'installshield-ins',
+            about: 'InstallShield 3 script: two system strings and two of its own, a number, a structure, a function of its own and one in a DLL, four bytes of code',
+            data: installShieldScript(),
+        },
+        {
+            name: 'installshield.ex_',
+            format: 'installshield-engine',
+            about: 'InstallShield 3 setup files: two of these, imploded, each with the second name setup unpacks it as',
+            data: installShieldEngine([
+                { name: 'CARD.CPS', alias: '_CARD.CPS', data: archived[0][1] },
+                { name: 'TONE.VOC', alias: '_INV0432._MP', data: archived[1][1] },
             ]),
         },
         {

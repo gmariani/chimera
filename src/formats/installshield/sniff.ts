@@ -5,6 +5,19 @@ export function sniffInstallShieldZ(data: Uint8Array): boolean {
     return data.length >= IS3_SIGNATURE.length && IS3_SIGNATURE.every((v, i) => data[i] === v);
 }
 
+/** InstallShield's compiled scripts (SETUP.INS): B8 C9 0C 00, and room for the header up to its notice. */
+export function sniffInstallShieldScript(data: Uint8Array): boolean {
+    return data.length >= 16 && data[0] === 0xb8 && data[1] === 0xc9 && data[2] === 0x0c && data[3] === 0x00;
+}
+
+/** The 82 bytes before the entries of InstallShield 3's setup files (_INST32I.EX_). */
+export const ENGINE_HEADER = 82;
+
+/** InstallShield 3's setup files (_INST32I.EX_, _INST16.EX_): 2A AB 79 D8, then 00 01, as Deark checks. */
+export function sniffInstallShieldEngine(data: Uint8Array): boolean {
+    return data.length >= 6 && [0x2a, 0xab, 0x79, 0xd8, 0x00, 0x01].every((v, i) => data[i] === v);
+}
+
 /** The 10 bytes before an InstallShield 3 package list's first block. */
 export const PKG_HEADER = 10;
 

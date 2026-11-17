@@ -7,7 +7,7 @@ import { sniffMix, sniffXccDatabase } from './mix/sniff';
 import { sniffOgg } from './ogg/sniff';
 import { sniffBmp } from './bmp-sniff';
 import { sniffIco } from './ico-sniff';
-import { sniffInstallShieldPkg, sniffInstallShieldZ } from './installshield/sniff';
+import { sniffInstallShieldEngine, sniffInstallShieldPkg, sniffInstallShieldScript, sniffInstallShieldZ } from './installshield/sniff';
 import { sniffNe } from './ne-sniff';
 import { sniffMz } from './mz-sniff';
 import { sniffPif } from './pif-sniff';
@@ -80,6 +80,24 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'meg', name: 'Petroglyph MEG archive', extensions: ['meg'], sniff: sniffMeg, load: parserOf(() => import('./meg')) },
     // Chrome, Quake and others use .pak too, so the name alone says nothing.
     { id: 'installshield-z', name: 'InstallShield 3 archive', extensions: ['z', 'lib'], sniff: sniffInstallShieldZ, byNameAlone: false, load: parserOf(() => import('./installshield')) },
+    // Microsoft's COMPRESS names the programs it packs .ex_ too, so the name alone says nothing.
+    {
+        id: 'installshield-engine',
+        name: 'InstallShield 3 setup files (_INST32I.EX_)',
+        extensions: ['ex_'],
+        sniff: sniffInstallShieldEngine,
+        byNameAlone: false,
+        load: parserOf(() => import('./installshield/engine')),
+    },
+    // Windows' Internet settings and others are .ins too, so the name alone says nothing.
+    {
+        id: 'installshield-ins',
+        name: 'InstallShield script (SETUP.INS)',
+        extensions: ['ins'],
+        sniff: sniffInstallShieldScript,
+        byNameAlone: false,
+        load: parserOf(() => import('./installshield/script')),
+    },
     // macOS and PlayStation installers are .pkg too, so the name alone says nothing.
     {
         id: 'installshield-pkg',
