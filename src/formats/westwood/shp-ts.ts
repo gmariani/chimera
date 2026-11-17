@@ -7,11 +7,14 @@ import { TS_REMAP } from './team-colors';
  * Tiberian Sun / Red Alert 2 sprites. Each frame is a rectangle placed on a
  * shared canvas, stored raw, as raw scanlines, or with runs of zeros squeezed out.
  *
- * Written from what was known of the format and checked against the game's
- * sprites; since checked against ModdingWiki's page, which agrees on the
- * layout: https://moddingwiki.shikadi.net/wiki/Westwood_SHP_Format_(TS). The
- * page reads the byte after a frame's size as two flags (1: has transparency,
- * 2: compressed, never without 1), where this names the four values it takes.
+ * The layout is as ModdingWiki's page gives it
+ * (https://moddingwiki.shikadi.net/wiki/Westwood_SHP_Format_(TS)), with how each
+ * frame is stored as OpenRA's loader reads it
+ * (OpenRA.Mods.Common/SpriteLoaders/ShpTSLoader.cs, GPL 3:
+ * https://github.com/OpenRA/OpenRA): 0 and 1 whole rows, 2 rows each after a
+ * 2-byte length, 3 rows with runs of zeros packed (ModdingWiki's Westwood
+ * RLE-Zero). ModdingWiki reads that byte as two flags (1: has transparency, 2:
+ * compressed, never without 1).
  */
 
 const COMPRESSION: Record<number, string> = {

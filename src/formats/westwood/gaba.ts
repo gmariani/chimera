@@ -9,10 +9,10 @@ import { checkCount } from '../../core/limits';
  * sample rate, how it's stored, and for IMA ADPCM the size of each block. The
  * .bag is raw sound with no headers, so with it the sounds come out as WAVs.
  *
- * Worked out from RA2's audio.idx and audio.bag, and checked against XCC's
- * structures (t_audio_idx_header and t_audio_idx_entry in misc/cc_structures.h,
- * Olaf van der Spek, GPL 3: https://github.com/OlafvdSpek/xcc), which give
- * version 2's 36-byte entry.
+ * The layout is as XCC's structures give it (t_audio_idx_header and
+ * t_audio_idx_entry in misc/cc_structures.h, Olaf van der Spek, GPL 3:
+ * https://github.com/OlafvdSpek/xcc), with version 2's 36-byte entry; checked
+ * against RA2's audio.idx and audio.bag.
  */
 
 const FLAG_STEREO = 1;

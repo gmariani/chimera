@@ -9,9 +9,9 @@ import { checkCount } from '../../core/limits';
  * A header (the range of colors that take the owner's color, the number of
  * levels), a palette, then the tables, darkest first.
  *
- * Worked out from TS's voxels.vpl (its 8,976 bytes are exactly the header, the
- * palette and 32 tables), and checked against ModEnc's page
- * (https://modenc.renegadeprojects.com/VPL), which agrees.
+ * The layout is as ModEnc's page gives it
+ * (https://modenc.renegadeprojects.com/VPL), checked against TS's voxels.vpl,
+ * whose 8,976 bytes are exactly the header, the palette and 32 tables.
  */
 
 const SWATCH = 8;

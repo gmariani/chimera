@@ -15,9 +15,11 @@ export { unpackDiamond };
  * and narrowing again), then a depth image of the same shape, then optionally
  * an "extra" rectangle drawn over it: a cliff face, a tree stump.
  *
- * Worked out from TS's own tiles with what was known of the format, and checked
- * against ModEnc's page (https://modenc.renegadeprojects.com/TMP), which agrees
- * on the file header and every field of the cell header.
+ * The file and cell headers are as ModEnc's page gives them
+ * (https://modenc.renegadeprojects.com/TMP); the diamond, depth and extra
+ * images as OpenRA's loader reads them
+ * (OpenRA.Mods.Cnc/SpriteLoaders/TmpTSLoader.cs, GPL 3:
+ * https://github.com/OpenRA/OpenRA). Checked against TS's and RA2's tiles.
  */
 
 const HEADER = 52;

@@ -180,6 +180,19 @@ export function installShieldZ(dirs: { name: string; files: { name: string; data
 }
 
 /**
+ * MPEG audio after an ID3v2.4 tag: the tag's 10-byte header (its flags saying a footer follows), `body` bytes of
+ * frames left zero, the "3DI" footer; then two MPEG-1 layer III frames at 128 kbit/s and 44,100 Hz, stereo, each
+ * 144 × 128,000 / 44,100 = 417 bytes of header and silence. `footer` sets the footer's first three bytes.
+ */
+export function mp3Tagged(body = 20, footer = '3DI'): Uint8Array {
+    const size = [(body >> 21) & 0x7f, (body >> 14) & 0x7f, (body >> 7) & 0x7f, body & 0x7f];
+    const frame = new Array<number>(417).fill(0);
+    frame.splice(0, 4, 0xff, 0xfb, 0x90, 0x00);
+    const tail = [...footer].map((c) => c.charCodeAt(0)).concat([4, 0, 0x10, ...size]);
+    return Uint8Array.from([0x49, 0x44, 0x33, 4, 0, 0x10, ...size, ...new Array<number>(body).fill(0), ...tail, ...frame, ...frame]);
+}
+
+/**
  * An InstallShield 3 script (SETUP.INS) laid out as Counterstrike's are: B8 C9 0C 00, version 3.00.065, the sum of
  * every byte after it, Stirling's notice; how many labels; a size for each string variable (512 for the system's);
  * the system's string and number variables; the structures; the functions (each `dll` one in a DLL, else the
@@ -1354,6 +1367,12 @@ export function samples(): Sample[] {
                 },
                 { name: 'SOUNDS', files: [{ name: 'TONE.VOC', data: archived[1][1] }] },
             ]),
+        },
+        {
+            name: 'mp3-id3v24.mp3',
+            format: 'mp3',
+            about: 'MPEG-1 layer III: an ID3v2.4 tag with a footer, then two silent 417-byte frames at 128 kbit/s and 44,100 Hz',
+            data: mp3Tagged(),
         },
         {
             name: 'installshield.ins',

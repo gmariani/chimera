@@ -3,10 +3,29 @@
  * for what they decode to.
  *
  * IMA ADPCM is the IMA's (Recommended Practices for Enhancing Digital Audio
- * Compatibility in Multimedia Systems, 1992). Westwood's 8-bit ADPCM was
- * written from what was known of it, and agrees with FFmpeg's decoder for it
- * (libavcodec/ws-snd1.c, by Konstantin Shishkov): the same commands and the
- * same table of steps.
+ * Compatibility in Multimedia Systems, 1992), decoded as the Multimedia Wiki
+ * gives the algorithm (https://wiki.multimedia.cx/index.php/IMA_ADPCM).
+ *
+ * Westwood's 8-bit ADPCM (`decodeWestwood`) has no written description; it
+ * follows FFmpeg's decoder for it (libavcodec/ws-snd1.c), translated to
+ * TypeScript: the same commands, loops and table of steps. That file's notice:
+ *
+ *   Westwood SNDx codecs
+ *   Copyright (c) 2005 Konstantin Shishkov
+ *
+ *   This file is part of FFmpeg.
+ *
+ *   FFmpeg is free software; you can redistribute it and/or
+ *   modify it under the terms of the GNU Lesser General Public
+ *   License as published by the Free Software Foundation; either
+ *   version 2.1 of the License, or (at your option) any later version.
+ *
+ *   FFmpeg is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *   Lesser General Public License for more details.
+ *
+ * Chimera takes it under version 3 of the GPL, as the LGPL allows.
  */
 
 export const IMA_STEPS = [

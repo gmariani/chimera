@@ -90,6 +90,7 @@ Report what didn't pass, with the output. Don't round "mostly works" up to "work
 - `src/testing/`: where the installed games are (`game-data.ts`), the walk through their archives that `test:game-data` and `test:formats` share (`game-archives.ts`), and the sample generator (`samples.ts`).
 - `scripts/`: `npm run test:setup` and `npm run samples`.
 - `fuzz/`: the fuzzer.
+- `SOURCES.md`, `src/components/Credits.tsx`: what Chimera is made from, and the Credits list in the app's footer, which shows it with every license. The notices come from the files that carry them (`src/lib/notices.ts` names them; a test checks it against SOURCES.md), and the npm packages in a build from `scripts/licenses.ts`, run by `vite.config.ts`.
 
 ## References
 

@@ -9,9 +9,14 @@ import type { Field, FormatParser } from '../../core/types';
  * sound, which the browser plays; Speex and Theora, which are only described.
  * Those packets also hold the tags, as "KEY=value" text.
  *
- * Written from what was known of the format, and checked against RFC 3533
- * (https://www.rfc-editor.org/rfc/rfc3533), which agrees on the page header, the
- * segment table and the CRC.
+ * The pages are RFC 3533's (https://www.rfc-editor.org/rfc/rfc3533). The first
+ * packets are each codec's own: Vorbis's identification and comment headers from
+ * the Vorbis I specification (https://xiph.org/vorbis/doc/Vorbis_I_spec.html),
+ * Opus's from RFC 7845 (https://www.rfc-editor.org/rfc/rfc7845), FLAC's from
+ * Xiph's Ogg mapping (https://xiph.org/flac/ogg_mapping.html) and RFC 9639's
+ * STREAMINFO (https://www.rfc-editor.org/rfc/rfc9639), Speex's from its
+ * SpeexHeader (speex_header.h, https://github.com/xiph/speex), and Theora's from
+ * the Theora specification (https://www.theora.org/doc/Theora.pdf).
  */
 
 /** At most this many pages are listed. */

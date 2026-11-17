@@ -257,6 +257,74 @@ html {
     }
 }
 
+/* The footer's link to the credits: the same small capitals, lit on hover and focus. */
+.frame-footer .footer-link {
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+    text-decoration: none;
+}
+
+.frame-footer .footer-link:hover,
+.frame-footer .footer-link:focus-visible {
+    color: var(--bp-accent);
+}
+
+/* Credits and licenses: sections under small-capital headings, each text folded away until asked for. */
+.credits section + section {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--bp-rule);
+}
+
+.credits h3,
+.credits h4,
+.credits h5 {
+    font-family: var(--bs-font-monospace);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.75rem;
+    margin: 1rem 0 0.5rem;
+}
+
+.credits h3 {
+    margin-top: 0;
+    color: var(--bp-accent);
+}
+
+.credits p,
+.credits li {
+    font-size: 0.875rem;
+}
+
+.credits-item {
+    font-size: 0.875rem;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid var(--bp-rule);
+}
+
+.credits-text summary {
+    cursor: pointer;
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+}
+
+.credits-text summary:hover {
+    color: var(--bp-accent);
+}
+
+.credits-text pre {
+    max-height: 18rem;
+    overflow: auto;
+    margin: 0.5rem 0;
+    padding: 0.75rem;
+    background: var(--bp-deep);
+    border: 1px solid var(--bp-rule);
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+}
+
 @media (max-width: 767.98px) {
     .frame-pad {
         padding: 1.5rem 1rem;

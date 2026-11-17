@@ -5,8 +5,7 @@ import { expandPalette } from './vga';
 /**
  * Westwood's palettes (.pal), from Tiberian Dawn to Red Alert 2: 256 colors,
  * each three bytes of red, green and blue from 0 to 63, as VGA's DAC takes
- * them (6 bits a channel). Written from what was known of the format, and
- * checked against ModEnc's page, which describes them the same way:
+ * them (6 bits a channel), as ModEnc's page describes them:
  * https://modenc.renegadeprojects.com/PAL
  */
 

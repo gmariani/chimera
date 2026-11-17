@@ -8,9 +8,9 @@ import type { Field, FormatParser } from '../../core/types';
  * value after), the length in characters, and UTF-16 text with every bit
  * flipped.
  *
- * Written from what was known of the format and RA2's ra2.csf, and checked
- * against ModEnc's page (https://modenc.renegadeprojects.com/CSF_File_Format),
- * which agrees on every field.
+ * The layout is as ModEnc's page gives it
+ * (https://modenc.renegadeprojects.com/CSF_File_Format), checked against RA2's
+ * ra2.csf.
  */
 
 const LANGUAGES = ['US English', 'UK English', 'German', 'French', 'Spanish', 'Italian', 'Japanese', 'Jabberwockie', 'Korean', 'Chinese'];

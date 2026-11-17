@@ -10,10 +10,10 @@ import { pixelBuffer } from '../core/limits';
  * (TS's menus and map previews) store each row as a red, a green and a blue
  * plane in turn.
  *
- * Written from what was known of the format, and checked against ModdingWiki's
- * page (https://moddingwiki.shikadi.net/wiki/PCX_Format), which agrees on the
- * header, the run-length coding, the planes and the palette at the end. Its
- * bytes 70 to 73 (PC Paintbrush IV's screen size) are left in the padding here.
+ * The format is ZSoft's, as ModdingWiki's page gives it
+ * (https://moddingwiki.shikadi.net/wiki/PCX_Format): the header, the run-length
+ * coding, the planes and the palette at the end. Its bytes 70 to 73 (PC
+ * Paintbrush IV's screen size) are left in the padding here.
  */
 const parser: FormatParser = {
     parse(data) {

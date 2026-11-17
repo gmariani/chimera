@@ -7,12 +7,11 @@ import { hvaLayout } from './sniff';
  * of the same name: a name, the frame and section (limb) counts, each
  * section's name, then for each frame a 3 × 4 transform per section.
  *
- * Written from what was known of the format and checked against TS's files;
- * since checked against OpenRA's reader
+ * The layout is as OpenRA's reader has it
  * (OpenRA.Mods.Cnc/FileFormats/HvaReader.cs, GPL 3:
- * https://github.com/OpenRA/OpenRA), which agrees. ModEnc's page
- * (https://modenc.renegadeprojects.com/HVA) says what the transforms mean, but
- * not how they're laid out.
+ * https://github.com/OpenRA/OpenRA), with what the transforms mean from
+ * ModEnc's page (https://modenc.renegadeprojects.com/HVA); checked against TS's
+ * and RA2's files.
  */
 const parser: FormatParser = {
     parse(data) {

@@ -15,13 +15,20 @@ import { append } from '../../core/math';
  * background color is ignored), with a delay under 2 hundredths of a second
  * taken as 10.
  *
- * Written from what was known of the format, and checked against the GIF89a
- * specification (CompuServe, 1990;
- * https://www.w3.org/Graphics/GIF/spec-gif89a.txt): the interlaced row order,
- * the disposal methods, the pixel aspect ratio and the LZW codes agree.
- * Disposal 2 restores the background color in the spec; it clears to
- * transparent here, as browsers do. Decoded frames were compared with
- * ImageMagick's.
+ * The format is the GIF89a specification's (CompuServe, 1990:
+ * https://www.w3.org/Graphics/GIF/spec-gif89a.txt). The looping extension
+ * (NETSCAPE2.0) is Netscape's, which the specification doesn't cover, as
+ * "What's In A GIF"
+ * (https://giflib.sourceforge.net/whatsinagif/bits_and_bytes.html) and
+ * Vurdalakov's notes
+ * (http://www.vurdalakov.net/misc/gif/netscape-looping-application-extension)
+ * describe it. Frames are timed as browsers time them, which Nullsleep's study
+ * of browsers (2012:
+ * https://www.tumblr.com/nullsleep/16524517190/animated-gif-minimum-frame-delay-browser)
+ * and Mozilla's bug 125137
+ * (https://bugzilla.mozilla.org/show_bug.cgi?id=125137) give. Disposal 2
+ * restores the background color in the specification; it clears to transparent
+ * here, as browsers do. Decoded frames were compared with ImageMagick's.
  */
 
 /** At most this many frames are listed in the fields. */

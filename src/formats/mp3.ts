@@ -7,10 +7,14 @@ import type { Field, FormatParser } from '../core/types';
  * mode) and the coded sound. An ID3v2 tag can come first and an ID3v1 tag
  * (128 bytes, "TAG") last. The browser plays it; this reads the frames.
  *
- * Written from what was known of the format, and checked against FFmpeg's
- * tables and frame sizes (libavcodec/mpegaudiotabs.h and mpegaudiodecheader.c),
- * which agree on every bit rate, sample rate and frame length. The format
- * itself is ISO/IEC 11172-3 and 13818-3.
+ * The frame header is MPEG audio's (ISO/IEC 11172-3 and 13818-3, and the
+ * unofficial MPEG 2.5), as DataVoyage's "MPEG Audio Frame Header" (1998, 1999:
+ * http://www.mpgedit.org/mpgedit/mpeg_format/mpeghdr.htm) lays it out; the bit
+ * rates, sample rates and frame lengths agree with FFmpeg's
+ * (libavcodec/mpegaudiotabs.h and mpegaudiodecheader.c). The ID3v2 tag's header
+ * and footer are as the ID3v2.4.0 specification gives them
+ * (https://mutagen-specs.readthedocs.io/en/latest/id3/id3v2.4.0-structure.html,
+ * a copy of id3.org's).
  */
 
 const BITRATES: Record<string, number[]> = {
@@ -62,20 +66,26 @@ const parser: FormatParser = {
         if (data[0] === 0x49 && data[1] === 0x44 && data[2] === 0x33) {
             // ID3v2: the size is four 7-bit bytes ("syncsafe"), not counting the 10-byte header.
             const size = ((data[6] & 0x7f) << 21) | ((data[7] & 0x7f) << 14) | ((data[8] & 0x7f) << 7) | (data[9] & 0x7f);
+            // Version 2.4 can end the tag with a 10-byte footer ("3DI"), flagged in bit 4, which the size doesn't count.
+            const footer = data[3] === 4 && data[5] & 0x10 ? 10 : 0;
+            const footerAt = 10 + size;
+            if (footer && String.fromCharCode(data[footerAt], data[footerAt + 1], data[footerAt + 2]) !== '3DI')
+                warnings.push(`The ID3v2 tag says it has a footer, but the 10 bytes after it don't start with "3DI".`);
             fields.push({
                 name: 'ID3v2 tag',
                 offset: 0,
-                length: 10 + size,
+                length: 10 + size + footer,
                 value: `v2.${data[3]}`,
                 children: [
                     field('Identifier', 0, 3, 'ID3'),
                     field('Version', 3, 2, `2.${data[3]}.${data[4]}`),
-                    field('Flags', 5, 1, data[5]),
+                    field('Flags', 5, 1, data[5], footer ? 'Bit 4: a footer follows the frames.' : undefined),
                     field('Size', 6, 4, bytesLabel(size), 'Seven bits in each byte.'),
                     field('Frames', 10, size, bytesLabel(size)),
+                    ...(footer ? [field('Footer', footerAt, 10, '3DI', 'The header again, reversed in name, so the tag can be found from the end.')] : []),
                 ],
             });
-            at = 10 + size;
+            at = 10 + size + footer;
         }
         const end = data.length >= 128 && data[data.length - 128] === 0x54 && data[data.length - 127] === 0x41 && data[data.length - 126] === 0x47 ? data.length - 128 : data.length;
         const frames: Field[] = [];
