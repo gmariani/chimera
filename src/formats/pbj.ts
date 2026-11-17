@@ -8,6 +8,13 @@ import type { Field, FormatParser } from '../core/types';
  * textures (A3); then instructions of 8 bytes: an opcode, a destination
  * register and write mask, and a source register and swizzle. Integers are
  * little-endian; float constants are big-endian.
+ *
+ * Started from the kernel header reader in Flashbug (Gabriel Mariani, GPL 3:
+ * https://github.com/gmariani/flashbug), which read the records but not the
+ * code; the instructions were worked out from a real kernel's bytes. Checked
+ * against the Haxe format library's PBJ reader (Nicolas Cannasse, BSD 2-Clause:
+ * https://github.com/HaxeFoundation/format, format/pbj), which agrees on every
+ * record, type and opcode.
  */
 
 const TYPES: Record<number, [string, number]> = {

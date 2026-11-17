@@ -2,6 +2,8 @@
 
 A universal file inspector that runs in the browser. Open a file to see how it's put together: every field, what it means, and the bytes behind it, in a structure tree linked to a hex view (in the spirit of 010 Editor templates). Archives open up so you can look inside each file they hold, preview it, and pull any of it out. Nothing is uploaded.
 
+Chimera is licensed under the GNU GPL, version 3. The code taken from other projects, under their own notices, and the specifications and programs the rest was written from are listed in [SOURCES.md](SOURCES.md).
+
 ## Todo
 - .t1 font
 - .afm font

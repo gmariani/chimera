@@ -584,7 +584,7 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
             tint: ['LightRedTint', 'LightGreenTint', 'LightBlueTint'].map((k) => ruleNumber(o.type, k)),
         }));
     const lights = new Map<string, [number, number, number]>();
-    // Units, infantry and aircraft get a little more ([AudioVisual] ExtraUnitLight and the like).
+    // Units, infantry and aircraft get a little more ([AudioVisual] ExtraUnitLight and the like), as CNCMaps adds it.
     const extraLight = (kind: string) =>
         Number((rulesIni?.get('AudioVisual', kind === 'infantry' ? 'ExtraInfantryLight' : kind === 'aircraft' ? 'ExtraAircraftLight' : 'ExtraUnitLight') ?? '0').replace(',', '.')) || 0;
     const lightAt = (rx: number, ry: number, extra = 0): [number, number, number] | null => {
@@ -601,7 +601,8 @@ export function renderIsoMap(map: IsoMap, find: Finder | undefined, yuri: boolea
                 intensity += fade * lamp.intensity;
                 for (let i = 0; i < 3; i++) tint[i] += fade * lamp.tint[i];
             }
-            // Limited as the game limits them (CNCMaps' renderer, which matches it): intensity and each tint
+            // Limited as the game limits them (as CNCMaps' renderer has it, which matches the game: zzattack's
+            // ccmaps-net, GPL 3, https://github.com/zzattack/ccmaps-net, CNCMaps.FileFormats/Map/Lighting.cs): intensity and each tint
             // 0 to 2, the tint scaled so its strongest channel is 1, and that channel's light at most 2. Many
             // lamps overlapping (sov01t's 27 yellow ones) would otherwise wash a map out.
             const amb = Math.min(Math.max(intensity, 0), 2);

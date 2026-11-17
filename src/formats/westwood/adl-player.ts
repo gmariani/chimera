@@ -4,11 +4,47 @@
  * second, writing the OPL2 chip's registers as they go.
  *
  * A port of ScummVM's reimplementation of the driver (engines/kyra/sound/
- * drivers/adlib.cpp, GPL-2.0-or-later), as AdPlug carries it (src/adl.cpp,
- * with its "repeating" flag for knowing when a song has come round), for
- * versions 2 and 3: Dune II's, Kyrandia's and Eye of the Beholder II's. It
- * keeps the driver's 8- and 16-bit arithmetic, wrap-arounds included.
- * https://github.com/scummvm/scummvm, https://github.com/adplug/adplug
+ * drivers/adlib.cpp, by Torbjorn Andersson and Johannes Schickel of the
+ * ScummVM project), as AdPlug carries it (src/adl.cpp, Simon Peter's
+ * adaptation, with its "repeating" flag for knowing when a song has come
+ * round), for versions 2 and 3: Dune II's, Kyrandia's and Eye of the Beholder
+ * II's. Changed: translated to TypeScript, the other versions left out, and
+ * the one difference below. It keeps the driver's 8- and 16-bit arithmetic,
+ * wrap-arounds included. https://github.com/scummvm/scummvm,
+ * https://github.com/adplug/adplug
+ *
+ * The driver's notice, as AdPlug's adl.cpp carries it (ScummVM's own copy now
+ * offers version 3 of the GPL or later, or the LGPL 2.1 or later):
+ *
+ *   ScummVM - Graphic Adventure Engine
+ *
+ *   ScummVM is the legal property of its developers, whose names
+ *   are too numerous to list here. Please refer to the COPYRIGHT
+ *   file distributed with this source distribution.
+ *
+ *   This program is free software; you can redistribute it and/or
+ *   modify it under the terms of the GNU General Public License
+ *   as published by the Free Software Foundation; either version 2
+ *   of the License, or (at your option) any later version.
+ *
+ *   This program is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   LGPL License
+ *
+ *   This library is free software; you can redistribute it and/or
+ *   modify it under the terms of the GNU Lesser General Public
+ *   License as published by the Free Software Foundation; either
+ *   version 2.1 of the License, or (at your option) any later version.
+ *
+ *   This library is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *   Lesser General Public License for more details.
+ *
+ * Chimera takes it under version 3 of the GPL, as that notice allows.
  *
  * One difference, on purpose: an instrument the file's table lacks (an offset
  * of 0 or 0xFFFF) is set up from wherever that offset points, as ALFX.DRV

@@ -10,7 +10,9 @@ import { CHECKSUM_SIZE, FLAG_CHECKSUM, FLAG_ENCRYPTED, INDEX_ENTRY_SIZE } from '
 /**
  * Westwood MIX archives (Command & Conquer: Tiberian Dawn, Red Alert, Tiberian
  * Sun, Red Alert 2). A header, an index of {id, offset, size}, then the files
- * stored back to back, uncompressed. See https://xhp.xwis.net/documents/MIX_Format.html
+ * stored back to back, uncompressed. See https://xhp.xwis.net/documents/MIX_Format.html,
+ * and ModdingWiki's page (https://moddingwiki.shikadi.net/wiki/MIX_Format_(Westwood)),
+ * which the checksum check and the handling of bytes no entry covers were added from.
  */
 
 const LOCAL_DATABASE = 'local mix database.dat';

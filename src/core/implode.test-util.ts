@@ -1,6 +1,30 @@
 /**
  * A small, plain PKWARE implode encoder, to test explode.ts against: greedy matches found by searching back, written
  * with blast.c's fixed codes. Not how PKWARE's compresses, only a valid stream.
+ *
+ * The encoder is Chimera's own; its code tables (LITERALS, LENGTHS, DISTANCES and the base and extra-bit tables) are
+ * copied from Mark Adler's blast.c (zlib's contrib/blast, version 1.3), which carries this notice, in blast.h:
+ *
+ *   Copyright (C) 2003, 2012, 2013 Mark Adler
+ *   version 1.3, 24 Aug 2013
+ *
+ *   This software is provided 'as-is', without any express or implied
+ *   warranty.  In no event will the author be held liable for any damages
+ *   arising from the use of this software.
+ *
+ *   Permission is granted to anyone to use this software for any purpose,
+ *   including commercial applications, and to alter it and redistribute it
+ *   freely, subject to the following restrictions:
+ *
+ *   1. The origin of this software must not be misrepresented; you must not
+ *      claim that you wrote the original software. If you use this software
+ *      in a product, an acknowledgment in the product documentation would be
+ *      appreciated but is not required.
+ *   2. Altered source versions must be plainly marked as such, and must not be
+ *      misrepresented as being the original software.
+ *   3. This notice may not be removed or altered from any source distribution.
+ *
+ *   Mark Adler    madler@alumni.caltech.edu
  */
 
 export type ImplodeToken = number | { len: number; dist: number };

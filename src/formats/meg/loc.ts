@@ -10,6 +10,10 @@ import type { Field, FormatParser } from '../../core/types';
  * all the keys (ASCII), in the same order. The master tables are sorted by CRC
  * with each key once; the credits (CreditsText_EN-US.dat) are the same layout in
  * reading order, with style names like "CENTER" as keys, repeated.
+ *
+ * Worked out from the Remastered Collection's own files, with no description of
+ * the format to go on: the key's CRC-32 is checked against all 27 of its tables.
+ * The reader follows csf.ts, RA2's string tables, which it resembles.
  */
 
 const RECORD = 12;

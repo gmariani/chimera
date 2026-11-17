@@ -14,6 +14,14 @@ import { append } from '../../core/math';
  * Frames are drawn as browsers draw them: on a transparent screen (the
  * background color is ignored), with a delay under 2 hundredths of a second
  * taken as 10.
+ *
+ * Written from what was known of the format, and checked against the GIF89a
+ * specification (CompuServe, 1990;
+ * https://www.w3.org/Graphics/GIF/spec-gif89a.txt): the interlaced row order,
+ * the disposal methods, the pixel aspect ratio and the LZW codes agree.
+ * Disposal 2 restores the background color in the spec; it clears to
+ * transparent here, as browsers do. Decoded frames were compared with
+ * ImageMagick's.
  */
 
 /** At most this many frames are listed in the fields. */

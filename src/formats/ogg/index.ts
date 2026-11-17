@@ -8,6 +8,10 @@ import type { Field, FormatParser } from '../../core/types';
  * serial number. A stream's first packets say what's in it: Vorbis, Opus or FLAC
  * sound, which the browser plays; Speex and Theora, which are only described.
  * Those packets also hold the tags, as "KEY=value" text.
+ *
+ * Written from what was known of the format, and checked against RFC 3533
+ * (https://www.rfc-editor.org/rfc/rfc3533), which agrees on the page header, the
+ * segment table and the CRC.
  */
 
 /** At most this many pages are listed. */

@@ -14,6 +14,10 @@ export { unpackDiamond };
  * diamond's pixels row by row (4 wide at the top, widening by 4 to the middle
  * and narrowing again), then a depth image of the same shape, then optionally
  * an "extra" rectangle drawn over it: a cliff face, a tree stump.
+ *
+ * Worked out from TS's own tiles with what was known of the format, and checked
+ * against ModEnc's page (https://modenc.renegadeprojects.com/TMP), which agrees
+ * on the file header and every field of the cell header.
  */
 
 const HEADER = 52;

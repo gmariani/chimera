@@ -343,6 +343,23 @@ describe('small leftovers', () => {
         });
         expect(detect(data, null).id).toBe('shp-ts');
     });
+
+    it('shows a sprite frame’s radar color as red, green and blue, in that order', async () => {
+        // One 1 × 1 frame, stored raw, its radar color bytes 0x12 0x34 0x56 (ModdingWiki: R, G, B).
+        const data = bytes(8 + 24 + 1, (v, b) => {
+            v.setUint16(2, 1, true);
+            v.setUint16(4, 1, true);
+            v.setUint16(6, 1, true);
+            v.setUint16(8 + 4, 1, true);
+            v.setUint16(8 + 6, 1, true);
+            b.set([0x12, 0x34, 0x56], 8 + 12);
+            v.setUint32(8 + 20, 32, true);
+            b[32] = 7;
+        });
+        const r = (await import('./shp-ts')).default.parse(data, context());
+        const frame = r.fields.flatMap((f) => f.children ?? []).find((f) => f.name === 'Frame 1')!;
+        expect(frame.children!.find((f) => f.name === 'Radar color')!.value).toBe('#123456');
+    });
 });
 
 describe('Bink', () => {

@@ -24,7 +24,8 @@ import { DUNE2_MUSIC, dune2MusicPlays } from './dune2-music';
  * Each sequence is offered as a standard MIDI file: 60 ticks a beat at
  * 500,000 µs a beat is the player's 120 a second, and tempo events are set to
  * that, as the player ignores them (the times are already in its ticks).
- * This follows the XMIDI specification (Miles Design, release 1.02, 1992)
+ * This follows the XMIDI specification (Miles Design, release 1.02, 1992),
+ * libeastwood's notes on it (doc/xmidi.txt, https://github.com/libeastwood/libeastwood)
  * and ScummVM's parser (audio/midiparser_xmidi.cpp).
  */
 

@@ -3,11 +3,26 @@
  * nine voices of two operators each, or six and five drums. Games write its
  * registers; this turns those writes into sound.
  *
- * A port of DOSBox's DBOPL (dbopl.cpp, by the DOSBox Team, GPL-2.0-or-later;
- * as kept in ScummVM's audio/softsynth/opl), its OPL2 half only: the OPL3's
- * stereo and four-operator modes are left out. It keeps DBOPL's arithmetic,
- * 32-bit counters that wrap included, so the same writes give the same
- * samples. https://www.dosbox.com, https://github.com/scummvm/scummvm
+ * A port of DOSBox's DBOPL (dbopl.cpp, as kept in ScummVM's
+ * audio/softsynth/opl), changed: translated to TypeScript, and its OPL2 half
+ * only, the OPL3's stereo and four-operator modes left out. It keeps DBOPL's
+ * arithmetic, 32-bit counters that wrap included, so the same writes give the
+ * same samples. https://www.dosbox.com, https://github.com/scummvm/scummvm
+ * DBOPL's notice:
+ *
+ *   Copyright (C) 2002-2011  The DOSBox Team
+ *
+ *   This program is free software; you can redistribute it and/or modify
+ *   it under the terms of the GNU General Public License as published by
+ *   the Free Software Foundation; either version 2 of the License, or
+ *   (at your option) any later version.
+ *
+ *   This program is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ * Chimera takes it under version 3 of the GPL, as that notice allows.
  */
 
 /** The chip's own rate: its 14.31818 MHz clock over 288. */

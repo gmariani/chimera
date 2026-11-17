@@ -6,6 +6,11 @@ import { VORTEX_SIZE } from './sniff';
  * frames each of growing, spinning and shrinking (VORTEX.CPP). For each of the
  * vortex's 64 × 64 pixels, three bytes: the x and y of the screen pixel to copy
  * from, and a shade (0 darkest, 15 unchanged) to darken it by.
+ *
+ * The layout is RA's own (VORTEX.CPP, in the source Electronic Arts released:
+ * https://github.com/electronicarts/CnC_Remastered_Collection), and agrees with
+ * ModdingWiki's page
+ * (https://moddingwiki.shikadi.net/wiki/Command_%26_Conquer:_Red_Alert_Vortex_Lookup_Table).
  */
 
 const SHADES = 16;

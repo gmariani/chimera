@@ -8,11 +8,18 @@ import { minOf } from '../../core/math';
  * 16-bit length and the characters), then a 20-byte record for each file,
  * sorted by the CRC-32 of its upper-case name. Three versions:
  *
- * - 1 (Empire at War): just the name and file counts.
- * - 2 (Forces of Corruption): FF FF FF FF, a version float (0.99), the data offset, then the counts.
+ * - 1 (Empire at War and Forces of Corruption): just the name and file counts.
+ * - 2 (Guardians of Graxia): FF FF FF FF, a version float (0.99), the data offset, then the counts.
  * - 3 (Grey Goo, the Remaster): the same, plus the name table's size; each record starts with
  *   flags (1: encrypted) and has a 16-bit name index. A signature of 0x8FFFFFFF means the
  *   tables themselves are encrypted (AES), which isn't read here.
+ *
+ * Worked out from the Remastered Collection's MEGs with what was known of the format, most likely
+ * Mike Lankamp's documentation (https://modtools.petrolution.net/docs/MegFileFormat; it couldn't be
+ * reached to check). Version 1's layout is checked against the Reverse Engineering Wiki's page
+ * (https://rewiki.miraheze.org/wiki/Petroglyph_MEG). Which games use which version is from the
+ * petro_meg crate's documentation (https://docs.rs/petro-meg): Empire at War and Forces of
+ * Corruption use version 1, Guardians of Graxia 2.
  */
 
 /** The 0.99 every version 2 and 3 header has, as a float's bits. */

@@ -1,6 +1,12 @@
 /**
  * The sound codecs Westwood used in AUD files and VQA movies, and a WAV writer
  * for what they decode to.
+ *
+ * IMA ADPCM is the IMA's (Recommended Practices for Enhancing Digital Audio
+ * Compatibility in Multimedia Systems, 1992). Westwood's 8-bit ADPCM was
+ * written from what was known of it, and agrees with FFmpeg's decoder for it
+ * (libavcodec/ws-snd1.c, by Konstantin Shishkov): the same commands and the
+ * same table of steps.
  */
 
 export const IMA_STEPS = [

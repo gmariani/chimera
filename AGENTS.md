@@ -94,3 +94,9 @@ Report what didn't pass, with the output. Don't round "mostly works" up to "work
 ## References
 
 Specs come first from the [ModdingWiki](https://moddingwiki.shikadi.net/) for game formats, and from the format's own specification otherwise. Where a spec is vague, a reference implementation (FFmpeg, the game's released source code) is the tiebreaker. Cite whichever was used.
+
+Nothing is claimed as Chimera's own that isn't. `SOURCES.md` lists everything the code was made from; keep it current:
+
+- **Cite every source**, in the reader's opening comment and in `SOURCES.md`. What was worked out from files says so.
+- **Code taken from elsewhere is a port, whatever it's called.** A function translated line by line is a port, even a short one. Before taking any, check that its license allows it in a GPL 3 program. Keep the original's notice word for word in the file, say what was changed, and add it to the first table in `SOURCES.md`.
+- **Facts only from a source whose license doesn't allow that**: GPL 2 only (OpenDUNE), no license at all, or terms that forbid it (isDcc). Read it for how the format works, then write the code without it open, and say in `SOURCES.md` that only facts were taken.

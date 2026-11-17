@@ -8,6 +8,10 @@ import { checkCount } from '../../core/limits';
  * each level is a table: for every palette color, the color to draw instead.
  * A header (the range of colors that take the owner's color, the number of
  * levels), a palette, then the tables, darkest first.
+ *
+ * Worked out from TS's voxels.vpl (its 8,976 bytes are exactly the header, the
+ * palette and 32 tables), and checked against ModEnc's page
+ * (https://modenc.renegadeprojects.com/VPL), which agrees.
  */
 
 const SWATCH = 8;

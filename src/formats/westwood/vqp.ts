@@ -8,6 +8,11 @@ import { VQP_TABLE } from './sniff';
  * palette color closest to their average; these tables hold the answers.
  * Each is triangular: the color for (a, b) is the same as for (b, a), so only
  * a ≥ b is stored, row by row.
+ *
+ * Worked out from RA's .vqp files, with no description of the format to go on:
+ * each is exactly the triangle of a 256-color table. The code in the source
+ * Electronic Arts released reads the full 256 × 256 table (INTERPAL.CPP; see
+ * blend-table.ts), not this one.
  */
 const parser: FormatParser = {
     parse(data) {

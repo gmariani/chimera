@@ -16,6 +16,14 @@ import { maxOf } from '../../core/math';
  * The animation (.hva) of the same name places and moves the limbs. Tanks keep
  * their turret and barrel in models of their own (htnktur.vxl, htnkbarl.vxl);
  * when those are in an opened archive, they're shown too.
+ *
+ * Written from what was known of the format and checked against TS's and RA2's
+ * models; since checked against OpenRA's reader
+ * (OpenRA.Mods.Cnc/FileFormats/VxlReader.cs, GPL 3:
+ * https://github.com/OpenRA/OpenRA), which agrees on the 802-byte header, the
+ * 28-byte limb headers and the 92-byte tailers. ModEnc's page
+ * (https://modenc.renegadeprojects.com/VXL) describes voxels but not the file's
+ * layout.
  */
 
 /** Each limb seen four ways: from above, the front, the side, and from above at an angle as in the game. */

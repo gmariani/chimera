@@ -7,9 +7,32 @@ import { checkBytes, MAX_BYTES } from './limits';
  * or a 1 bit, a length and a distance back into what's been written so far. Length 519 ends the data. The codes are
  * fixed Huffman codes, sent with their bits inverted.
  *
- * Ported from Mark Adler's blast.c (zlib's contrib/blast, version 1.3), which this follows exactly but for one thing:
- * it writes into the whole output, not a 4 KB window, which comes to the same, since a distance blast takes never
- * reaches before what's been written.
+ * Ported from Mark Adler's blast.c (zlib's contrib/blast, version 1.3, https://github.com/madler/zlib/tree/develop/
+ * contrib/blast). This is an altered version, not the original: blast.c translated to TypeScript, with checks of
+ * Chimera's own added (sizes against what's expected, a limit on what it may write), and one change: it writes into
+ * the whole output, not a 4 KB window, which comes to the same, since a distance blast takes never reaches before
+ * what's been written. blast.c's notice, from blast.h:
+ *
+ *   Copyright (C) 2003, 2012, 2013 Mark Adler
+ *   version 1.3, 24 Aug 2013
+ *
+ *   This software is provided 'as-is', without any express or implied
+ *   warranty.  In no event will the author be held liable for any damages
+ *   arising from the use of this software.
+ *
+ *   Permission is granted to anyone to use this software for any purpose,
+ *   including commercial applications, and to alter it and redistribute it
+ *   freely, subject to the following restrictions:
+ *
+ *   1. The origin of this software must not be misrepresented; you must not
+ *      claim that you wrote the original software. If you use this software
+ *      in a product, an acknowledgment in the product documentation would be
+ *      appreciated but is not required.
+ *   2. Altered source versions must be plainly marked as such, and must not be
+ *      misrepresented as being the original software.
+ *   3. This notice may not be removed or altered from any source distribution.
+ *
+ *   Mark Adler    madler@alumni.caltech.edu
  */
 
 const MAXBITS = 13;

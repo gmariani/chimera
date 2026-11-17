@@ -18,6 +18,29 @@ import { wav } from './westwood/adpcm';
  * Samples are 8-bit unsigned or 16-bit signed PCM, A-law, µ-law, or Creative's
  * ADPCM at 4, 2.6 or 2 bits a sample, which decodes as FFmpeg's
  * adpcm_sbpro does (checked sample for sample against FFmpeg in every codec).
+ *
+ * `expand`, Creative ADPCM's step, is ported from FFmpeg's
+ * adpcm_sbpro_expand_nibble (libavcodec/adpcm.c), translated to TypeScript.
+ * That file's notice:
+ *
+ *   Copyright (c) 2001-2003 The FFmpeg project
+ *
+ *   This file is part of FFmpeg.
+ *
+ *   FFmpeg is free software; you can redistribute it and/or
+ *   modify it under the terms of the GNU Lesser General Public
+ *   License as published by the Free Software Foundation; either
+ *   version 2.1 of the License, or (at your option) any later version.
+ *
+ *   FFmpeg is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ *   Lesser General Public License for more details.
+ *
+ * Chimera takes it under version 3 of the GPL, as the LGPL allows.
+ *
+ * The A-law and µ-law conversions are G.711's, after Sun Microsystems'
+ * g711.c, which Sun provided for unrestricted use.
  */
 
 const SIGNATURE = 'Creative Voice File\x1a';

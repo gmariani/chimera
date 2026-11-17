@@ -6,6 +6,12 @@ import { TS_REMAP } from './team-colors';
 /**
  * Tiberian Sun / Red Alert 2 sprites. Each frame is a rectangle placed on a
  * shared canvas, stored raw, as raw scanlines, or with runs of zeros squeezed out.
+ *
+ * Written from what was known of the format and checked against the game's
+ * sprites; since checked against ModdingWiki's page, which agrees on the
+ * layout: https://moddingwiki.shikadi.net/wiki/Westwood_SHP_Format_(TS). The
+ * page reads the byte after a frame's size as two flags (1: has transparency,
+ * 2: compressed, never without 1), where this names the four values it takes.
  */
 
 const COMPRESSION: Record<number, string> = {
@@ -47,12 +53,8 @@ const parser: FormatParser = {
                         'Radar color',
                         at + 12,
                         4,
-                        `#${b
-                            .u32(at + 12)
-                            .toString(16)
-                            .padStart(6, '0')
-                            .slice(-6)}`,
-                        'Used for the minimap.'
+                        `#${Array.from(data.subarray(at + 12, at + 15), (c) => c.toString(16).padStart(2, '0')).join('')}`,
+                        'Red, green and blue, 8 bits each (the fourth byte unused): what the minimap shows.'
                     ),
                     field('Reserved', at + 16, 4),
                     field('Data offset', at + 20, 4, offset, offset ? undefined : 'Zero: the frame is empty.'),

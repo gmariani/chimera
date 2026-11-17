@@ -6,6 +6,11 @@ import type { Field, FormatParser } from '../core/types';
  * bits, then the version, layer, bit rate, sample rate, padding and channel
  * mode) and the coded sound. An ID3v2 tag can come first and an ID3v1 tag
  * (128 bytes, "TAG") last. The browser plays it; this reads the frames.
+ *
+ * Written from what was known of the format, and checked against FFmpeg's
+ * tables and frame sizes (libavcodec/mpegaudiotabs.h and mpegaudiodecheader.c),
+ * which agree on every bit rate, sample rate and frame length. The format
+ * itself is ISO/IEC 11172-3 and 13818-3.
  */
 
 const BITRATES: Record<string, number[]> = {

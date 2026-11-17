@@ -2,6 +2,14 @@ import { bytesLabel, field } from '../../core/bytes';
 import type { FormatParser } from '../../core/types';
 import { expandPalette } from './vga';
 
+/**
+ * Westwood's palettes (.pal), from Tiberian Dawn to Red Alert 2: 256 colors,
+ * each three bytes of red, green and blue from 0 to 63, as VGA's DAC takes
+ * them (6 bits a channel). Written from what was known of the format, and
+ * checked against ModEnc's page, which describes them the same way:
+ * https://modenc.renegadeprojects.com/PAL
+ */
+
 const parser: FormatParser = {
     parse(data) {
         // 256 colors, 3 bytes each, 0 to 63 (VGA's 6 bits).
