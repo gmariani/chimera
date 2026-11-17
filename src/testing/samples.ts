@@ -9,6 +9,7 @@
  * out every time. This runs in Node (the script, without a bundler, and the
  * tests), so it imports only the plain test encoders.
  */
+import { implode } from '../core/implode.test-util.ts';
 import { dune2Compress, lcwLiterals, lzw, rle } from '../formats/westwood/encoders.test-util.ts';
 
 export interface Sample {
@@ -110,6 +111,134 @@ export function bitmap(bits: 4 | 8 | 24, { pad = false }: { pad?: boolean } = {}
         }
     }
     return out;
+}
+
+/**
+ * An InstallShield 3 archive laid out as InstallShield's are: the 59-byte header, zeros to byte 255, each file's data
+ * (imploded, or stored when `stored`), the directory table, the file table. Dates are 1997-02-25 11:51:24.
+ */
+export function installShieldZ(dirs: { name: string; files: { name: string; data: Uint8Array; stored?: boolean }[] }[]): Uint8Array {
+    const DATE = 0x5e6c2259;
+    const latin1 = (s: string) => Uint8Array.from(s, (c) => c.charCodeAt(0));
+    const files = dirs.flatMap((d, dir) => d.files.map((f) => ({ ...f, dir, packed: f.stored ? f.data : implode(f.data) })));
+    let at = 255;
+    const placed = files.map((f) => ({ ...f, at: (at += f.packed.length) - f.packed.length }));
+    const dirEntries = dirs.map((d) => {
+        const name = latin1(d.name);
+        const e = new Uint8Array(6 + name.length + 5);
+        const v = new DataView(e.buffer);
+        v.setUint16(0, d.files.length, true);
+        v.setUint16(2, e.length, true);
+        v.setUint16(4, name.length, true);
+        e.set(name, 6);
+        return e;
+    });
+    const fileEntries = placed.map((f) => {
+        const name = latin1(f.name);
+        const e = new Uint8Array(30 + name.length + 13);
+        const v = new DataView(e.buffer);
+        v.setUint16(1, f.dir, true);
+        v.setUint32(3, f.data.length, true);
+        v.setUint32(7, f.packed.length, true);
+        v.setUint32(11, f.at, true);
+        v.setUint32(15, DATE, true);
+        v.setUint32(19, 0x20, true);
+        v.setUint16(23, e.length, true);
+        e[25] = f.stored ? 0x10 : 0;
+        e[29] = name.length;
+        e.set(name, 30);
+        return e;
+    });
+    const dirsAt = at;
+    const dirsSize = dirEntries.reduce((n, e) => n + e.length, 0);
+    const filesSize = fileEntries.reduce((n, e) => n + e.length, 0);
+    const out = new Uint8Array(dirsAt + dirsSize + filesSize);
+    const v = new DataView(out.buffer);
+    out.set([0x13, 0x5d, 0x65, 0x8c, 0x3a, 0x01, 0x02, 0x00]);
+    v.setUint16(12, files.length, true);
+    v.setUint32(14, DATE, true);
+    v.setUint32(18, out.length, true);
+    v.setUint32(
+        22,
+        files.reduce((n, f) => n + f.data.length, 0),
+        true
+    );
+    v.setUint32(26, 0xff, true);
+    v.setUint32(33, 255, true);
+    v.setUint32(41, dirsAt, true);
+    v.setUint32(45, dirsSize, true);
+    v.setUint16(49, dirs.length, true);
+    v.setUint32(51, dirsAt + dirsSize, true);
+    v.setUint32(55, filesSize, true);
+    for (const f of placed) out.set(f.packed, f.at);
+    let p = dirsAt;
+    for (const e of [...dirEntries, ...fileEntries]) {
+        out.set(e, p);
+        p += e.length;
+    }
+    return out;
+}
+
+/**
+ * An InstallShield 3 package list (SETUP.PKG) laid out as Counterstrike's three are: 4A A3, where the list of archives
+ * are, 2; a block for each archive (its length, its groups, its files, each name followed by a zero); then each disk's
+ * list (0, the disk, how many): on disk 1 the archives (each its name, 1 and 1, where its block starts), and on each
+ * disk the files `copied` as they are (each its name, 2 and 0, its size).
+ */
+export function installShieldPkg(
+    archives: { name: string; groups: { name: string; files: { name: string; size: number }[] }[] }[],
+    copied: { name: string; size: number; disk: number }[] = []
+): Uint8Array {
+    const bytes: number[] = [0x4a, 0xa3, 0, 0, 0, 0, 2, 0, 0, 0];
+    const u16 = (v: number) => bytes.push(v & 255, v >> 8);
+    const u32 = (v: number) => bytes.push(v & 255, (v >> 8) & 255, (v >> 16) & 255, v >>> 24);
+    const latin1 = (s: string) => bytes.push(...Array.from(s, (c) => c.charCodeAt(0)));
+    const blocks = archives.map((a) => {
+        const at = bytes.length;
+        u32(0);
+        u16(a.groups.length);
+        for (const g of a.groups) {
+            u16(g.name.length);
+            latin1(g.name);
+            bytes.push(0);
+        }
+        u16(a.groups.reduce((n, g) => n + g.files.length, 0));
+        a.groups.forEach((g, i) =>
+            g.files.forEach((f) => {
+                u16(i);
+                u32(f.size);
+                bytes.push(f.name.length);
+                latin1(f.name);
+                bytes.push(0);
+            })
+        );
+        const length = bytes.length - at - 4;
+        bytes.splice(at, 4, length & 255, (length >> 8) & 255, (length >> 16) & 255, length >>> 24);
+        return at;
+    });
+    const listAt = bytes.length;
+    bytes.splice(2, 4, listAt & 255, (listAt >> 8) & 255, (listAt >> 16) & 255, listAt >>> 24);
+    const disks = Math.max(1, ...copied.map((f) => f.disk));
+    for (let disk = 1; disk <= disks; disk++) {
+        const here = copied.filter((f) => f.disk === disk);
+        u16(0);
+        u16(disk);
+        u16((disk === 1 ? archives.length : 0) + here.length);
+        if (disk === 1)
+            archives.forEach((a, i) => {
+                u16(a.name.length);
+                latin1(a.name);
+                bytes.push(1, 1);
+                u32(blocks[i]);
+            });
+        for (const f of here) {
+            u16(f.name.length);
+            latin1(f.name);
+            bytes.push(2, 0);
+            u32(f.size);
+        }
+    }
+    return Uint8Array.from(bytes);
 }
 
 /**
@@ -1110,7 +1239,42 @@ export function samples(): Sample[] {
     out.push(
         { name: 'pak-v1.pak', format: 'pak', about: 'Westwood PAK, version 1 (Eye of the Beholder), holding three of these', data: pak(1, archived) },
         { name: 'pak-v2.pak', format: 'pak', about: 'Westwood PAK, version 2 (Dune II), holding three of these', data: pak(2, archived) },
-        { name: 'pak-v3.pak', format: 'pak', about: 'Westwood PAK, version 3 (Kyrandia 2 and 3), holding three of these', data: pak(3, archived) }
+        { name: 'pak-v3.pak', format: 'pak', about: 'Westwood PAK, version 3 (Kyrandia 2 and 3), holding three of these', data: pak(3, archived) },
+        {
+            name: 'installshield.z',
+            format: 'installshield-z',
+            about: 'InstallShield 3 archive: two directories, two files imploded and one stored, three of these',
+            data: installShieldZ([
+                {
+                    name: 'PICTURES',
+                    files: [
+                        { name: 'CARD.CPS', data: archived[0][1] },
+                        { name: 'PALETTE.PAL', data: archived[2][1], stored: true },
+                    ],
+                },
+                { name: 'SOUNDS', files: [{ name: 'TONE.VOC', data: archived[1][1] }] },
+            ]),
+        },
+        {
+            name: 'installshield.pkg',
+            format: 'installshield-pkg',
+            about: 'InstallShield 3 package list: the files of installshield.z, in its two groups, at their unpacked sizes',
+            data: installShieldPkg([
+                {
+                    name: 'INSTALLSHIELD.Z',
+                    groups: [
+                        {
+                            name: 'PICTURES',
+                            files: [
+                                { name: 'CARD.CPS', size: archived[0][1].length },
+                                { name: 'PALETTE.PAL', size: archived[2][1].length },
+                            ],
+                        },
+                        { name: 'SOUNDS', files: [{ name: 'TONE.VOC', size: archived[1][1].length }] },
+                    ],
+                },
+            ]),
+        }
     );
     return out;
 }

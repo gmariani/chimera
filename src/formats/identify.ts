@@ -101,6 +101,7 @@ export function signature(data: Uint8Array): Signature | null {
     if (ascii(data, 0, 'Creative Voice')) return { name: 'Creative Voice sound', ext: 'voc', format: 'voc', length: ascii(data, 14, ' File\x1a') ? 20 : 14 };
     if (ascii(data, 0, 'ID3')) return { name: 'MP3 sound', ext: 'mp3', format: 'mp3', length: 3 };
     if (ascii(data, 0, 'OTTO') || ascii(data, 0, 'ttcf')) return { name: 'OpenType font', ext: 'otf', exts: ['otf', 'ttc', 'otc', 'ttf'], format: 'sfnt', length: 4 };
+    if (bytes(data, 0, [0x13, 0x5d, 0x65, 0x8c])) return { name: 'InstallShield 3 archive', ext: 'z', exts: ['z', 'lib'], format: 'installshield-z', length: 4 };
     if (ascii(data, 0, 'BIK') || ascii(data, 0, 'KB2')) return { name: 'Bink video', ext: 'bik', format: 'bink', length: 3 };
 
     // Programs.

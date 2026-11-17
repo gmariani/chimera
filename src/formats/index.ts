@@ -7,6 +7,7 @@ import { sniffMix, sniffXccDatabase } from './mix/sniff';
 import { sniffOgg } from './ogg/sniff';
 import { sniffBmp } from './bmp-sniff';
 import { sniffIco } from './ico-sniff';
+import { sniffInstallShieldPkg, sniffInstallShieldZ } from './installshield/sniff';
 import { sniffNe } from './ne-sniff';
 import { sniffMz } from './mz-sniff';
 import { sniffPif } from './pif-sniff';
@@ -78,6 +79,17 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'mix', name: 'Westwood MIX archive', extensions: ['mix'], sniff: sniffMix, load: parserOf(() => import('./mix')) },
     { id: 'meg', name: 'Petroglyph MEG archive', extensions: ['meg'], sniff: sniffMeg, load: parserOf(() => import('./meg')) },
     // Chrome, Quake and others use .pak too, so the name alone says nothing.
+    { id: 'installshield-z', name: 'InstallShield 3 archive', extensions: ['z', 'lib'], sniff: sniffInstallShieldZ, byNameAlone: false, load: parserOf(() => import('./installshield')) },
+    // macOS and PlayStation installers are .pkg too, so the name alone says nothing.
+    {
+        id: 'installshield-pkg',
+        name: 'InstallShield 3 package list',
+        extensions: ['pkg'],
+        sniff: sniffInstallShieldPkg,
+        byNameAlone: false,
+        companions: true,
+        load: parserOf(() => import('./installshield/pkg')),
+    },
     { id: 'pak', name: 'Westwood PAK archive', extensions: ['pak'], sniff: sniffPak, byNameAlone: false, load: parserOf(() => import('./westwood/pak')) },
     { id: 'shp-td', name: 'Sprite (TD/RA SHP)', extensions: ['shp'], alsoNamed: THEATERS, sniff: sniffShpTd, load: parserOf(() => import('./westwood/shp-td')) },
     { id: 'shp-ts', name: 'Sprite (TS/RA2 SHP)', extensions: ['shp'], alsoNamed: THEATERS, sniff: sniffShpTs, load: parserOf(() => import('./westwood/shp-ts')) },

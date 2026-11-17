@@ -61,3 +61,5 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `pak-v1.pak` | Westwood PAK, version 1 (Eye of the Beholder), holding three of these | 66,753 bytes |
 | `pak-v2.pak` | Westwood PAK, version 2 (Dune II), holding three of these | 66,752 bytes |
 | `pak-v3.pak` | Westwood PAK, version 3 (Kyrandia 2 and 3), holding three of these | 66,757 bytes |
+| `installshield.z` | InstallShield 3 archive: two directories, two files imploded and one stored, three of these | 2,504 bytes |
+| `installshield.pkg` | InstallShield 3 package list: the files of installshield.z, in its two groups, at their unpacked sizes | 118 bytes |
