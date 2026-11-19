@@ -43,6 +43,8 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `alfx.drv` | Westwood sound driver, laid out as Dune II’s ALFX.DRV: 18 functions, an AdLib player’s three music commands, every routine a bare return | 117 bytes |
 | `driver.adv` | Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF | 150 bytes |
 | `program.exe` | DOS program linked as Borland’s TLINK does with overlays: relocations, the segment table, one overlay with a fixup | 262 bytes |
+| `program-pe.exe` | Windows program (PE, 32-bit) that does nothing: an import, an export, debug info naming a PDB, an icon and version information | 3,072 bytes |
+| `program-pe64.exe` | The same program, 64-bit (PE32+), with a Rich header as Microsoft’s linker leaves | 3,584 bytes |
 | `program.pif` | Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections | 545 bytes |
 | `strings-dune2.eng` | Dune II string table, compressed as the game does | 291 bytes |
 | `strings-dos.ger` | C&C-style string table, plain, with accented letters in DOS characters | 42 bytes |

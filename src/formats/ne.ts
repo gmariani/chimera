@@ -5,6 +5,7 @@ import type { Entry, Field, FormatParser, Preview } from '../core/types';
 import { debugInfo } from './debug-info';
 import { decodeDib } from './dib';
 import { neOffset } from './ne-sniff';
+import { iconGroupFile, resourceCounts, RESOURCE_TYPES as TYPES } from './win-resources';
 
 /**
  * 16-bit Windows (and OS/2) modules, "New Executable": Windows 3's programs,
@@ -25,24 +26,6 @@ import { neOffset } from './ne-sniff';
  * 3.1 SDK), mirrored at https://wiki.osdev.org/NE.
  */
 
-/** Resource types Windows defines (the high bit set means a number, not a name). */
-const TYPES: Record<number, { name: string; ext: string }> = {
-    // Saved as they're stored: a bare bitmap (DIB), not yet an .ico, .cur or .bmp file.
-    1: { name: 'Cursor', ext: 'dib' },
-    2: { name: 'Bitmap', ext: 'dib' },
-    3: { name: 'Icon', ext: 'dib' },
-    4: { name: 'Menu', ext: 'bin' },
-    5: { name: 'Dialog', ext: 'bin' },
-    6: { name: 'Strings', ext: 'bin' },
-    7: { name: 'Font directory', ext: 'bin' },
-    8: { name: 'Font', ext: 'fnt' },
-    9: { name: 'Shortcut keys', ext: 'bin' },
-    10: { name: 'Data', ext: 'bin' },
-    11: { name: 'Message table', ext: 'bin' },
-    12: { name: 'Cursor group', ext: 'bin' },
-    14: { name: 'Icon group', ext: 'bin' },
-    16: { name: 'Version', ext: 'bin' },
-};
 const OS: Record<number, string> = { 0: 'unknown', 1: 'OS/2', 2: 'Windows', 3: 'European MS-DOS 4', 4: 'Windows 386', 5: 'Borland Operating System Services' };
 
 interface Resource {
@@ -194,55 +177,16 @@ const parser: FormatParser = {
                     meta: { Type: r.typeName },
                 });
 
-        /**
-         * Each icon or cursor group as the file Windows would save it as: a 6-byte header (0, 1 for icons or 2 for cursors, the
-         * count), a 16-byte entry for each image, then the images. A group's entries are 14 bytes (an icon's: width, height,
-         * colors, reserved, planes, bits, size, ID; a cursor's: width, height doubled, planes, bits, size, ID), and a cursor's
-         * image starts with its hot spot, which goes into its file entry instead.
-         */
+        // Each icon or cursor group as the file Windows would save it as (see win-resources.ts).
         for (const r of resources) {
             if ((r.type !== 14 && r.type !== 12) || !fits(r.at, 6)) continue;
             const cursor = r.type === 12;
-            const count = Math.min(b.u16(r.at + 4), Math.floor((r.length - 6) / 14));
-            const listed = Array.from({ length: count }, (_, i) => {
-                const e = r.at + 6 + i * 14;
-                return { e, id: b.u16(e + 12), size: b.u32(e + 8), res: resources.find((x) => x.type === (cursor ? 1 : 3) && x.id === b.u16(e + 12)) };
-            });
-            const missing = listed.filter((i) => !i.res || !fits(i.res.at, i.res.length));
+            const { file, images, missing } = iconGroupFile(data, r.at, r.length, cursor, (id) => resources.find((x) => x.type === (cursor ? 1 : 3) && x.id === id) ?? null);
             if (missing.length)
                 warnings.push(
-                    `${r.typeName} ${r.name} names ${cursor ? 'cursor' : 'icon'}${missing.length === 1 ? '' : 's'} ${missing.map((i) => `#${i.id}`).join(', ')}, which the module doesn't have.`
+                    `${r.typeName} ${r.name} names ${cursor ? 'cursor' : 'icon'}${missing.length === 1 ? '' : 's'} ${missing.map((i) => `#${i}`).join(', ')}, which the module doesn't have.`
                 );
-            const present = listed.filter((i) => i.res && fits(i.res.at, i.res.length));
-            if (!present.length) continue;
-            // The image itself: the group's size for it (the resource is rounded up to the alignment), less a cursor's hot spot.
-            const images = present.map((i) => {
-                const res = i.res!;
-                const skip = cursor ? 4 : 0;
-                const size = Math.min(i.size || res.length, res.length) - skip;
-                return { i, bytes: data.subarray(res.at + skip, res.at + skip + size), hotX: cursor ? b.u16(res.at) : 0, hotY: cursor ? b.u16(res.at + 2) : 0 };
-            });
-            const header = 6 + images.length * 16;
-            const file = new Uint8Array(header + images.reduce((n, x) => n + x.bytes.length, 0));
-            const v = new DataView(file.buffer);
-            v.setUint16(2, cursor ? 2 : 1, true);
-            v.setUint16(4, images.length, true);
-            let at = header;
-            images.forEach((x, k) => {
-                const e = 6 + k * 16;
-                if (cursor) {
-                    file[e] = b.u16(x.i.e) & 0xff;
-                    file[e + 1] = (b.u16(x.i.e + 2) / 2) & 0xff;
-                    v.setUint16(e + 4, x.hotX, true);
-                    v.setUint16(e + 6, x.hotY, true);
-                } else {
-                    file.set(data.subarray(x.i.e, x.i.e + 8), e);
-                }
-                v.setUint32(e + 8, x.bytes.length, true);
-                v.setUint32(e + 12, at, true);
-                file.set(x.bytes, at);
-                at += x.bytes.length;
-            });
+            if (!file) continue;
             const ext = cursor ? 'cur' : 'ico';
             entries.push({
                 name: `${stem}-${r.name.replace(/^#/, '')}.${ext}`,
@@ -250,7 +194,7 @@ const parser: FormatParser = {
                 offset: r.at,
                 size: file.length,
                 data: file,
-                meta: { Type: `${cursor ? 'Cursor' : 'Icon'} file, from the group and its ${images.length === 1 ? 'image' : `${images.length} images`}` },
+                meta: { Type: `${cursor ? 'Cursor' : 'Icon'} file, from the group and its ${images === 1 ? 'image' : `${images} images`}` },
             });
         }
 
@@ -371,12 +315,6 @@ const parser: FormatParser = {
             end = debug.end;
         }
 
-        // Windows' own types read in lower case ("2 icons"); a module's named types keep theirs ("1 OEMBIN").
-        const counts = new Map<string, number>();
-        for (const r of resources) {
-            const t = r.type >= 0 && TYPES[r.type] ? r.typeName.toLowerCase() : r.typeName;
-            counts.set(t, (counts.get(t) ?? 0) + 1);
-        }
         const codeless = segmentCount === 0 && entryLength === 0;
         // What a module with no code is for, as its resources say (icons: an icon library; fonts: a .fon), in the words identify.ts uses.
         const HELD: Record<number, string> = { 1: 'cursors', 2: 'bitmaps', 3: 'icons', 4: 'menus', 5: 'dialogs', 6: 'strings', 8: 'fonts' };
@@ -393,7 +331,7 @@ const parser: FormatParser = {
                 ...(imports.length ? [['Imports from', imports.join(', ')] as [string, string]] : []),
                 ...(debug && !('problem' in debug) ? [['Debug info', debug.summary] as [string, string]] : []),
                 ...(stray ? [['Not pointed to', `${bytesLabel(stray)} between the parts aren’t padding, and nothing in the module points to them`] as [string, string]] : []),
-                ['Resources', [...counts].map(([t, n]) => `${n} ${t}${n === 1 || t !== t.toLowerCase() ? '' : 's'}`).join(', ') || 'none'],
+                ['Resources', resourceCounts(resources)],
             ],
             fields: filled,
             entries,

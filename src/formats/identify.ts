@@ -22,8 +22,11 @@ export interface Signature {
     codeless?: boolean;
 }
 
-/** What DOS and Windows programs and libraries are named. */
-const PROGRAMS = ['exe', 'dll', 'com', 'scr', 'sys', 'ocx', 'cpl', 'drv', 'mod', 'efi', 'mui', 'ax', 'vxd', '386', 'ovl', 'acm', 'tsp', 'ime'];
+/**
+ * What DOS and Windows programs and libraries are named. The Miles Sound System's plug-ins are libraries named for
+ * what they do: .asi (decoders), .m3d (3D sound), .flt (filters), as Generals and C&C Remastered have them.
+ */
+const PROGRAMS = ['exe', 'dll', 'com', 'scr', 'sys', 'ocx', 'cpl', 'drv', 'mod', 'efi', 'mui', 'ax', 'vxd', '386', 'ovl', 'acm', 'tsp', 'ime', 'asi', 'm3d', 'flt'];
 
 /** Whether a file with this signature is named as such files are. */
 export function namedAs(sig: Signature, ext: string | null): boolean {
@@ -109,11 +112,11 @@ export function signature(data: Uint8Array): Signature | null {
     // Programs.
     if (ascii(data, 0, 'MZ') && data.length >= 64) {
         const pe = u32le(data, 0x3c);
-        if (pe + 24 <= data.length && ascii(data, pe, 'PE\0\0')) {
+        if (pe >= 4 && pe + 24 <= data.length && ascii(data, pe, 'PE\0\0')) {
             const machine = data[pe + 4] | (data[pe + 5] << 8);
             const dll = (data[pe + 22] | (data[pe + 23] << 8)) & 0x2000;
             const bits = machine === 0x8664 || machine === 0xaa64 ? '64-bit' : machine === 0x14c ? '32-bit' : `machine ${machine.toString(16).toUpperCase()}`;
-            return { name: `Windows ${dll ? 'library (DLL' : 'program (PE'}, ${bits})`, ext: dll ? 'dll' : 'exe', exts: PROGRAMS, length: 2, runs: true };
+            return { name: `Windows ${dll ? 'library (DLL' : 'program (PE'}, ${bits})`, ext: dll ? 'dll' : 'exe', exts: PROGRAMS, format: 'pe', length: 2, runs: true };
         }
         const ne = newExecutable(data, pe);
         if (ne) return ne;

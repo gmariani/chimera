@@ -3,6 +3,7 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { signature } from './identify';
 import { inspect } from './inspect';
+import { windowsProgram } from '../testing/samples';
 
 const enc = new TextEncoder();
 const concat = (...parts: (Uint8Array | number[])[]) => {
@@ -22,7 +23,7 @@ const levels = (checks: { level: string }[]) => checks.map((c) => c.level);
 /** A 1 × 1 GIF89a: two colors, one pixel of color 1. */
 const GIF = concat(enc.encode('GIF89a'), [1, 0, 1, 0, 0x80, 0, 0], [0, 0, 0, 255, 255, 255], [0x2c, 0, 0, 0, 0, 1, 0, 1, 0, 0], [2, 2, 0x4c, 0x01, 0], [0x3b]);
 
-/** The start of a 32-bit Windows program: an MZ header pointing at a PE header. */
+/** The start of a 32-bit Windows program: an MZ header pointing at a PE header, and nothing after it that a program has. */
 function program(): Uint8Array {
     const data = new Uint8Array(512);
     data.set(enc.encode('MZ'), 0);
@@ -97,10 +98,15 @@ describe('checks every file gets', () => {
     });
 
     it('calls out a program under another name', async () => {
-        const r = await open(program(), 'readme.txt');
+        const r = await open(windowsProgram(), 'readme.txt');
         expect(r.parsed.title).toBe('Windows program (PE, 32-bit)');
         expect(r.checks[0]).toMatchObject({ level: 'danger' });
-        expect((await open(program(), 'setup.exe')).checks.map((c) => c.level)).toEqual(['info']);
+        expect((await open(windowsProgram(), 'setup.exe')).checks).toEqual([]);
+        // Only the start of one, with no optional header: not a program Windows could load, whatever it's named.
+        expect((await open(program(), 'setup.exe')).checks[0]).toMatchObject({
+            level: 'danger',
+            text: expect.stringMatching(/^It starts like a Windows program \(PE, 32-bit\) .*, but it isn't one: .*Its optional header starts with 0000/),
+        });
     });
 
     it('finds data after the end of a file, and hands it over', async () => {

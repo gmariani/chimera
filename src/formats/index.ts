@@ -9,6 +9,7 @@ import { sniffBmp } from './bmp-sniff';
 import { sniffIco } from './ico-sniff';
 import { sniffInstallShieldEngine, sniffInstallShieldPkg, sniffInstallShieldScript, sniffInstallShieldZ } from './installshield/sniff';
 import { sniffNe } from './ne-sniff';
+import { sniffPe } from './pe-sniff';
 import { sniffMz } from './mz-sniff';
 import { sniffPif } from './pif-sniff';
 import { sniffAil } from './ail-sniff';
@@ -157,7 +158,15 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'sos', name: 'Sound drivers (HMI SOS)', extensions: ['386'], sniff: sniffSos, byNameAlone: false, load: parserOf(() => import('./sos')) },
     { id: 'pif', name: 'Program information file (PIF)', extensions: ['pif'], sniff: sniffPif, load: parserOf(() => import('./pif')) },
     { id: 'ico', name: 'Icon or cursor (ICO, CUR)', extensions: ['ico', 'cur'], sniff: sniffIco, load: parserOf(() => import('./ico')) },
-    // Other programs (PE, DOS) are named .exe and .dll too, so the name alone says nothing.
+    // Programs of every kind are named .exe and .dll, so the name alone says nothing.
+    {
+        id: 'pe',
+        name: 'Windows program or library (PE)',
+        extensions: ['exe', 'dll', 'sys', 'ocx', 'cpl', 'scr', 'drv', 'efi', 'mui', 'ax', 'acm', 'tsp', 'ime'],
+        sniff: sniffPe,
+        byNameAlone: false,
+        load: parserOf(() => import('./pe')),
+    },
     {
         id: 'ne',
         name: '16-bit Windows module (NE)',

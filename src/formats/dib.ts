@@ -33,7 +33,8 @@ export interface DibInfo {
     beyond: number;
 }
 
-export type Dib = { info: DibInfo; rgba: Uint8Array } | { problem: string };
+/** A bitmap drawn, or why not: `unsupported` when it's a kind this doesn't draw, rather than one that's wrong. */
+export type Dib = { info: DibInfo; rgba: Uint8Array } | { problem: string; unsupported?: boolean };
 
 /**
  * Decodes a DIB at `at` (at most `length` bytes) to RGBA; `masked` for icons and cursors. `pixelsFrom`, from the DIB's
@@ -54,7 +55,7 @@ export function decodeDib(data: Uint8Array, at: number, length: number, masked: 
     const topDown = rawHeight < 0 && !masked;
     const height = masked ? Math.floor(rawHeight / 2) : Math.abs(rawHeight);
     if (width <= 0 || height <= 0 || width > 4096 || height > 4096) return { problem: `it says it’s ${width} × ${height}` };
-    if (compression !== 0) return { problem: `it’s compressed (method ${compression}), which isn’t drawn here` };
+    if (compression !== 0) return { problem: `it’s compressed (method ${compression}), which isn’t drawn here`, unsupported: true };
     if (![1, 4, 8, 16, 24, 32].includes(bits)) return { problem: `it has ${bits} bits a pixel` };
     const used = core ? 0 : b.u32(at + 32);
     const colors = bits <= 8 ? (used && used <= 1 << bits ? used : 1 << bits) : 0;

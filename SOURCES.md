@@ -71,6 +71,8 @@ No code is taken from any of these: they're where the facts about each format co
 - **Borland's run-time library** (SE.ASM), as GeReV's LoadBorlandOverlays.java reads it (https://github.com/GeReV/ghidra_scripts): Borland's overlays.
 - **Microsoft's "Executable-File Header Format"** (the NE spec in the Windows 3.1 SDK, mirrored at https://wiki.osdev.org/NE): 16-bit Windows modules.
 - **Microsoft's "Visual C++ 5.0 Symbolic Debug Information Specification"** (CodeView): debug info after programs.
+- **Microsoft's "PE Format"** (https://learn.microsoft.com/windows/win32/debug/pe-format): Windows programs and libraries (PE). Its **"Resource Types"**, **"Resource File Formats"** and **VS_VERSIONINFO** pages (https://learn.microsoft.com/windows/win32/menurc/): their resources, icon groups and version information; **[MS-LCID]** for the language names.
+- **Daniel Pistelli's "Microsoft's Rich Signature (undocumented)"** (2008, https://ntcore.com/files/richsign.htm; no license given, so facts only): the Rich header Microsoft's linker leaves. How its checksum is made was worked out from real programs.
 - **The AIL 2 source John Miles released in 2000** (public domain, https://github.com/Tronix286/AIL2): Miles sound drivers.
 - **Wikipedia's "Program information file"** (https://en.wikipedia.org/wiki/Program_information_file): PIF files.
 
@@ -101,7 +103,7 @@ No code is taken from any of these: they're where the facts about each format co
 
 ### Worked out here
 
-Some formats have no public description. Their readers say so, and what they know comes from the files themselves: Petroglyph's chunk files and the Remastered Collection's string tables (LOC), RA's VQA palette tables (VQP), and parts of InstallShield's PKG, setup files and scripts (each reader says which parts).
+Some formats have no public description. Their readers say so, and what they know comes from the files themselves: Petroglyph's chunk files and the Remastered Collection's string tables (LOC), RA's VQA palette tables (VQP), parts of InstallShield's PKG, setup files and scripts (each reader says which parts), and the Rich header's checksum in Windows programs.
 
 ## Looked at, and not used
 

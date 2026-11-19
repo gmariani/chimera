@@ -868,6 +868,224 @@ export function iconLibrary({ segments = 0 }: { segments?: number } = {}): Uint8
     return out;
 }
 
+/** UTF-16 text and its closing 0, as Windows' resources store names and strings. */
+const utf16z = (s: string) => [...[...s].flatMap((c) => u16(c.charCodeAt(0))), 0, 0];
+const pad4 = (b: number[]) => [...b, ...new Array((4 - (b.length % 4)) % 4).fill(0)];
+
+/**
+ * A version resource (VS_VERSIONINFO): each node its length, its value's length, its type (1: text, counted in
+ * characters), its key, then its value and its children, each on a 4-byte boundary.
+ */
+function versionNode(key: string, type: number, value: number[], children: number[][] = []): number[] {
+    const head = pad4([0, 0, 0, 0, ...u16(type), ...utf16z(key)]);
+    const body = [...head, ...pad4(value), ...children.flatMap(pad4)];
+    const valueLength = type === 1 ? value.length / 2 : value.length;
+    return [...u16(body.length), ...u16(valueLength), ...body.slice(4)];
+}
+
+/**
+ * A Windows program (PE) in three sections, as a linker lays one out: .text, whose code is `xor eax, eax` and `ret`
+ * (it does nothing, and exits at once); .rdata, with the import of KERNEL32's ExitProcess, the export of a function
+ * named Hello (the same code), and a CodeView debug entry naming sample.pdb; and .rsrc, with a 16 × 16 icon, its
+ * group, and version information. 32-bit, or 64-bit with `wide`. With `rich`, a Rich header (as Microsoft's linker
+ * leaves) between the DOS stub and the PE header, with one tool's record and its checksum.
+ */
+export function windowsProgram({ wide = false, rich = false }: { wide?: boolean; rich?: boolean } = {}): Uint8Array {
+    const FA = 0x200;
+    const SA = 0x1000;
+    const up = (n: number, to: number) => Math.ceil(n / to) * to;
+    const w = wide ? 8 : 4;
+    const pe = rich ? 0xa0 : 0x80;
+    const optSize = wide ? 240 : 224;
+    const headers = up(pe + 24 + optSize + 3 * 40, FA);
+
+    // .rdata, from RVA 0x2000: the import descriptors (KERNEL32 and the zeros that end them), the lookup and address
+    // tables, the hint and name, the library's name; the export directory and its three tables, the names; the debug entry.
+    const RD = 0x2000;
+    const at = { desc: 0, ilt: 40, iat: 40 + 2 * w, hint: 40 + 4 * w } as Record<string, number>;
+    at.dll = at.hint + 14;
+    at.exp = up(at.dll + 13, 4);
+    at.eat = at.exp + 40;
+    at.enpt = at.eat + 4;
+    at.eot = at.enpt + 4;
+    at.expName = at.eot + 2;
+    at.fnName = at.expName + 11;
+    at.dbg = up(at.fnName + 6, 4);
+    at.cv = at.dbg + 28;
+    const rdata = new Uint8Array(at.cv + 4 + 16 + 4 + 11);
+    const rv = new DataView(rdata.buffer);
+    const thunk = (off: number) => (wide ? rv.setBigUint64(off, BigInt(RD + at.hint), true) : rv.setUint32(off, RD + at.hint, true));
+    rv.setUint32(at.desc, RD + at.ilt, true);
+    rv.setUint32(at.desc + 12, RD + at.dll, true);
+    rv.setUint32(at.desc + 16, RD + at.iat, true);
+    thunk(at.ilt);
+    thunk(at.iat);
+    rdata.set([...u16(0), ...text('ExitProcess'), 0], at.hint);
+    rdata.set([...text('KERNEL32.dll'), 0], at.dll);
+    for (const [off, v] of [
+        [12, RD + at.expName],
+        [16, 1],
+        [20, 1],
+        [24, 1],
+        [28, RD + at.eat],
+        [32, RD + at.enpt],
+        [36, RD + at.eot],
+    ])
+        rv.setUint32(at.exp + off, v, true);
+    rv.setUint32(at.eat, 0x1000, true);
+    rv.setUint32(at.enpt, RD + at.fnName, true);
+    rdata.set([...text('sample.exe'), 0, ...text('Hello'), 0], at.expName);
+    // The debug entry: CodeView (2), its size, where it is in memory and in the file; then "RSDS", a GUID, the age, the path.
+    const cvSize = rdata.length - at.cv;
+    rv.setUint32(at.dbg + 12, 2, true);
+    rv.setUint32(at.dbg + 16, cvSize, true);
+    rv.setUint32(at.dbg + 20, RD + at.cv, true);
+    rv.setUint32(at.dbg + 24, headers + FA + at.cv, true);
+    rdata.set([...text('RSDS'), ...Array.from({ length: 16 }, (_, i) => i * 17), ...u32(1), ...text('sample.pdb'), 0], at.cv);
+
+    // .rsrc, from RVA 0x3000: the types (icon, icon group, version), a name and a language (English, US) under each, the
+    // three leaves, then the icon, the group and the version information.
+    const RS = 0x3000;
+    const icon = iconDib();
+    const group = [...u16(0), ...u16(1), ...u16(1), 16, 16, 16, 0, ...u16(1), ...u16(4), ...u32(icon.length), ...u16(1)];
+    const strings = [
+        ['CompanyName', 'Chimera'],
+        ['FileDescription', 'Chimera sample program'],
+        ['FileVersion', '1.0.0.0'],
+        ['OriginalFilename', 'program-pe.exe'],
+        ['ProductName', 'Chimera'],
+    ];
+    const fixed = [...u32(0xfeef04bd), ...u32(0x10000), ...u32(0x10000), ...u32(0), ...u32(0x10000), ...u32(0), ...u32(0x3f), ...u32(0), ...u32(0x40004), ...u32(1), ...u32(0), ...u32(0), ...u32(0)];
+    const version = versionNode('VS_VERSION_INFO', 0, fixed, [
+        versionNode(
+            'StringFileInfo',
+            1,
+            [],
+            [
+                versionNode(
+                    '040904B0',
+                    1,
+                    [],
+                    strings.map(([k, v]) => versionNode(k, 1, utf16z(v)))
+                ),
+            ]
+        ),
+        versionNode('VarFileInfo', 1, [], [versionNode('Translation', 0, [...u16(0x409), ...u16(0x4b0)])]),
+    ]);
+    const leaves = 184;
+    const iconAt = leaves + 48;
+    const groupAt = up(iconAt + icon.length, 4);
+    const versionAt = up(groupAt + group.length, 4);
+    const rsrc = new Uint8Array(versionAt + version.length);
+    const sv = new DataView(rsrc.buffer);
+    const directory = (off: number, id: number, target: number) => {
+        sv.setUint16(off + 14, 1, true);
+        sv.setUint32(off + 16, id, true);
+        sv.setUint32(off + 20, target, true);
+    };
+    sv.setUint16(14, 3, true);
+    [3, 14, 16].forEach((type, i) => {
+        sv.setUint32(16 + i * 8, type, true);
+        sv.setUint32(20 + i * 8, 0x80000000 | (40 + i * 24), true);
+        directory(40 + i * 24, 1, 0x80000000 | (112 + i * 24));
+        directory(112 + i * 24, 0x409, leaves + i * 16);
+        const [where, size] = [
+            [iconAt, icon.length],
+            [groupAt, group.length],
+            [versionAt, version.length],
+        ][i];
+        sv.setUint32(leaves + i * 16, RS + where, true);
+        sv.setUint32(leaves + i * 16 + 4, size, true);
+    });
+    rsrc.set(icon, iconAt);
+    rsrc.set(group, groupAt);
+    rsrc.set(version, versionAt);
+
+    const sections = [
+        { name: '.text', va: 0x1000, data: Uint8Array.from([0x31, 0xc0, 0xc3]), flags: 0x60000020 },
+        { name: '.rdata', va: RD, data: rdata, flags: 0x40000040 },
+        { name: '.rsrc', va: RS, data: rsrc, flags: 0x40000040 },
+    ];
+    let filePos = headers;
+    const placed = sections.map((s) => {
+        const p = { ...s, ptr: filePos, raw: up(s.data.length, FA) };
+        filePos += p.raw;
+        return p;
+    });
+    const out = new Uint8Array(filePos);
+    const v = new DataView(out.buffer);
+    out.set(text('MZ'), 0);
+    v.setUint16(2, 0x90, true); // the DOS header's sizes: one page and a bit, as a linker writes them
+    v.setUint16(4, 3, true);
+    v.setUint16(8, 4, true);
+    v.setUint16(0x18, 0x40, true);
+    v.setUint32(0x3c, pe, true);
+    // The DOS stub: push cs; pop ds; mov dx, 0x0E; mov ah, 9; int 21h (print the message); mov ax, 0x4C01; int 21h (exit).
+    out.set([0x0e, 0x1f, 0xba, 0x0e, 0x00, 0xb4, 0x09, 0xcd, 0x21, 0xb8, 0x01, 0x4c, 0xcd, 0x21, ...text('This program needs Windows.\r\n$')], 0x40);
+    if (rich) {
+        // One record: tool 0x0104, build 30729, used once. The key is the checksum (see pe.ts).
+        const tool = (0x0104 << 16) | 30729;
+        const rotl = (x: number, n: number) => (n & 31 ? ((x << (n & 31)) | (x >>> (32 - (n & 31)))) >>> 0 : x >>> 0);
+        let key = 0x80;
+        for (let i = 0; i < 0x80; i++) if (i < 0x3c || i > 0x3f) key = (key + rotl(out[i], i)) >>> 0;
+        key = (key + rotl(tool, 1)) >>> 0;
+        [0x536e6144, 0, 0, 0, tool, 1].forEach((x, i) => v.setUint32(0x80 + i * 4, (x ^ key) >>> 0, true));
+        out.set(text('Rich'), 0x98);
+        v.setUint32(0x9c, key, true);
+    }
+    out.set(text('PE'), pe);
+    v.setUint16(pe + 4, wide ? 0x8664 : 0x14c, true);
+    v.setUint16(pe + 6, 3, true);
+    v.setUint32(pe + 8, 0x5e0be100, true); // 2020-01-01
+    v.setUint16(pe + 20, optSize, true);
+    v.setUint16(pe + 22, wide ? 0x0022 : 0x0102, true); // a program; 32-bit (or, 64-bit, large addresses)
+    const o = pe + 24;
+    v.setUint16(o, wide ? 0x20b : 0x10b, true);
+    out[o + 2] = 1; // linker 1.0
+    v.setUint32(o + 4, FA, true);
+    v.setUint32(o + 8, placed[1].raw + placed[2].raw, true);
+    v.setUint32(o + 16, 0x1000, true);
+    v.setUint32(o + 20, 0x1000, true);
+    if (wide) v.setBigUint64(o + 24, 0x140000000n, true);
+    else {
+        v.setUint32(o + 24, RD, true);
+        v.setUint32(o + 28, 0x400000, true);
+    }
+    v.setUint32(o + 32, SA, true);
+    v.setUint32(o + 36, FA, true);
+    v.setUint16(o + 40, 4, true); // Windows 4.0 (95 and NT 4)
+    v.setUint16(o + 44, 1, true);
+    v.setUint16(o + 48, 4, true);
+    v.setUint32(o + 56, 0x4000, true);
+    v.setUint32(o + 60, headers, true);
+    v.setUint16(o + 68, 2, true); // a window
+    const sizes = wide ? [72, 80, 88, 96] : [72, 76, 80, 84];
+    [0x100000, 0x1000, 0x100000, 0x1000].forEach((n, i) => (wide ? v.setBigUint64(o + sizes[i], BigInt(n), true) : v.setUint32(o + sizes[i], n, true)));
+    const dirs = o + (wide ? 112 : 96);
+    v.setUint32(dirs - 4, 16, true);
+    for (const [i, rva, size] of [
+        [0, RD + at.exp, at.fnName + 6 - at.exp],
+        [1, RD + at.desc, 40],
+        [2, RS, rsrc.length],
+        [6, RD + at.dbg, 28],
+        [12, RD + at.iat, 2 * w],
+    ]) {
+        v.setUint32(dirs + i * 8, rva, true);
+        v.setUint32(dirs + i * 8 + 4, size, true);
+    }
+    placed.forEach((s, i) => {
+        const e = o + optSize + i * 40;
+        out.set(text(s.name), e);
+        v.setUint32(e + 8, s.data.length, true);
+        v.setUint32(e + 12, s.va, true);
+        v.setUint32(e + 16, s.raw, true);
+        v.setUint32(e + 20, s.ptr, true);
+        v.setUint32(e + 36, s.flags, true);
+        out.set(s.data, s.ptr);
+    });
+    return out;
+}
+
 /** A 32 × 32 icon at 32 bits a pixel: a disc fading from opaque in the middle to see-through at its edge, with its own alpha. */
 export function iconDib32(): number[] {
     const pixels: number[] = [];
@@ -1327,6 +1545,13 @@ export function samples(): Sample[] {
         },
         { name: 'driver.adv', format: 'ail', about: 'Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF', data: ailDriver() },
         { name: 'program.exe', format: 'mz', about: 'DOS program linked as Borland’s TLINK does with overlays: relocations, the segment table, one overlay with a fixup', data: dosProgram() },
+        {
+            name: 'program-pe.exe',
+            format: 'pe',
+            about: 'Windows program (PE, 32-bit) that does nothing: an import, an export, debug info naming a PDB, an icon and version information',
+            data: windowsProgram(),
+        },
+        { name: 'program-pe64.exe', format: 'pe', about: 'The same program, 64-bit (PE32+), with a Rich header as Microsoft’s linker leaves', data: windowsProgram({ wide: true, rich: true }) },
         { name: 'program.pif', format: 'pif', about: 'Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections', data: pif() },
         { name: 'strings-dune2.eng', format: 'strings', about: 'Dune II string table, compressed as the game does', data: stringTable(true) },
         { name: 'strings-dos.ger', format: 'strings', about: 'C&C-style string table, plain, with accented letters in DOS characters', data: stringTable(false) },

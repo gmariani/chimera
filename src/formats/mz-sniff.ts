@@ -25,8 +25,9 @@ export function mzLayout(data: Uint8Array): MzLayout | string {
     if (!signature) return 'It doesn’t start with "MZ".';
     if (data.length >= 64) {
         const next = (data[0x3c] | (data[0x3d] << 8) | (data[0x3e] << 16) | (data[0x3f] << 24)) >>> 0;
-        const two = next >= 64 && next + 4 <= data.length ? String.fromCharCode(data[next], data[next + 1]) : '';
-        if (two === 'NE' || two === 'LE' || two === 'LX' || (two === 'PE' && data[next + 2] === 0 && data[next + 3] === 0))
+        const two = next >= 4 && next + 4 <= data.length ? String.fromCharCode(data[next], data[next + 1]) : '';
+        // A PE header may start inside the MZ header's fields (Windows reads it there); the older kinds start after them.
+        if ((next >= 64 && (two === 'NE' || two === 'LE' || two === 'LX')) || (two === 'PE' && data[next + 2] === 0 && data[next + 3] === 0))
             return `It's a program for Windows or OS/2: the word at 0x3C points to its "${two}" header.`;
     }
     const lastPage = word(data, 2);
