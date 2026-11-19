@@ -862,6 +862,41 @@ export function resourceFile(): Uint8Array {
 }
 
 /**
+ * A 32-bit DOS program as DOS/4GW binds one: a DOS program (the extender's loader; here its code is a bare RETF), then
+ * a DOS/16M module ("BW", its 176-byte header naming VMM.EXP and where the next part is, then 16 bytes standing in for
+ * its code), then the program the extender runs: a DOS header whose newer-header field points past it, to "LE" and
+ * a few bytes standing in for a Linear Executable.
+ */
+export function dos4gwProgram(): Uint8Array {
+    const loader = [
+        ...text('MZ'),
+        ...u16(33),
+        ...u16(1),
+        ...u16(0),
+        ...u16(2),
+        ...u16(0),
+        ...u16(0xffff),
+        ...u16(0),
+        ...u16(0x100),
+        ...u16(0),
+        ...u16(0),
+        ...u16(0),
+        ...u16(0x1e),
+        ...u16(0),
+        ...new Array(4).fill(0),
+        0xcb,
+    ];
+    const moduleAt = loader.length;
+    const programAt = moduleAt + 0xb0 + 16;
+    const header = new Array(0xb0).fill(0);
+    header.splice(0, 6, ...text('BW'), ...u16((0xb0 + 16) % 512), ...u16(1));
+    header.splice(0x1a, 10, ...u16(0x818), ...u32(programAt), ...u32(0xb0 + 16));
+    header.splice(0x70, 8, ...text('VMM.EXP'), 0);
+    const program = [...text('MZ'), ...u16(0x40), ...u16(1), ...u16(0), ...u16(4), ...new Array(0x3c - 10).fill(0), ...u32(0x40), ...text('LE'), 0, 0, ...new Array(12).fill(0x11)];
+    return Uint8Array.from([...loader, ...header, ...new Array(16).fill(0x90), ...program]);
+}
+
+/**
  * A Windows 3 icon library: a 16-bit module (MZ, then NE) with no code, holding one icon and the group that lists it,
  * named CHIMERA. As icon editors made them, and as Dune II's DUNE2.ICO is.
  */
@@ -1590,6 +1625,7 @@ export function samples(): Sample[] {
             data: westwoodDriver(),
         },
         { name: 'driver.adv', format: 'ail', about: 'Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF', data: ailDriver() },
+        { name: 'program-dos4gw.exe', format: 'mz', about: 'A 32-bit DOS program as DOS/4GW binds one: its loader, a DOS/16M module (VMM.EXP), then the program (LE) it runs', data: dos4gwProgram() },
         { name: 'program.exe', format: 'mz', about: 'DOS program linked as Borland’s TLINK does with overlays: relocations, the segment table, one overlay with a fixup', data: dosProgram() },
         {
             name: 'program-pe.exe',

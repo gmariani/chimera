@@ -1,6 +1,7 @@
 import { Bytes, bytesLabel, field, hex } from '../core/bytes';
 import { checkCount } from '../core/limits';
 import type { Entry, Field, FormatParser, TableRow } from '../core/types';
+import { readDos16m } from './dos16m';
 import { mzLayout } from './mz-sniff';
 
 /**
@@ -32,6 +33,9 @@ import { mzLayout } from './mz-sniff';
  */
 
 const seg = (v: number) => `0x${hex(v, 4)}`;
+
+/** DOS/16M's modules, in a few words (see dos16m.ts). */
+const EXTENDER: Record<string, string> = { 'VMM.EXP': 'virtual memory', '4GWPRO.EXP': 'DOS/4GW Professional', 'CFG4GPRO.EXP': 'its settings' };
 const at = (s: number, o: number) => `${hex(s, 4)}:${hex(o, 4)}`;
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 
@@ -402,6 +406,14 @@ const parser: FormatParser = {
             });
         }
 
+        // A DOS extender's modules (DOS/16M, DOS/4GW), bound after its loader, and the program they run.
+        const extender = fbov < 0 && !zip ? readDos16m(data, loaded, (context.name ?? 'program').replace(/\.[^.]*$/, '')) : null;
+        if (extender) {
+            fields.push(...extender.fields);
+            entries.push(...extender.entries);
+            warnings.push(...extender.problems);
+        }
+
         // The segments, to look through: what TLINK says each is, how big, and where.
         const rows: TableRow[] = segments.map((s) => {
             const o = s.flags & OVERLAID ? overlays.find((x) => x.segment === s.segment) : undefined;
@@ -425,16 +437,34 @@ const parser: FormatParser = {
         for (const s of segments) counts.set(SAID[kindOf(s.flags)], counts.get(SAID[kindOf(s.flags)])! + 1);
         const stem = (context.name ?? '').toUpperCase();
         return {
-            title: fbov >= 0 ? 'DOS program (MZ), with Borland overlays' : zip ? 'DOS program (MZ), a self-extracting ZIP' : 'DOS program (MZ)',
+            title:
+                fbov >= 0
+                    ? 'DOS program (MZ), with Borland overlays'
+                    : zip
+                      ? 'DOS program (MZ), a self-extracting ZIP'
+                      : extender
+                        ? `32-bit DOS program, with ${extender.modules.some((m) => /^4GW/i.test(m)) ? 'DOS/4GW' : 'DOS/16M'}`
+                        : 'DOS program (MZ)',
             summary: [
                 ...(made ? [[made.packed ? 'Packed with' : 'Linked with', made.name] as [string, string]] : []),
-                ['Program', `${bytesLabel(imageSize)}${made?.packed ? ', packed' : ''}`],
+                [extender ? 'Loader' : 'Program', `${bytesLabel(imageSize)}${made?.packed ? ', packed' : ''}${extender ? ': the extender’s, which DOS runs' : ''}`],
                 ['Extra memory', `${bytesLabel(minAlloc * 16)} at least, ${maxAlloc === 0xffff ? 'as much as DOS has at most' : `${bytesLabel(maxAlloc * 16)} at most`}`],
                 ['Starts at', `${at(cs, ip)}, at ${(headerSize + entry).toLocaleString('en-US')} in the file`],
                 ['Stack', at(ss, sp)],
                 ['Relocations', relocations.toLocaleString('en-US')],
                 ...(fbov >= 0
                     ? [['Overlays', `${plural(overlays.length, 'piece')} of code, ${bytesLabel(overlayEnd - fbov)}, loaded from ${stem || 'the file'} when they’re called`] as [string, string]]
+                    : []),
+                ...(extender
+                    ? [
+                          ['Extender', extender.modules.map((m) => `${m || '(no name)'}${m.toUpperCase() in EXTENDER ? ` (${EXTENDER[m.toUpperCase()]})` : ''}`).join(', ')] as [string, string],
+                          [
+                              'Runs',
+                              extender.program
+                                  ? `a 32-bit program (${extender.program.kind}), bound after them at ${extender.program.at.toLocaleString('en-US')}`
+                                  : 'no program bound after them: it’s named when it’s run',
+                          ] as [string, string],
+                      ]
                     : []),
                 ...(zip ? [['Unpacks', `${zip.names.slice(0, 20).join(', ')}${zip.count > 20 ? `, and ${zip.count - 20} more` : ''}, from the ZIP after it`] as [string, string]] : []),
                 ...(segments.length
@@ -466,7 +496,7 @@ const parser: FormatParser = {
                   }
                 : undefined,
             // DOS loads nothing past the image; anything there that isn't Borland's overlays or a whole ZIP is the shared checks' to look at.
-            end: fbov >= 0 ? overlayEnd : zip ? data.length : loaded,
+            end: fbov >= 0 ? overlayEnd : zip ? data.length : (extender?.end ?? loaded),
             warnings,
         };
     },
