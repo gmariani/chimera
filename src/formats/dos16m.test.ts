@@ -23,19 +23,28 @@ describe('DOS/16M and DOS/4GW', () => {
         expect(r.warnings).toEqual([]);
         expect(r.title).toBe('32-bit DOS program, with DOS/16M');
         expect(r.summary).toContainEqual(['Extender', 'VMM.EXP (virtual memory)']);
-        expect(r.summary).toContainEqual(['Runs', `a 32-bit program (LE), bound after them at ${PROGRAM}`]);
+        expect(r.summary).toContainEqual(['Runs', `PROGRAM, a 32-bit program (LE), bound after them at ${PROGRAM}`]);
+        // And what that program is, as the LE reader has it.
+        expect(r.summary).toContainEqual(['Fixups', '2: 1 inside the program, 1 imported by number']);
         expect(r.fields.slice(-2).map((f) => [f.name, f.offset, f.length])).toEqual([
             ['DOS/16M module VMM.EXP', MODULE, PROGRAM - MODULE],
             ['Bound program', PROGRAM, data.length - PROGRAM],
         ]);
-        expect(r.fields.at(-1)!.children!.map((f) => [f.name, f.offset])).toEqual([
+        expect(
+            r.fields
+                .at(-1)!
+                .children!.slice(0, 2)
+                .map((f) => [f.name, f.offset])
+        ).toEqual([
             ['DOS header and stub', PROGRAM],
-            ['Linear Executable (LE)', PROGRAM + 0x40],
+            ['LE header', PROGRAM + 0x40],
         ]);
         expect(r.fields.reduce((n, f) => n + f.length, 0)).toBe(data.length);
         expect(r.entries!.map((e) => [e.label, e.offset, e.size])).toEqual([
             ['VMM.EXP', MODULE, PROGRAM - MODULE],
             ['program-program.exe', PROGRAM, data.length - PROGRAM],
+            ['program-program-object-1-code.bin', data.length - 4096 - 16, 4096],
+            ['program-program-object-2-data.bin', data.length - 16, 16],
         ]);
     });
 
@@ -82,11 +91,11 @@ describe.skipIf(!CNC)('the readme viewer and installers Westwood bound to DOS/4G
             expect(r.parsed.warnings, path).toEqual([]);
             expect(r.parsed.title, path).toBe('32-bit DOS program, with DOS/4GW');
             expect(
-                r.parsed.entries!.slice(0, -1).map((e) => e.label),
+                r.parsed.entries!.slice(0, modules.length).map((e) => e.label),
                 path
             ).toEqual(modules);
             const bound = r.parsed.fields.at(-1)!;
-            expect([bound.name, bound.offset, bound.children!.at(-1)!.offset], path).toEqual(['Bound program', at, code]);
+            expect([bound.name, bound.offset, bound.children!.find((f) => f.name === 'LE header')!.offset], path).toEqual(['Bound program', at, code]);
             expect(
                 r.parsed.fields.reduce((n, f) => n + f.length, 0),
                 path

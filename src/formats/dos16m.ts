@@ -1,5 +1,6 @@
-import { Bytes, bytesLabel, field, hex } from '../core/bytes';
-import type { Entry, Field } from '../core/types';
+import { Bytes, bytesLabel, field, fillGaps, hex } from '../core/bytes';
+import type { Entry, Field, TableRow } from '../core/types';
+import { readLinear } from './linear';
 
 /**
  * Rational Systems' DOS/16M, and DOS/4GW, the DOS extender built on it that Watcom C shipped and most 32-bit DOS games
@@ -11,7 +12,7 @@ import type { Entry, Field } from '../core/types';
  * file; the selectors and memory it wants; its options and flags), and the module's name. The extender's modules have
  * names ending .EXP: VMM.EXP (virtual memory), 4GWPRO.EXP (DOS/4GW Professional itself), CFG4GPRO.EXP (its settings).
  * After the last, the program itself: a DOS header whose newer-header field points to its 32-bit code, a Linear
- * Executable ("LE"), which isn't read here yet.
+ * Executable ("LE"), read as linear.ts reads them.
  *
  * The header's fields are from Open Watcom's exe16m.h (https://github.com/open-watcom/open-watcom-v2, bld/watcom/h;
  * Sybase Open Watcom Public License, so facts only). That the modules chain this way, and end with the bound program,
@@ -60,7 +61,7 @@ export interface Dos16m {
     /** The modules' names, in order. */
     modules: string[];
     /** The program the extender runs, when it's bound after the modules. */
-    program: { at: number; codeAt: number; kind: string } | null;
+    program: { at: number; codeAt: number; kind: string; name: string; summary: [string, string][]; rows: TableRow[] } | null;
     /** Where what's read ends. */
     end: number;
     problems: string[];
@@ -151,32 +152,31 @@ export function readDos16m(data: Uint8Array, from: number, stem: string, { alone
         const codeAt = at + newer;
         const kind = codeAt + 2 <= data.length && newer >= 0x40 ? b.ascii(codeAt, 2) : '';
         if (kind === 'LE' || kind === 'LX') {
+            // Its offsets "from the file" count from its own DOS header, here, not from the start of the file it's bound into.
+            const lin = readLinear(data, at, codeAt, `${stem}-program`, modules.some((m) => /^4GW/i.test(m)) ? 'DOS/4GW' : 'DOS/16M');
             const pages = b.u16(at + 4);
             const stub = Math.min(codeAt, at + (pages ? (pages - 1) * 512 + (b.u16(at + 2) || 512) : 0x40));
-            program = { at, codeAt, kind };
-            const parts: Field[] = [field('DOS header and stub', at, stub - at, bytesLabel(stub - at), 'Its newer-header field says where the 32-bit code is.')];
-            if (codeAt > stub) {
-                const zeros = data.subarray(stub, codeAt).every((v) => v === 0);
-                parts.push(field(zeros ? 'Padding' : 'Not read', stub, codeAt - stub, bytesLabel(codeAt - stub)));
-            }
-            parts.push(field(`Linear Executable (${kind})`, codeAt, data.length - codeAt, bytesLabel(data.length - codeAt), 'The 32-bit program the extender runs. Not read here yet.'));
+            const to = Math.min(data.length, Math.max(lin.end, ...lin.fields.map((f) => f.offset + f.length)));
+            program = { at, codeAt, kind, name: lin.name, summary: lin.summary, rows: lin.rows };
+            const parts = fillGaps(
+                data,
+                [field('DOS header and stub', at, stub - at, bytesLabel(stub - at), 'Its newer-header field says where the 32-bit program’s header is.'), ...lin.fields],
+                at,
+                to,
+                'Not pointed to'
+            );
             fields.push({
                 name: 'Bound program',
                 offset: at,
-                length: data.length - at,
-                value: `32-bit (${kind}), ${bytesLabel(data.length - at)}`,
+                length: to - at,
+                value: `${lin.name || 'no name'}, 32-bit (${kind}), ${bytesLabel(to - at)}`,
                 note: 'What the extender loads and runs.',
                 children: parts,
             });
-            entries.push({
-                name: null,
-                label: `${stem}-program.exe`,
-                offset: at,
-                size: data.length - at,
-                data: data.subarray(at),
-                meta: { Type: `32-bit program (${kind}), which the extender runs` },
-            });
-            end = data.length;
+            entries.push({ name: null, label: `${stem}-program.exe`, offset: at, size: to - at, data: data.subarray(at, to), meta: { Type: `32-bit program (${kind}), which the extender runs` } });
+            entries.push(...lin.entries);
+            problems.push(...lin.problems);
+            end = to;
         }
     }
     return { fields, entries, modules, program, end, problems };

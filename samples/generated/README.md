@@ -42,7 +42,8 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `music.adl` | Westwood AdLib music, as Dune II’s: a conductor starting two voices, one looping as Westwood’s tools do | 1,177 bytes |
 | `alfx.drv` | Westwood sound driver, laid out as Dune II’s ALFX.DRV: 18 functions, an AdLib player’s three music commands, every routine a bare return | 117 bytes |
 | `driver.adv` | Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF | 150 bytes |
-| `program-dos4gw.exe` | A 32-bit DOS program as DOS/4GW binds one: its loader, a DOS/16M module (VMM.EXP), then the program (LE) it runs | 305 bytes |
+| `program-le.exe` | A Linear Executable (LE) as Watcom lays one out: two objects, an exported entry point, two fixups, an import | 4,496 bytes |
+| `program-dos4gw.exe` | A 32-bit DOS program as DOS/4GW binds one: its loader, a DOS/16M module (VMM.EXP), then the program (LE) it runs | 4,721 bytes |
 | `program.exe` | DOS program linked as Borland’s TLINK does with overlays: relocations, the segment table, one overlay with a fixup | 262 bytes |
 | `program-pe.exe` | Windows program (PE, 32-bit) that does nothing: an import, an export, debug info naming a PDB, an icon and version information | 3,072 bytes |
 | `program-pe64.exe` | The same program, 64-bit (PE32+), with a Rich header as Microsoft’s linker leaves | 3,584 bytes |

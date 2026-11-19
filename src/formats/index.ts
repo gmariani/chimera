@@ -12,6 +12,7 @@ import { sniffNe } from './ne-sniff';
 import { sniffPe } from './pe-sniff';
 import { sniffMz } from './mz-sniff';
 import { sniffDos16mModule } from './dos16m-sniff';
+import { sniffLe } from './le-sniff';
 import { sniffPif } from './pif-sniff';
 import { sniffVersion } from './version-sniff';
 import { sniffRes } from './res-sniff';
@@ -187,6 +188,14 @@ export const FORMATS: FormatDescriptor[] = [
         load: parserOf(() => import('./ne')),
     },
     // A plain DOS program: the MZ header and nothing newer where 0x3C points (Windows and OS/2 programs start with an MZ header too).
+    {
+        id: 'le',
+        name: 'Linear Executable (LE, LX): DOS/4GW programs, Windows drivers, OS/2',
+        extensions: ['exe', 'vxd', '386', 'dll'],
+        sniff: sniffLe,
+        byNameAlone: false,
+        load: parserOf(() => import('./le')),
+    },
     { id: 'dos16m', name: 'DOS extender module (DOS/16M)', extensions: ['exp'], sniff: sniffDos16mModule, load: parserOf(() => import('./dos16m-module')) },
     { id: 'mz', name: 'DOS program (MZ)', extensions: ['exe', 'com', 'ovl'], sniff: sniffMz, byNameAlone: false, load: parserOf(() => import('./mz')) },
     { id: 'voc', name: 'Sound (VOC)', extensions: ['voc'], sniff: sniffVoc, load: parserOf(() => import('./voc')) },

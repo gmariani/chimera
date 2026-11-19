@@ -407,7 +407,7 @@ const parser: FormatParser = {
         }
 
         // A DOS extender's modules (DOS/16M, DOS/4GW), bound after its loader, and the program they run.
-        const extender = fbov < 0 && !zip ? readDos16m(data, loaded, (context.name ?? 'program').replace(/\.[^.]*$/, '')) : null;
+        const extender = fbov < 0 && !zip ? readDos16m(data, loaded, (context.name ?? 'program').replace(/^.*[\\/]/, '').replace(/\.[^.]*$/, '')) : null;
         if (extender) {
             fields.push(...extender.fields);
             entries.push(...extender.entries);
@@ -461,9 +461,11 @@ const parser: FormatParser = {
                           [
                               'Runs',
                               extender.program
-                                  ? `a 32-bit program (${extender.program.kind}), bound after them at ${extender.program.at.toLocaleString('en-US')}`
+                                  ? `${extender.program.name ? `${extender.program.name}, ` : ''}a 32-bit program (${extender.program.kind}), bound after them at ${extender.program.at.toLocaleString('en-US')}`
                                   : 'no program bound after them: it’s named when it’s run',
                           ] as [string, string],
+                          // What the program is, as linear.ts reads it.
+                          ...(extender.program?.summary.filter(([k]) => k !== 'Module') ?? []),
                       ]
                     : []),
                 ...(zip ? [['Unpacks', `${zip.names.slice(0, 20).join(', ')}${zip.count > 20 ? `, and ${zip.count - 20} more` : ''}, from the ZIP after it`] as [string, string]] : []),
@@ -481,20 +483,34 @@ const parser: FormatParser = {
             ],
             fields,
             entries: entries.length ? entries : undefined,
-            preview: rows.length
-                ? {
-                      kind: 'table',
-                      columns: [
-                          { key: 'segment', label: 'Segment' },
-                          { key: 'kind', label: 'Kind' },
-                          { key: 'size', label: 'Size', numeric: true },
-                          { key: 'at', label: 'In the file at', numeric: true },
-                          { key: 'entries', label: 'Entry points', numeric: true },
-                      ],
-                      groups,
-                      rows,
-                  }
-                : undefined,
+            preview:
+                extender?.program && !rows.length
+                    ? {
+                          kind: 'table',
+                          columns: [
+                              { key: 'object', label: 'Object', numeric: true },
+                              { key: 'size', label: 'Size in memory', numeric: true },
+                              { key: 'address', label: 'Address' },
+                              { key: 'flags', label: 'Flags' },
+                              { key: 'pages', label: 'Pages', numeric: true },
+                          ],
+                          groups: [...new Set(extender.program.rows.map((r) => r.group))],
+                          rows: extender.program.rows,
+                      }
+                    : rows.length
+                      ? {
+                            kind: 'table',
+                            columns: [
+                                { key: 'segment', label: 'Segment' },
+                                { key: 'kind', label: 'Kind' },
+                                { key: 'size', label: 'Size', numeric: true },
+                                { key: 'at', label: 'In the file at', numeric: true },
+                                { key: 'entries', label: 'Entry points', numeric: true },
+                            ],
+                            groups,
+                            rows,
+                        }
+                      : undefined,
             // DOS loads nothing past the image; anything there that isn't Borland's overlays or a whole ZIP is the shared checks' to look at.
             end: fbov >= 0 ? overlayEnd : zip ? data.length : (extender?.end ?? loaded),
             warnings,

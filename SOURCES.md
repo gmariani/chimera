@@ -68,6 +68,7 @@ No code is taken from any of these: they're where the facts about each format co
 ### Programs and drivers
 
 - **Microsoft's MS-DOS Programmer's Reference** and **Ralf Brown's Interrupt List** (INT 21h function 4Bh): DOS programs (MZ).
+- **IBM's "LX - Linear eXecutable Module Format Description"** (1992, reprinted at http://www.edm2.com/index.php/LX_-_Linear_eXecutable_Module_Format_Description; IBM's copyright, so facts only): Linear Executables (LE, LX). **Open Watcom's exeflat.h** (same repository and license as below, facts only): where LE differs from LX. The byte order of LE's page numbers, and that offsets "from the file" count from a bound program's own DOS header, were worked out from TD's and Counterstrike's DOS/4GW programs.
 - **Open Watcom's exe16m.h** (https://github.com/open-watcom/open-watcom-v2, bld/watcom/h; Sybase Open Watcom Public License, so facts only): the DOS/16M module header ("BW") that DOS/4GW's modules have. How the modules chain, and the program bound after them, was worked out from TD's and Counterstrike's files.
 - **Borland's run-time library** (SE.ASM), as GeReV's LoadBorlandOverlays.java reads it (https://github.com/GeReV/ghidra_scripts): Borland's overlays.
 - **Microsoft's "Executable-File Header Format"** (the NE spec in the Windows 3.1 SDK, mirrored at https://wiki.osdev.org/NE): 16-bit Windows modules.

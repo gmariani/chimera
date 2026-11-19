@@ -120,9 +120,9 @@ export function signature(data: Uint8Array): Signature | null {
         }
         const ne = newExecutable(data, pe);
         if (ne) return ne;
-        if (pe + 4 <= data.length && (ascii(data, pe, 'LE') || ascii(data, pe, 'LX')))
+        if (pe >= 0x40 && pe + 4 <= data.length && (ascii(data, pe, 'LE') || ascii(data, pe, 'LX')))
             // LE: 32-bit DOS programs run by DOS/4GW, Windows 3 and 95 drivers (VxDs), OS/2 2's; LX: OS/2's.
-            return { name: ascii(data, pe, 'LE') ? '32-bit DOS program, Windows driver or OS/2 program (LE)' : 'OS/2 program (LX)', ext: 'exe', exts: PROGRAMS, length: 2, runs: true };
+            return { name: ascii(data, pe, 'LE') ? '32-bit DOS program, Windows driver or OS/2 program (LE)' : 'OS/2 program (LX)', ext: 'exe', exts: PROGRAMS, format: 'le', length: 2, runs: true };
         return { name: 'DOS program (MZ)', ext: 'exe', exts: PROGRAMS, format: 'mz', length: 2, runs: true };
     }
     if (bytes(data, 0, [0x7f, 0x45, 0x4c, 0x46])) return { name: 'Linux or Unix program (ELF)', ext: 'elf', length: 4, runs: true };

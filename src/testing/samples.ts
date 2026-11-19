@@ -862,10 +862,73 @@ export function resourceFile(): Uint8Array {
 }
 
 /**
+ * A Linear Executable as Watcom's linker lays one out, LE (or LX with `lx`): a DOS header pointing straight to the
+ * linear header (no stub), then its tables (two objects, code and data, a page each; the module's name, PROGRAM, and
+ * an exported entry point, START, at the start of the code; two fixups on the code's page, one to the data object and
+ * one importing function 5 from DOSCALLS; the imported module's name), then the pages: 4,096 bytes of code (a RET,
+ * then the two places the fixups fill) and 16 of data.
+ */
+export function linearProgram({ lx = false }: { lx?: boolean } = {}): Uint8Array {
+    const HEADER = 196;
+    const pascal = (s: string) => [s.length, ...text(s)];
+    const objects = [...u32(4096), ...u32(0x10000), ...u32(0x2005), ...u32(1), ...u32(1), ...u32(0), ...u32(16), ...u32(0x20000), ...u32(0x2003), ...u32(2), ...u32(1), ...u32(0)];
+    const map = lx ? [...u32(0), ...u16(4096), ...u16(0), ...u32(4096), ...u16(16), ...u16(0)] : [0, 0, 1, 0, 0, 0, 2, 0];
+    const resident = [...pascal('PROGRAM'), ...u16(0), ...pascal('START'), ...u16(1), 0];
+    const entry = [1, 3, ...u16(1), 1, ...u32(0), 0];
+    // Page 1: a 32-bit offset at 1 to object 2's start (internal, 8-bit object, 32-bit target); a 32-bit offset at 5 to
+    // DOSCALLS's function 5 (by number, 8-bit module, 16-bit number).
+    const records = [7, 0x10, ...u16(1), 2, ...u32(0), 7, 0x01, ...u16(5), 1, ...u16(5)];
+    const fixupPages = [...u32(0), ...u32(records.length), ...u32(records.length)];
+    const imports = pascal('DOSCALLS');
+    const at = { objects: HEADER } as Record<string, number>;
+    at.map = at.objects + objects.length;
+    at.resident = at.map + map.length;
+    at.entry = at.resident + resident.length;
+    at.fixupPages = at.entry + entry.length;
+    at.records = at.fixupPages + fixupPages.length;
+    at.imports = at.records + records.length;
+    at.names = at.imports + imports.length;
+    const tablesEnd = at.names;
+    const pagesAt = Math.ceil((0x40 + tablesEnd) / 16) * 16;
+    const h = new Array(HEADER).fill(0);
+    const set32 = (o: number, v: number) => h.splice(o, 4, ...u32(v));
+    h.splice(0, 2, ...text(lx ? 'LX' : 'LE'));
+    h.splice(8, 4, ...u16(2), ...u16(1));
+    for (const [o, v] of [
+        [0x14, 2],
+        [0x18, 1],
+        [0x1c, 0],
+        [0x20, 2],
+        [0x24, 16],
+        [0x28, 4096],
+        [0x2c, lx ? 0 : 16],
+        [0x30, fixupPages.length + records.length],
+        [0x38, at.fixupPages - at.objects],
+        [0x40, at.objects],
+        [0x44, 2],
+        [0x48, at.map],
+        [0x50, at.resident],
+        [0x58, at.resident],
+        [0x5c, at.entry],
+        [0x68, at.fixupPages],
+        [0x6c, at.records],
+        [0x70, at.imports],
+        [0x74, 1],
+        [0x78, at.names],
+        [0x80, pagesAt],
+    ])
+        set32(o, v);
+    const dos = [...text('MZ'), ...u16(0x40), ...u16(1), ...u16(0), ...u16(4), ...new Array(0x3c - 10).fill(0), ...u32(0x40)];
+    const tables = [...h.slice(HEADER), ...objects, ...map, ...resident, ...entry, ...fixupPages, ...records, ...imports];
+    const code = [0xc3, ...new Array(4095).fill(0)];
+    const data = Array.from({ length: 16 }, (_, i) => i);
+    return Uint8Array.from([...dos, ...h, ...tables, ...new Array(pagesAt - 0x40 - HEADER - tables.length).fill(0), ...code, ...data]);
+}
+
+/**
  * A 32-bit DOS program as DOS/4GW binds one: a DOS program (the extender's loader; here its code is a bare RETF), then
  * a DOS/16M module ("BW", its 176-byte header naming VMM.EXP and where the next part is, then 16 bytes standing in for
- * its code), then the program the extender runs: a DOS header whose newer-header field points past it, to "LE" and
- * a few bytes standing in for a Linear Executable.
+ * its code), then the program the extender runs, linearProgram's.
  */
 export function dos4gwProgram(): Uint8Array {
     const loader = [
@@ -892,8 +955,7 @@ export function dos4gwProgram(): Uint8Array {
     header.splice(0, 6, ...text('BW'), ...u16((0xb0 + 16) % 512), ...u16(1));
     header.splice(0x1a, 10, ...u16(0x818), ...u32(programAt), ...u32(0xb0 + 16));
     header.splice(0x70, 8, ...text('VMM.EXP'), 0);
-    const program = [...text('MZ'), ...u16(0x40), ...u16(1), ...u16(0), ...u16(4), ...new Array(0x3c - 10).fill(0), ...u32(0x40), ...text('LE'), 0, 0, ...new Array(12).fill(0x11)];
-    return Uint8Array.from([...loader, ...header, ...new Array(16).fill(0x90), ...program]);
+    return Uint8Array.from([...loader, ...header, ...new Array(16).fill(0x90), ...linearProgram()]);
 }
 
 /**
@@ -1625,6 +1687,7 @@ export function samples(): Sample[] {
             data: westwoodDriver(),
         },
         { name: 'driver.adv', format: 'ail', about: 'Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF', data: ailDriver() },
+        { name: 'program-le.exe', format: 'le', about: 'A Linear Executable (LE) as Watcom lays one out: two objects, an exported entry point, two fixups, an import', data: linearProgram() },
         { name: 'program-dos4gw.exe', format: 'mz', about: 'A 32-bit DOS program as DOS/4GW binds one: its loader, a DOS/16M module (VMM.EXP), then the program (LE) it runs', data: dos4gwProgram() },
         { name: 'program.exe', format: 'mz', about: 'DOS program linked as Borland’s TLINK does with overlays: relocations, the segment table, one overlay with a fixup', data: dosProgram() },
         {
