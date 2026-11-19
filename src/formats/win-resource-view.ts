@@ -2,6 +2,7 @@ import { bytesLabel, field, hex } from '../core/bytes';
 import type { Entry, Field, Preview, TableRow } from '../core/types';
 import { decodeDib } from './dib';
 import { pictureFinder, readDialog } from './win-dialogs';
+import { readMenu } from './win-menus';
 import {
     bitmapFile,
     iconGroupFile,
@@ -50,7 +51,7 @@ export interface ResourceView {
 }
 
 /** Resources with no signature of their own, and the readers that read them once saved. */
-const SAVED_AS: Record<number, string> = { 6: 'win-strings', 11: 'win-messages' };
+const SAVED_AS: Record<number, string> = { 4: 'win-menu', 6: 'win-strings', 11: 'win-messages' };
 
 const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`;
 
@@ -68,6 +69,7 @@ export function viewResources(
     const nameOf = (r: WinResource) => `${r.typeName} ${r.name}${several(r) ? ` (${languageName(r.lang)})` : ''}`;
     const items: { title: string; preview: Preview }[] = [];
     const dialogs: { title: string; preview: Preview }[] = [];
+    const menus: { title: string; preview: Preview }[] = [];
     const inside = new Map<WinResource, { value: string; fields?: Field[] }>();
     const pictures = pictureFinder(data, resources);
     const stringRows: TableRow[] = [];
@@ -114,6 +116,11 @@ export function viewResources(
             t.problems.forEach((p) => repeat('messages', p));
             listed(r, 'Messages', t.strings);
             inside.set(r, { value: plural(t.strings.length, 'message'), fields: t.fields });
+        } else if (r.type === 4) {
+            const m = readMenu(data, r.at, r.length, true);
+            m.problems.forEach((p) => repeat('menu', `${nameOf(r)}: ${p}`));
+            inside.set(r, { value: m.items.map((i) => i.text.replace(/&(.)/g, '$1')).join(', ') || 'empty', fields: m.fields });
+            if (m.text) menus.push({ title: `${nameOf(r)}${m.extended ? ' (extended)' : ''}`, preview: { kind: 'text', text: m.text } });
         } else if (r.type === 5) {
             const d = readDialog(data, r.at, r.length, true, pictures);
             if (!d) {
@@ -141,7 +148,7 @@ export function viewResources(
         });
     const versionLines = version ? versionText(version) : '';
     if (versionLines) items.push({ title: 'Version information', preview: { kind: 'text', text: versionLines } });
-    items.push(...dialogs);
+    items.push(...menus, ...dialogs);
     const manifest = resources.find((r) => r.type === 24);
     if (manifest)
         items.push({

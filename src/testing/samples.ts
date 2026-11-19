@@ -861,6 +861,100 @@ export function resourceFile(): Uint8Array {
     return Uint8Array.from([...empty, ...entry(3, 1, icon), ...entry(14, 1, group), ...entry(6, 7, strings), ...entry(5, 100, dialog)]);
 }
 
+// Signatures and certificates, in DER: each value its tag, its length (one byte under 128, else 0x81 or 0x82 and the
+// length), and its contents.
+const der = (tag: number, ...contents: number[][]) => {
+    const body = contents.flat();
+    const n = body.length;
+    return [tag, ...(n < 0x80 ? [n] : n < 0x100 ? [0x81, n] : [0x82, n >> 8, n & 0xff]), ...body];
+};
+const derOid = (oid: string) => {
+    const [a, b, ...rest] = oid.split('.').map(Number);
+    const base128 = (v: number) => {
+        const out = [v & 0x7f];
+        for (v = Math.floor(v / 128); v; v = Math.floor(v / 128)) out.unshift((v & 0x7f) | 0x80);
+        return out;
+    };
+    return der(0x06, [a * 40 + b, ...rest.flatMap(base128)]);
+};
+const derName = (parts: [string, string][]) => der(0x30, ...parts.map(([oid, v]) => der(0x31, der(0x30, derOid(oid), der(0x13, text(v))))));
+
+/**
+ * A certificate (X.509 version 3) as a certificate authority issues one, for code signing: serial number 0x1234, signed
+ * with SHA-256 and RSA, issued by "Chimera Test CA" to "Chimera Sample" (organization "Chimera", country US), valid
+ * from 2020-01-01 to 2030-12-31, a 1,024-bit RSA key (its modulus 0x80 followed by 127 bytes of 0x11; exponent 65537),
+ * an extended key usage of code signing, and 32 bytes standing in for the issuer's signature.
+ */
+export function certificate(): number[] {
+    const sha256Rsa = der(0x30, derOid('1.2.840.113549.1.1.11'), der(0x05));
+    const modulus = der(0x02, [0x00, 0x80, ...new Array(127).fill(0x11)]);
+    const key = der(0x30, der(0x30, derOid('1.2.840.113549.1.1.1'), der(0x05)), der(0x03, [0, ...der(0x30, modulus, der(0x02, [1, 0, 1]))]));
+    const eku = der(0x30, derOid('2.5.29.37'), der(0x04, der(0x30, derOid('1.3.6.1.5.5.7.3.3'))));
+    const tbs = der(
+        0x30,
+        der(0xa0, der(0x02, [2])),
+        der(0x02, [0x12, 0x34]),
+        sha256Rsa,
+        derName([['2.5.4.3', 'Chimera Test CA']]),
+        der(0x30, der(0x17, text('200101000000Z')), der(0x17, text('301231235959Z'))),
+        derName([
+            ['2.5.4.6', 'US'],
+            ['2.5.4.10', 'Chimera'],
+            ['2.5.4.3', 'Chimera Sample'],
+        ]),
+        key,
+        der(0xa3, der(0x30, eku))
+    );
+    return der(0x30, tbs, sha256Rsa, der(0x03, [0, ...new Array(32).fill(0x5a)]));
+}
+
+/**
+ * An Authenticode signature, as a Windows program carries one (PKCS #7 signed data): the program's SHA-256 hash (32
+ * bytes of 0xAB), the certificate above, and its holder's signature, which vouches for the hash, the signing time
+ * (2021-06-15 12:00:00 UTC) and the program's name, "Chimera Sample", with 64 bytes standing in for the signature
+ * itself. Then, as Windows pads them in a program, zeros to a multiple of 8 bytes.
+ */
+export function authenticode(): Uint8Array {
+    const sha256 = der(0x30, derOid('2.16.840.1.101.3.4.2.1'), der(0x05));
+    const content = der(
+        0x30,
+        derOid('1.3.6.1.4.1.311.2.1.4'),
+        der(0xa0, der(0x30, der(0x30, derOid('1.3.6.1.4.1.311.2.1.15'), der(0x30, der(0x03, [0]))), der(0x30, sha256, der(0x04, new Array(32).fill(0xab)))))
+    );
+    const attribute = (oid: string, value: number[]) => der(0x30, derOid(oid), der(0x31, value));
+    const signed = der(
+        0xa0,
+        attribute('1.2.840.113549.1.9.3', derOid('1.3.6.1.4.1.311.2.1.4')),
+        attribute('1.2.840.113549.1.9.5', der(0x17, text('210615120000Z'))),
+        attribute(
+            '1.3.6.1.4.1.311.2.1.12',
+            der(
+                0x30,
+                der(
+                    0xa0,
+                    der(
+                        0x80,
+                        [...'Chimera Sample'].flatMap((c) => [0, c.charCodeAt(0)])
+                    )
+                )
+            )
+        ),
+        attribute('1.2.840.113549.1.9.4', der(0x04, new Array(32).fill(0xcd)))
+    );
+    const signer = der(
+        0x30,
+        der(0x02, [1]),
+        der(0x30, derName([['2.5.4.3', 'Chimera Test CA']]), der(0x02, [0x12, 0x34])),
+        sha256,
+        signed,
+        der(0x30, derOid('1.2.840.113549.1.1.1'), der(0x05)),
+        der(0x04, new Array(64).fill(0x77))
+    );
+    const signedData = der(0x30, der(0x02, [1]), der(0x31, sha256), content, der(0xa0, certificate()), der(0x31, signer));
+    const info = der(0x30, derOid('1.2.840.113549.1.7.2'), der(0xa0, signedData));
+    return Uint8Array.from([...info, ...new Array((8 - (info.length % 8)) % 8).fill(0)]);
+}
+
 /**
  * A Linear Executable as Watcom's linker lays one out, LE (or LX with `lx`): a DOS header pointing straight to the
  * linear header (no stub), then its tables (two objects, code and data, a page each; the module's name, PROGRAM, and
@@ -1687,6 +1781,8 @@ export function samples(): Sample[] {
             data: westwoodDriver(),
         },
         { name: 'driver.adv', format: 'ail', about: 'Miles AIL 2 sound driver: the tables of a Sound Blaster digital driver, each function a bare RETF', data: ailDriver() },
+        { name: 'signature.p7s', format: 'pkcs7', about: 'Authenticode signature (PKCS #7): a program’s hash, a code-signing certificate, the signer’s attributes', data: authenticode() },
+        { name: 'certificate.cer', format: 'x509', about: 'Certificate (X.509 version 3) for code signing, with a 1,024-bit RSA key', data: Uint8Array.from(certificate()) },
         { name: 'program-le.exe', format: 'le', about: 'A Linear Executable (LE) as Watcom lays one out: two objects, an exported entry point, two fixups, an import', data: linearProgram() },
         { name: 'program-dos4gw.exe', format: 'mz', about: 'A 32-bit DOS program as DOS/4GW binds one: its loader, a DOS/16M module (VMM.EXP), then the program (LE) it runs', data: dos4gwProgram() },
         { name: 'program.exe', format: 'mz', about: 'DOS program linked as Borland’s TLINK does with overlays: relocations, the segment table, one overlay with a fixup', data: dosProgram() },

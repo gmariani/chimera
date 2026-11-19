@@ -5,6 +5,7 @@ import { entropy, signature } from './identify';
 import { peOffset } from './pe-sniff';
 import { viewResources } from './win-resource-view';
 import { languageName, resourceCounts, RESOURCE_TYPES } from './win-resources';
+import { readSignature, signedBy } from './pkcs7';
 
 /**
  * Windows programs and libraries from Windows 95 and NT on, "Portable Executable" (PE): .exe, .dll, .sys, .ocx, .cpl,
@@ -774,7 +775,20 @@ const parser: FormatParser = {
                 }
                 const type = b.u16(p + 6);
                 const kind = type === 2 ? 'Authenticode (PKCS #7)' : type === 1 ? 'X.509 certificate' : `type ${type}`;
-                children.push(field(`Signature ${children.length + 1}`, p, length, kind, `Revision ${hex(b.u16(p + 4), 4)}.`));
+                // What it says: who signed it, and the hash of the program it vouches for (see pkcs7.ts).
+                const inside: Field[] = [field('Length', p, 4, bytesLabel(length)), field('Revision', p + 4, 2, `0x${hex(b.u16(p + 4), 4)}`), field('Type', p + 6, 2, kind)];
+                let said = '';
+                if (type === 2) {
+                    try {
+                        const info = readSignature(data, p + 8, p + length);
+                        inside.push(...info.fields);
+                        info.problems.forEach((t) => repeat('signature', `Signature ${children.length + 1}: ${t}`));
+                        said = `${signedBy(info)}${info.digest ? `; the program’s ${info.digest.algorithm} hash` : ''}${info.signers[0]?.timestamp ? `; timestamped ${info.signers[0].timestamp.at.slice(0, 10)}` : ''}`;
+                    } catch (e) {
+                        repeat('signature', `Signature ${children.length + 1} isn’t a signature Windows could read: ${e instanceof Error ? e.message : String(e)}.`);
+                    }
+                }
+                children.push({ ...field(`Signature ${children.length + 1}`, p, length, said || kind), children: fillGaps(data, inside, p, p + length, 'Not read') });
                 entries.push({
                     name: `${stem}-signature-${children.length}.${type === 2 ? 'p7s' : 'bin'}`,
                     label: `Signature ${children.length}`,
@@ -783,7 +797,7 @@ const parser: FormatParser = {
                     data: data.subarray(p + 8, p + length),
                     meta: { Type: kind },
                 });
-                signed ||= kind;
+                signed ||= said ? `${said} (Authenticode)` : kind;
                 p += Math.ceil(length / 8) * 8;
             }
             if (sig.rva < data.length)

@@ -13,6 +13,7 @@ import { sniffPe } from './pe-sniff';
 import { sniffMz } from './mz-sniff';
 import { sniffDos16mModule } from './dos16m-sniff';
 import { sniffLe } from './le-sniff';
+import { sniffCertificate, sniffPkcs7 } from './pkcs7-sniff';
 import { sniffPif } from './pif-sniff';
 import { sniffVersion } from './version-sniff';
 import { sniffRes } from './res-sniff';
@@ -163,9 +164,13 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'pif', name: 'Program information file (PIF)', extensions: ['pif'], sniff: sniffPif, load: parserOf(() => import('./pif')) },
     { id: 'ico', name: 'Icon or cursor (ICO, CUR)', extensions: ['ico', 'cur'], sniff: sniffIco, load: parserOf(() => import('./ico')) },
     // Saved from a program's resources: it has no name of its own.
+    { id: 'pkcs7', name: 'Signature (PKCS #7, Authenticode)', extensions: ['p7s', 'p7b', 'p7c', 'p7m'], sniff: sniffPkcs7, load: parserOf(() => import('./pkcs7')) },
+    { id: 'x509', name: 'Certificate (X.509)', extensions: ['cer', 'crt', 'der'], sniff: sniffCertificate, load: parserOf(() => import('./pkcs7')) },
     { id: 'res', name: 'Resource file (.res)', extensions: ['res'], sniff: sniffRes, load: parserOf(() => import('./res')) },
     { id: 'version', name: 'Version information (Windows resource)', extensions: ['bin'], sniff: sniffVersion, byNameAlone: false, load: parserOf(() => import('./version')) },
     // A program's resources with no signature of their own: read so only when the program they come from says that's what they are.
+    { id: 'win-menu', name: 'Menu (Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/menu')) },
+    { id: 'win-menu-16', name: 'Menu (16-bit Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/menu-16')) },
     { id: 'win-strings', name: 'String table (Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/strings')) },
     { id: 'win-strings-16', name: 'String table (16-bit Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/strings-16')) },
     { id: 'win-messages', name: 'Message table (Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/messages')) },

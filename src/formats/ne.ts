@@ -5,6 +5,7 @@ import type { Entry, Field, FormatParser, Preview, TableRow } from '../core/type
 import { debugInfo } from './debug-info';
 import { decodeDib } from './dib';
 import { pictureFinder, readDialog } from './win-dialogs';
+import { readMenu } from './win-menus';
 import { neOffset } from './ne-sniff';
 import { bitmapFile, iconGroupFile, readStringTable, readVersionInfo, versionText, resourceCounts, RESOURCE_TYPES as TYPES, type VersionInfo } from './win-resources';
 
@@ -156,6 +157,7 @@ const parser: FormatParser = {
         const inside = new Map<Resource, { value: string; fields: Field[] }>();
         const stringRows: TableRow[] = [];
         const dialogs: { title: string; preview: Preview }[] = [];
+        const menus: { title: string; preview: Preview }[] = [];
         const pictures = pictureFinder(
             data,
             resources.filter((r) => fits(r.at, r.length))
@@ -189,6 +191,11 @@ const parser: FormatParser = {
                 warnings.push(...t.problems);
                 for (const x of t.strings) stringRows.push({ group: 'Strings', cells: { id: String(x.id), text: x.text } });
                 inside.set(r, { value: `${t.strings.length} string${t.strings.length === 1 ? '' : 's'}`, fields: t.fields });
+            } else if (r.type === 4) {
+                const m = readMenu(data, r.at, r.length, false);
+                warnings.push(...m.problems.map((p) => `${r.typeName} ${r.name}: ${p}`));
+                inside.set(r, { value: m.items.map((i) => i.text.replace(/&(.)/g, '$1')).join(', ') || 'empty', fields: m.fields });
+                if (m.text) menus.push({ title: `${r.typeName} ${r.name}`, preview: { kind: 'text', text: m.text } });
             } else if (r.type === 5) {
                 const d = readDialog(data, r.at, r.length, false, pictures);
                 if (!d) {
@@ -215,7 +222,7 @@ const parser: FormatParser = {
             });
         const versionLines = version ? versionText(version) : '';
         if (versionLines) items.push({ title: 'Version information', preview: { kind: 'text', text: versionLines } });
-        items.push(...dialogs);
+        items.push(...menus, ...dialogs);
 
         // Each resource to save as it's stored (bitmaps as .bmp files), except icons and cursors and their groups: those come together, below.
         const entries: Entry[] = [];
@@ -231,7 +238,7 @@ const parser: FormatParser = {
                 data: bmp ?? data.subarray(r.at, r.at + r.length),
                 meta: { Type: bmp ? 'Bitmap file, from the resource' : r.typeName },
                 // String tables and dialogs have no signature: say what they are, for when they're opened.
-                ...(r.type === 5 ? { format: 'win-dialog-16' } : r.type === 6 ? { format: 'win-strings-16' } : {}),
+                ...(r.type === 4 ? { format: 'win-menu-16' } : r.type === 5 ? { format: 'win-dialog-16' } : r.type === 6 ? { format: 'win-strings-16' } : {}),
             });
         }
 
