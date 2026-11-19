@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import type { Parsed } from '../core/types';
 import { gameDir, gameFile } from '../testing/game-data';
 import { iconLibrary } from '../testing/samples';
+import { debugInfo } from './debug-info';
 import { detect } from './index';
 import { inspect } from './inspect';
 import ico from './ico';
@@ -83,6 +84,21 @@ describe('16-bit Windows modules (NE)', () => {
             expect(r.end).toBe(data.length);
         });
 
+        it('takes zeros to a 16-byte boundary before the header, and nothing else there', () => {
+            // A program ending at 8, zeros to 16, then the header.
+            const data = Uint8Array.from([...Array<number>(8).fill(0x90), ...Array<number>(8).fill(0), ...header]);
+            const found = debugInfo(data, 8);
+            if (!found || 'problem' in found) throw new Error('not found');
+            expect(found.fields.map((f) => [f.name, f.offset, f.length])).toEqual([
+                ['Padding', 8, 8],
+                ['Debug info header', 16, 16],
+            ]);
+            expect(found.end).toBe(data.length);
+            // Anything but zeros there, and it isn't debug info.
+            data[12] = 7;
+            expect(debugInfo(data, 8)).toBeNull();
+        });
+
         it('reads Turbo Debugger’s debug info, between the header and the trailer pointing back to it', async () => {
             const body = [0xfb, 0x52, 0x01, 0x04, 1, 2, 3, 4];
             const { data, at } = withTail([...header, ...body, ...trailer(16 + body.length + 8)]);
@@ -128,6 +144,14 @@ describe('16-bit Windows modules (NE)', () => {
             expect(td.warnings).toEqual([]);
             expect(td.summary).toContainEqual(['Debug info', expect.stringMatching(/^None: only the 16-byte header/)]);
             expect(td.fields.at(-1)).toMatchObject({ name: 'Debug info header', offset: 90112 });
+            // INSTICON.EXE has 8 zeros before it, to a 16-byte boundary.
+            const icons = parse(new Uint8Array(readFileSync(join(CNC!, 'TIBERIAN_DAWN/CD2/INSTALL/INSTICON.EXE'))), 'INSTICON.EXE');
+            expect(icons.warnings).toEqual([]);
+            expect(icons.fields.slice(-2).map((f) => [f.name, f.offset, f.length])).toEqual([
+                ['Padding', 132392, 8],
+                ['Debug info header', 132400, 16],
+            ]);
+            expect(icons.end).toBe(132416);
             const cs = parse(new Uint8Array(readFileSync(join(CNC!, 'RED_ALERT/COUNTERSTRIKE/SETUP/SETUP.EXE'))), 'SETUP.EXE');
             expect(cs.warnings).toEqual([]);
             expect(cs.summary).toContainEqual(['Debug info', 'Turbo Debugger’s (Borland), 12,269 bytes, after the program']);

@@ -275,11 +275,11 @@ export class Engine {
         return this.request<'remove'>(`Removing ${id}`, () => ({ op: 'remove', id }));
     }
 
-    async inspect(data: Uint8Array, { name, shownName, as, near }: { name: string | null; shownName: string; as?: string; near?: string }): Promise<UiInspection> {
+    async inspect(data: Uint8Array, { name, shownName, as, hint, near }: { name: string | null; shownName: string; as?: string; hint?: string; near?: string }): Promise<UiInspection> {
         const generation = this.generation;
         const wire = await this.request<'inspect'>(
             `Reading ${shownName}${as ? ` as ${formatOf(as).name}` : ''}`,
-            () => ({ op: 'inspect', data: this.ref(data), name, shownName, as, near }),
+            () => ({ op: 'inspect', data: this.ref(data), name, shownName, as, hint, near }),
             this.poisonKey(data, as)
         );
         return this.fromWire(wire, data, generation);

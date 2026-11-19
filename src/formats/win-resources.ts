@@ -618,3 +618,30 @@ export function readMessageTable(data: Uint8Array, at: number, length: number): 
     if (short) problems.push(`${short === 1 ? 'A block' : `${short} blocks`} of a message table ${short === 1 ? 'runs' : 'run'} out before ${short === 1 ? 'its' : 'their'} last message.`);
     return { strings, fields, problems };
 }
+
+/**
+ * A 32-bit resource file (.res), as a resource compiler writes one: an empty entry first (32 bytes: no data, a
+ * 32-byte header, type 0 and name 0), which tells it from a 16-bit one, then each resource, a header and its data, each
+ * on a 4-byte boundary. A header is the data's size, its own size, the type and the name (each 0xFFFF and a number, or
+ * UTF-16 text), then on a 4-byte boundary the data's version, memory flags, language, version and characteristics.
+ * See Microsoft's RESOURCEHEADER (https://learn.microsoft.com/windows/win32/menurc/resourceheader).
+ */
+export function resourceFile(resources: { type: number; id: number; name: string; lang: number; data: Uint8Array }[]): Uint8Array {
+    const parts: number[][] = [];
+    const u16 = (v: number) => [v & 0xff, (v >> 8) & 0xff];
+    const u32 = (v: number) => [...u16(v & 0xffff), ...u16(v >>> 16)];
+    const pad4 = (b: number[]) => [...b, ...new Array((4 - (b.length % 4)) % 4).fill(0)];
+    const id = (n: number, name: string) => (n >= 0 ? [...u16(0xffff), ...u16(n)] : [...[...name].flatMap((c) => u16(c.charCodeAt(0))), 0, 0]);
+    const header = (size: number, type: number[], name: number[], lang: number, flags: number) => {
+        const h = pad4([...type, ...name]);
+        const rest = [...u32(0), ...u16(flags), ...u16(lang), ...u32(0), ...u32(0)];
+        return [...u32(size), ...u32(8 + h.length + rest.length), ...h, ...rest];
+    };
+    parts.push(header(0, [...u16(0xffff), ...u16(0)], [...u16(0xffff), ...u16(0)], 0, 0));
+    for (const r of resources) {
+        // MOVEABLE, PURE and DISCARDABLE, as resource compilers mark them.
+        parts.push(header(r.data.length, [...u16(0xffff), ...u16(r.type)], id(r.id, r.name), r.lang, 0x1030));
+        parts.push(pad4([...r.data]));
+    }
+    return Uint8Array.from(parts.flat());
+}

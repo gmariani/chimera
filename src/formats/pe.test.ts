@@ -250,12 +250,13 @@ for (const [game, quirks] of [
                     at
                 ).toBe(data.length);
                 // Its bitmaps and version information, saved, open as files of their own, with nothing to warn about either.
+                // So do its string tables and dialogs, which only the program can say are what they are.
                 for (const e of r.parsed.entries ?? []) {
-                    const kind = e.label.match(/^(Bitmap|Version) .*\.(bmp|bin)$/)?.[1];
+                    const kind = e.label.match(/^(Bitmap|Version|String table|Message table|Dialog) .*\.(bmp|bin|res)$/)?.[1];
                     if (!kind) continue;
-                    const opened = await inspect(e.data, { name: e.label, names: [] });
+                    const opened = await inspect(e.data, { name: null, names: [] }, { hint: e.format, shownName: e.label });
                     const where = `${at} › ${e.label}`;
-                    expect(opened.format.id, where).toBe(kind === 'Bitmap' ? 'bmp' : 'version');
+                    expect(opened.format.id, where).toBe({ Bitmap: 'bmp', Version: 'version', 'String table': 'win-strings', 'Message table': 'win-messages', Dialog: 'res' }[kind]);
                     expect(opened.parsed.warnings, where).toEqual([]);
                     expect(
                         opened.checks.filter((c) => c.level !== 'info'),
@@ -277,6 +278,39 @@ describe.skipIf(!launcher)('Red Alert 2’s launcher', () => {
         expect(rows.slice(0, 2).map((row) => [row.cells.id, row.cells.text])).toEqual([
             ['1', 'Your computer needs to be restarted to continue the patch. Press OK to continue.'],
             ['2', 'About to restart'],
+        ]);
+    });
+});
+
+const totalAccess = gameDir('cncRemastered') && join(gameDir('cncRemastered')!, 'RED_ALERT/COUNTERSTRIKE/INTERNET/TA/SETUP.EXE');
+describe.skipIf(!totalAccess)('Counterstrike’s TotalAccess setup', () => {
+    it('lays out its dialogs as the program shows them', () => {
+        const r = parse(new Uint8Array(readFileSync(totalAccess!)), 'SETUP.EXE');
+        const p = r.preview!;
+        const dialog = p.kind === 'stack' ? p.items.find((i) => i.title === 'Dialog #2: TotalAccess Installation')?.preview : undefined;
+        if (dialog?.kind !== 'dialog') throw new Error('no dialog #2');
+        expect([dialog.width, dialog.height, dialog.font]).toEqual([275, 210, { name: 'MS Sans Serif', size: 8 }]);
+        expect(dialog.controls.map((c) => [c.kind, c.text])).toEqual(
+            expect.arrayContaining([
+                ['text', 'TotalAccess directory:'],
+                ['edit', ''],
+                ['button', '...'],
+                ['default-button', '&Next >'],
+                ['button', '&Cancel'],
+            ])
+        );
+    });
+
+    it('opens a string table it holds with the IDs it has in the program: MFC’s own, from 61440', async () => {
+        const r = parse(new Uint8Array(readFileSync(totalAccess!)), 'SETUP.EXE');
+        const e = r.entries!.find((x) => x.label === 'String table #3841.bin')!;
+        expect(e.format).toBe('win-strings');
+        const opened = await inspect(e.data, { name: null, names: [] }, { hint: e.format, shownName: e.label });
+        const p = opened.parsed.preview!;
+        // MFC's afxres.h: AFX_IDS_OPENFILE is 0xF000, AFX_IDS_SAVEFILE 0xF001.
+        expect(p.kind === 'table' && p.rows.slice(0, 2).map((row) => [row.cells.id, row.cells.text])).toEqual([
+            ['61440', 'Open'],
+            ['61441', 'Save As'],
         ]);
     });
 });

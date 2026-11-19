@@ -30,6 +30,33 @@ export interface Entry {
     data: Uint8Array;
     /** Extra columns for the contents table, e.g. a MIX entry's ID. */
     meta?: Record<string, string>;
+    /**
+     * What the file it's in says it is (a format's id), for data with no signature of its own to be told by: a program's
+     * string table or dialog. It's tried first when the entry is opened, before what its bytes and name suggest.
+     */
+    format?: string;
+}
+
+/** What a dialog's control looks like, for drawing it. */
+export type DialogControlKind = 'button' | 'default-button' | 'checkbox' | 'radio' | 'group' | 'edit' | 'text' | 'image' | 'frame' | 'rect' | 'line' | 'list' | 'combo' | 'scrollbar' | 'custom';
+
+/** A control in a dialog: where it is (in dialog units), what it is, and what it says. */
+export interface DialogControl {
+    kind: DialogControlKind;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    text: string;
+    id: number;
+    /** Its window class, in words ("Button", or a registered class's name). */
+    className: string;
+    align?: 'left' | 'center' | 'right';
+    /** Shown only once the program shows it. */
+    hidden?: boolean;
+    disabled?: boolean;
+    /** The picture an image control shows, from the program's own resources, at its own size in pixels. */
+    picture?: { width: number; height: number; rgba: Uint8Array };
 }
 
 /** Indexed-color pictures; the app supplies the palette unless the file carries one. */
@@ -114,6 +141,22 @@ export type Preview =
           toggle?: { label: string; off(): IndexedImage[]; startsOff?: boolean; legend?: { label: string; index: number }[] };
       }
     | { kind: 'palette'; /** 256 colors as 8-bit RGB. */ colors: Uint8Array }
+    /**
+     * A dialog box as a program lays it out, to be drawn: its size and every control's place in dialog units, which
+     * `units` turns into pixels (from the dialog's font), and what each control is and says.
+     */
+    | {
+          kind: 'dialog';
+          title: string;
+          /** Whether it has a title bar. */
+          caption: boolean;
+          width: number;
+          height: number;
+          /** Pixels to a dialog unit, across and down. */
+          units: [number, number];
+          font: { name: string; size: number };
+          controls: DialogControl[];
+      }
     /** A true-color picture. */
     | {
           kind: 'picture';
@@ -223,6 +266,8 @@ export interface Parsed {
 export interface ParseContext {
     /** The file's name, when known. */
     name: string | null;
+    /** The name it's shown under when its real one isn't known (an entry's label, e.g. "String table #7"), which may say more about it. */
+    label?: string;
     /** Extra file names the user supplied, for archives that store hashes instead of names. */
     names: readonly string[];
     /**

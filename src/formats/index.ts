@@ -13,6 +13,7 @@ import { sniffPe } from './pe-sniff';
 import { sniffMz } from './mz-sniff';
 import { sniffPif } from './pif-sniff';
 import { sniffVersion } from './version-sniff';
+import { sniffRes } from './res-sniff';
 import { sniffAil } from './ail-sniff';
 import { sniffSos } from './sos-sniff';
 import { sniffDrv } from './westwood/drv-layout';
@@ -160,7 +161,13 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'pif', name: 'Program information file (PIF)', extensions: ['pif'], sniff: sniffPif, load: parserOf(() => import('./pif')) },
     { id: 'ico', name: 'Icon or cursor (ICO, CUR)', extensions: ['ico', 'cur'], sniff: sniffIco, load: parserOf(() => import('./ico')) },
     // Saved from a program's resources: it has no name of its own.
+    { id: 'res', name: 'Resource file (.res)', extensions: ['res'], sniff: sniffRes, load: parserOf(() => import('./res')) },
     { id: 'version', name: 'Version information (Windows resource)', extensions: ['bin'], sniff: sniffVersion, byNameAlone: false, load: parserOf(() => import('./version')) },
+    // A program's resources with no signature of their own: read so only when the program they come from says that's what they are.
+    { id: 'win-strings', name: 'String table (Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/strings')) },
+    { id: 'win-strings-16', name: 'String table (16-bit Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/strings-16')) },
+    { id: 'win-messages', name: 'Message table (Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/messages')) },
+    { id: 'win-dialog-16', name: 'Dialog (16-bit Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/dialog')) },
     // Programs of every kind are named .exe and .dll, so the name alone says nothing.
     {
         id: 'pe',

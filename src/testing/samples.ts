@@ -824,6 +824,44 @@ export function iconDib(): number[] {
 }
 
 /**
+ * A resource file (.res) as a resource compiler writes one, from this script:
+ *
+ *     1 ICON "diamond.ico"                       (the 16 × 16 icon of iconDib, as icon #1 and its group #1)
+ *     STRINGTABLE { 100 "Hello" }                (in block #7, strings 96 to 111)
+ *     100 DIALOG 0, 0, 160, 60
+ *     STYLE WS_CAPTION | WS_VISIBLE | DS_SETFONT
+ *     CAPTION "About"
+ *     FONT 8, "MS Shell Dlg"
+ *     { ICON 1, -1, 10, 10, 20, 20
+ *       LTEXT "Chimera", -1, 40, 14, 100, 8
+ *       DEFPUSHBUTTON "OK", 1, 55, 40, 50, 14 }
+ *
+ * An empty entry first, then each resource: its header (sizes, type, name, then version, flags, language) and data, on
+ * 4-byte boundaries. English (US).
+ */
+export function resourceFile(): Uint8Array {
+    const pad4 = (b: number[]) => [...b, ...new Array((4 - (b.length % 4)) % 4).fill(0)];
+    const wide = (s: string) => [...[...s].flatMap((c) => u16(c.charCodeAt(0))), 0, 0];
+    const entry = (type: number, name: number, data: number[]) =>
+        pad4([...u32(data.length), ...u32(32), ...u16(0xffff), ...u16(type), ...u16(0xffff), ...u16(name), ...u32(0), ...u16(0x1030), ...u16(0x409), ...u32(0), ...u32(0), ...data]);
+    const empty = [...u32(0), ...u32(32), ...u16(0xffff), ...u16(0), ...u16(0xffff), ...u16(0), ...new Array(16).fill(0)];
+    const icon = iconDib();
+    const group = [...u16(0), ...u16(1), ...u16(1), 16, 16, 16, 0, ...u16(1), ...u16(4), ...u32(icon.length), ...u16(1)];
+    // Strings 96 to 111: four empty, "Hello" (100), eleven empty.
+    const strings = [...new Array(4 * 2).fill(0), ...u16(5), ...[...'Hello'].flatMap((c) => u16(c.charCodeAt(0))), ...new Array(11 * 2).fill(0)];
+    const control = (style: number, x: number, y: number, w: number, h: number, id: number, cls: number, label: number[]) =>
+        pad4([...u32(style), ...u32(0), ...u16(x), ...u16(y), ...u16(w), ...u16(h), ...u16(id), ...u16(0xffff), ...u16(cls), ...label, ...u16(0)]);
+    const VISIBLE = 0x10000000;
+    const dialog = [
+        ...pad4([...u32(0x00c00000 | VISIBLE | 0x40), ...u32(0), ...u16(3), ...u16(0), ...u16(0), ...u16(160), ...u16(60), ...u16(0), ...u16(0), ...wide('About'), ...u16(8), ...wide('MS Shell Dlg')]),
+        ...control(VISIBLE | 3, 10, 10, 20, 20, 0xffff, 0x82, [...u16(0xffff), ...u16(1)]),
+        ...control(VISIBLE, 40, 14, 100, 8, 0xffff, 0x82, wide('Chimera')),
+        ...control(VISIBLE | 1, 55, 40, 50, 14, 1, 0x80, wide('OK')),
+    ];
+    return Uint8Array.from([...empty, ...entry(3, 1, icon), ...entry(14, 1, group), ...entry(6, 7, strings), ...entry(5, 100, dialog)]);
+}
+
+/**
  * A Windows 3 icon library: a 16-bit module (MZ, then NE) with no code, holding one icon and the group that lists it,
  * named CHIMERA. As icon editors made them, and as Dune II's DUNE2.ICO is.
  */
@@ -1560,6 +1598,7 @@ export function samples(): Sample[] {
             data: windowsProgram(),
         },
         { name: 'program-pe64.exe', format: 'pe', about: 'The same program, 64-bit (PE32+), with a Rich header as Microsoft’s linker leaves', data: windowsProgram({ wide: true, rich: true }) },
+        { name: 'resources.res', format: 'res', about: 'Resource file (.res) as a resource compiler writes one: an icon, a string, and a dialog that shows the icon', data: resourceFile() },
         {
             name: 'version-info.bin',
             format: 'version',

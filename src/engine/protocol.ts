@@ -27,7 +27,7 @@ export type Request =
     | { op: 'names'; names: readonly string[] }
     | { op: 'add'; name: string; data: DataRef; how: SessionFile['how'] }
     | { op: 'remove'; id: string }
-    | { op: 'inspect'; data: DataRef; name: string | null; shownName: string; as?: string; near?: string }
+    | { op: 'inspect'; data: DataRef; name: string | null; shownName: string; as?: string; hint?: string; near?: string }
     | { op: 'call'; handle: number; args: (number | boolean | undefined)[] }
     | { op: 'palettes'; name: string; data: DataRef }
     /** The first of these files found in the session. */

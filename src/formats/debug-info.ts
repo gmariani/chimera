@@ -12,6 +12,9 @@ import type { Field } from '../core/types';
  * header, "NB02" with the directory's offset as -1 (there's no CodeView directory) and 8 more bytes of FF, then
  * its own, then the trailer. Red Alert's Counterstrike installers (SETUP.EXE, INSTALL.EXE) have all three. Tiberian
  * Dawn's Windows installers have only the header, with nothing after it.
+ *
+ * The header may start on the next 16-byte boundary rather than where the program ends, with zeros between: TD's
+ * INSTICON.EXE (CD2/INSTALL) has 8.
  */
 
 export interface DebugInfo {
@@ -36,7 +39,12 @@ function signature(data: Uint8Array, at: number): string | null {
  * The debug info that starts at `from` (where a program's own data ends) and runs to the end of the file, or, when
  * there's none there or it isn't whole, null and what doesn't fit, for a warning.
  */
-export function debugInfo(data: Uint8Array, from: number): DebugInfo | { problem: string } | null {
+export function debugInfo(data: Uint8Array, start: number): DebugInfo | { problem: string } | null {
+    // Zeros to the next 16-byte boundary, when the signature is there and not where the program ends.
+    const aligned = Math.ceil(start / 16) * 16;
+    const padded = !signature(data, start) && aligned > start && data.subarray(start, aligned).every((v) => v === 0) && signature(data, aligned) !== null;
+    const from = padded ? aligned : start;
+    const padding = padded ? [field('Padding', start, from - start, bytesLabel(from - start), 'Zeros to a 16-byte boundary, before the debug info.')] : [];
     const sig = signature(data, from);
     if (!sig) return null;
     const b = new Bytes(data);
@@ -68,7 +76,7 @@ export function debugInfo(data: Uint8Array, from: number): DebugInfo | { problem
     // Only the header, and nothing after it: TD's installers. Nothing to point to, so no trailer either.
     if (borland && from + BORLAND_HEADER === data.length)
         return {
-            fields: [{ ...header, note: 'Borland’s linker writes this before its debug info; nothing follows, so the program has none.' }],
+            fields: [...padding, { ...header, note: 'Borland’s linker writes this before its debug info; nothing follows, so the program has none.' }],
             summary: 'None: only the 16-byte header Borland’s linker writes before it, with nothing after',
             end: data.length,
         };
@@ -89,6 +97,7 @@ export function debugInfo(data: Uint8Array, from: number): DebugInfo | { problem
     const kind = turbo ? 'Turbo Debugger’s (Borland)' : borland ? 'not CodeView' : `CodeView (${sig})`;
     return {
         fields: [
+            ...padding,
             header,
             turbo
                 ? {

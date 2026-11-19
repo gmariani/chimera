@@ -13,6 +13,8 @@ export interface OpenFile {
     data: Uint8Array;
     /** Open as this format (an id) rather than the one detected. */
     as?: string;
+    /** The format the file it came from says it is, tried first. */
+    hint?: string;
 }
 
 export type ParseState =
@@ -94,7 +96,7 @@ export function useParsed(file: OpenFile, names: readonly string[], { version, n
         // Each read is dropped only by its own cleanup (the file or what it's read with changing, or the page going).
         let canceled = false;
         setState((s) => (s.status === 'ready' && read.file === file ? s : { status: 'loading', since: Date.now() }));
-        engine.inspect(file.data, { name: file.knownName, shownName: file.name, as: file.as, near }).then(
+        engine.inspect(file.data, { name: file.knownName, shownName: file.name, as: file.as, hint: file.hint, near }).then(
             (inspection) => {
                 if (canceled) return;
                 kept.set(file, { names, near, generation, version: watched, inspection });
@@ -140,6 +142,6 @@ export function typeEntries(entries: Entry[], formats?: string[]): TypedEntry[] 
     });
 }
 
-export function openEntry({ entry, fileName }: TypedEntry): OpenFile {
-    return { name: fileName, knownName: entry.name, data: entry.data };
+export function openEntry({ entry, format, fileName }: TypedEntry): OpenFile {
+    return { name: fileName, knownName: entry.name, data: entry.data, ...(format !== RAW ? { hint: format.id } : {}) };
 }

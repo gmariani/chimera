@@ -1,22 +1,10 @@
 import { Bytes, bytesLabel, field, fillGaps, hex } from '../core/bytes';
 import { minOf } from '../core/math';
-import type { Entry, Field, FormatParser, Preview, TableRow } from '../core/types';
-import { decodeDib } from './dib';
+import type { Field, FormatParser, Preview, TableRow } from '../core/types';
 import { entropy, signature } from './identify';
 import { peOffset } from './pe-sniff';
-import {
-    bitmapFile,
-    iconGroupFile,
-    languageName,
-    readMessageTable,
-    readStringTable,
-    readVersionInfo,
-    versionText,
-    resourceCounts,
-    RESOURCE_TYPES,
-    type ResourceString,
-    type VersionInfo,
-} from './win-resources';
+import { viewResources } from './win-resource-view';
+import { languageName, resourceCounts, RESOURCE_TYPES } from './win-resources';
 
 /**
  * Windows programs and libraries from Windows 95 and NT on, "Portable Executable" (PE): .exe, .dll, .sys, .ocx, .cpl,
@@ -639,112 +627,14 @@ const parser: FormatParser = {
             if (crowded) warnings.push('The resource tree lists more entries than its table could hold: its directories overlap, so the rest weren’t read.');
             runs('Resource names', nameFields);
         }
-        const several = (r: Resource) => resources.filter((x) => x.type === r.type && x.typeName === r.typeName && x.name === r.name).length > 1;
-        const resName = (r: Resource) => `${r.typeName} ${r.name}${several(r) ? ` (${languageName(r.lang)})` : ''}`;
-        // What's inside the resources this reads (bitmaps, version information, strings, messages), field by field, and what's shown of them.
-        const items: { title: string; preview: Preview }[] = [];
-        const stringRows: TableRow[] = [];
-        const languages = new Set(resources.filter((r) => r.type === 6 || r.type === 11).map((r) => r.lang));
-        const listed = (r: Resource, kind: string, found: ResourceString[]) => {
-            const group = languages.size > 1 ? `${kind} (${languageName(r.lang)})` : kind;
-            for (const s of found) stringRows.push({ group, cells: { id: String(s.id), text: s.text } });
-        };
-        // Bitmaps of a kind not drawn here (compressed) are no fault of the program's: they're said in the summary, not warned about.
-        let undrawn = 0;
-        let version: VersionInfo | null = null;
-        for (const r of resources) {
-            let inside: Field[] | undefined;
-            let value = bytesLabel(r.length);
-            if (r.type === 2) {
-                const dib = decodeDib(data, r.at, r.length, false);
-                if ('problem' in dib) {
-                    if (dib.unsupported) undrawn++;
-                    else repeat('bitmap', `${resName(r)} can't be drawn: ${dib.problem}.`);
-                } else {
-                    const { width, height, bits, colors, headerSize, colorsAt, pixelsAt, length } = dib.info;
-                    value = `${width} × ${height}, ${colors ? `${colors} colors` : `${bits}-bit`}`;
-                    items.push({ title: `${resName(r)}: ${value}`, preview: { kind: 'picture', width, height, rgba: dib.rgba } });
-                    inside = [
-                        field('Header', r.at, headerSize, `${width} × ${height}, ${bits} bits a pixel`),
-                        ...(pixelsAt > colorsAt ? [field('Colors', r.at + colorsAt, pixelsAt - colorsAt, plural(colors, 'color'))] : []),
-                        field('Pixels', r.at + pixelsAt, length - pixelsAt, bytesLabel(length - pixelsAt), 'Row by row, the bottom row first, each padded to 4 bytes.'),
-                    ];
-                }
-            } else if (r.type === 16 && !version) {
-                version = readVersionInfo(data, r.at, r.length);
-                warnings.push(...version.problems);
-                inside = version.fields[0]?.children ?? [];
-                value = version.fileVersion ?? value;
-            } else if (r.type === 6) {
-                const t = readStringTable(data, r.at, r.length, r.id, true);
-                t.problems.forEach((p) => repeat('strings', p));
-                listed(r, 'Strings', t.strings);
-                inside = t.fields;
-                value = plural(t.strings.length, 'string');
-            } else if (r.type === 11) {
-                const t = readMessageTable(data, r.at, r.length);
-                t.problems.forEach((p) => repeat('messages', p));
-                listed(r, 'Messages', t.strings);
-                inside = t.fields;
-                value = plural(t.strings.length, 'message');
-            }
-            part(resName(r), r.at, r.length, value, undefined, inside && fillGaps(data, inside, r.at, r.at + r.length, 'Not read'));
-        }
-        if (stringRows.length)
-            items.push({
-                title: `Strings and messages: ${stringRows.length.toLocaleString('en-US')}`,
-                preview: {
-                    kind: 'table',
-                    columns: [
-                        { key: 'id', label: 'ID', numeric: true },
-                        { key: 'text', label: 'Text' },
-                    ],
-                    groups: [...new Set(stringRows.map((r) => r.group))],
-                    rows: stringRows,
-                },
-            });
-        const versionLines = version ? versionText(version) : '';
-        if (versionLines) items.push({ title: 'Version information', preview: { kind: 'text', text: versionLines } });
-        // Icons and cursors are in Contents, as the .ico and .cur files their groups make; bitmaps as .bmp files; everything else as it's stored.
-        const entries: Entry[] = [];
+        // What the resources hold, shown and in Contents (see win-resource-view.ts), and broken into fields where they're read.
         const stem = (context.name ?? 'program').replace(/\.[^.]*$/, '');
+        const view = viewResources(data, resources, { stem, owner: 'program', repeat, warn: (t: string) => warnings.push(t) });
+        const { items, entries, version, undrawn, nameOf: resName } = view;
         for (const r of resources) {
-            if ([1, 3, 12, 14].includes(r.type)) continue;
-            const bmp = r.type === 2 ? bitmapFile(data, r.at, r.length) : null;
-            entries.push({
-                name: null,
-                label: `${resName(r)}.${bmp ? 'bmp' : r.type === 2 ? 'bin' : (RESOURCE_TYPES[r.type]?.ext ?? 'bin')}`,
-                offset: r.at,
-                size: bmp?.length ?? r.length,
-                data: bmp ?? data.subarray(r.at, r.at + r.length),
-                meta: { Type: bmp ? 'Bitmap file, from the resource' : r.typeName, Language: languageName(r.lang) },
-            });
+            const known = view.inside.get(r);
+            part(resName(r), r.at, r.length, known?.value ?? bytesLabel(r.length), undefined, known?.fields && fillGaps(data, known.fields, r.at, r.at + r.length, 'Not read'));
         }
-        for (const r of resources) {
-            if (r.type !== 14 && r.type !== 12) continue;
-            const cursor = r.type === 12;
-            const kind = cursor ? 1 : 3;
-            const find = (id: number) => resources.find((x) => x.type === kind && x.id === id && x.lang === r.lang) ?? resources.find((x) => x.type === kind && x.id === id) ?? null;
-            const { file, images, missing: absent } = iconGroupFile(data, r.at, r.length, cursor, find);
-            if (absent.length)
-                repeat('group', `${resName(r)} names ${cursor ? 'cursor' : 'icon'}${absent.length === 1 ? '' : 's'} ${absent.map((i) => `#${i}`).join(', ')}, which the program doesn't have.`);
-            if (!file) continue;
-            const ext = cursor ? 'cur' : 'ico';
-            entries.push({
-                name: `${stem}-${r.name.replace(/^#/, '')}${several(r) ? `-${hex(r.lang, 4)}` : ''}.${ext}`,
-                label: `${cursor ? 'Cursor' : 'Icon'} ${r.name}.${ext}`,
-                offset: r.at,
-                size: file.length,
-                data: file,
-                meta: { Type: `${cursor ? 'Cursor' : 'Icon'} file, from the group and its ${images === 1 ? 'image' : `${images} images`}`, Language: languageName(r.lang) },
-            });
-        }
-        const manifest = resources.find((r) => r.type === 24);
-        if (manifest)
-            items.push({
-                title: `${resName(manifest)}: what Windows reads before running it`,
-                preview: { kind: 'text', text: new TextDecoder().decode(data.subarray(manifest.at, manifest.at + Math.min(manifest.length, 1 << 16))), maxLines: 30 },
-            });
 
         // Base relocations: blocks of a page's address, the block's size, then a 2-byte entry for each place (4 bits of type, 12 of offset).
         const relocs = dir(5);

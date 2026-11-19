@@ -1337,6 +1337,175 @@ html {
     cursor: grabbing;
 }
 
+/* A dialog, drawn as a blueprint of itself: its frame, title bar and controls in thin lines over the drafting ground. */
+.dialog-stage {
+    display: flex;
+    padding: 2rem;
+    overflow: auto;
+    max-height: 80vh;
+    background-color: var(--bp-deep);
+    background-image: linear-gradient(var(--bp-rule) 1px, transparent 1px), linear-gradient(90deg, var(--bp-rule) 1px, transparent 1px);
+    background-size: 24px 24px;
+    background-blend-mode: normal;
+}
+
+.dialog-stage > * {
+    margin: auto;
+}
+
+.dialog-window {
+    border: 1px solid var(--bp-line);
+    outline: 1px solid var(--bp-rule);
+    outline-offset: 3px;
+    background: var(--bp-panel);
+    color: var(--bp-line);
+    line-height: 1.15;
+}
+
+.dialog-caption {
+    padding: 0.25em 0.5em;
+    border-bottom: 1px solid var(--bp-line);
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dialog-client {
+    position: relative;
+    overflow: hidden;
+}
+
+.dialog-control {
+    position: absolute;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35em;
+    overflow: hidden;
+}
+
+.dialog-control:hover {
+    outline: 1px solid var(--bp-accent);
+    z-index: 1;
+}
+
+.dialog-control.is-hidden {
+    opacity: 0.35;
+    outline: 1px dashed var(--bp-rule-strong);
+}
+
+.dialog-control.is-disabled .dialog-text {
+    opacity: 0.5;
+}
+
+.dialog-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.dialog-control--text.is-center {
+    justify-content: center;
+    text-align: center;
+}
+
+.dialog-control--text.is-right {
+    justify-content: flex-end;
+    text-align: right;
+}
+
+.dialog-control--button,
+.dialog-control--default-button {
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border: 1px solid var(--bp-line);
+}
+
+.dialog-control--default-button {
+    border-width: 2px;
+}
+
+.dialog-control--checkbox,
+.dialog-control--radio {
+    align-items: center;
+}
+
+.dialog-mark {
+    flex: none;
+    width: 0.9em;
+    height: 0.9em;
+    border: 1px solid var(--bp-line);
+}
+
+.dialog-control--radio .dialog-mark {
+    border-radius: 50%;
+}
+
+/* A group box: a frame whose label sits on its top line. */
+.dialog-control--group {
+    overflow: visible;
+    border: 1px solid var(--bp-rule-strong);
+    border-top: 0;
+    background: linear-gradient(var(--bp-rule-strong), var(--bp-rule-strong)) 0 0.6em / 100% 1px no-repeat;
+}
+
+.dialog-legend {
+    margin-left: 0.5em;
+    padding: 0 0.25em;
+    background: var(--bp-panel);
+    white-space: nowrap;
+}
+
+.dialog-control--edit,
+.dialog-control--list,
+.dialog-control--combo,
+.dialog-control--frame,
+.dialog-control--scrollbar {
+    border: 1px solid var(--bp-rule-strong);
+    padding: 0.1em 0.25em;
+}
+
+.dialog-control--edit,
+.dialog-control--list,
+.dialog-control--combo {
+    background: rgba(var(--bp-line-rgb), 0.06);
+}
+
+.dialog-arrow {
+    margin-left: auto;
+    padding-left: 0.25em;
+    border-left: 1px solid var(--bp-rule-strong);
+}
+
+.dialog-control--scrollbar {
+    background: repeating-linear-gradient(45deg, transparent 0 3px, var(--bp-rule) 3px 4px);
+}
+
+.dialog-control--rect {
+    background: var(--bp-rule);
+}
+
+.dialog-control--line {
+    border-top: 1px solid var(--bp-rule-strong);
+}
+
+.dialog-control--custom,
+.dialog-control--image:not(:has(canvas)) {
+    border: 1px dashed var(--bp-rule-strong);
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85em;
+    color: var(--bs-secondary-color);
+}
+
+.dialog-control--image {
+    overflow: visible;
+}
+
+.dialog-picture {
+    image-rendering: pixelated;
+}
+
 /* The 3D voxel view. */
 .voxel-canvas {
     display: block;

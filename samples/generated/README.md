@@ -45,6 +45,7 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `program.exe` | DOS program linked as Borland’s TLINK does with overlays: relocations, the segment table, one overlay with a fixup | 262 bytes |
 | `program-pe.exe` | Windows program (PE, 32-bit) that does nothing: an import, an export, debug info naming a PDB, an icon and version information | 3,072 bytes |
 | `program-pe64.exe` | The same program, 64-bit (PE32+), with a Rich header as Microsoft’s linker leaves | 3,584 bytes |
+| `resources.res` | Resource file (.res) as a resource compiler writes one: an icon, a string, and a dialog that shows the icon | 684 bytes |
 | `version-info.bin` | Version information saved from a Windows program: version 1.0.0.0, five strings in English (US) | 524 bytes |
 | `program.pif` | Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections | 545 bytes |
 | `strings-dune2.eng` | Dune II string table, compressed as the game does | 291 bytes |

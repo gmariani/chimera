@@ -82,14 +82,18 @@ function candidates(data: Uint8Array, ext: string | null): { sniffed: FormatDesc
 
 /**
  * Opens the data as its format (or as `as`, a format id), and checks it is
- * one. `shownName` is the name the file goes by when the context has no real
- * one (a label from an archive).
+ * one. `hint` is a format to try first, as the file it came from says it is.
+ * `shownName` is the name the file goes by when the context has no real one
+ * (a label from an archive).
  */
-export async function inspect(data: Uint8Array, context: ParseContext, { as, shownName }: { as?: string; shownName?: string } = {}): Promise<Inspection> {
+export async function inspect(data: Uint8Array, context: ParseContext, { as, hint, shownName }: { as?: string; hint?: string; shownName?: string } = {}): Promise<Inspection> {
     const ext = extension(context.name ?? shownName ?? null);
+    if (!context.name && shownName && !context.label) context = { ...context, label: shownName };
     const { sniffed, named, fits, order: found } = candidates(data, ext);
     const forced = as ? (FORMATS.find((f) => f.id === as) ?? null) : null;
-    const order = forced ? [forced] : found;
+    // What the file it came from says it is goes first; if it can't be read that way, the rest are tried as usual.
+    const hinted = !forced && hint ? (FORMATS.find((f) => f.id === hint) ?? null) : null;
+    const order = forced ? [forced] : unique([...(hinted ? [hinted] : []), ...found]);
     const sig = signature(data);
     const signed = sig?.format ? (FORMATS.find((f) => f.id === sig.format) ?? null) : null;
 

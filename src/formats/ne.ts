@@ -4,6 +4,7 @@ import { minOf } from '../core/math';
 import type { Entry, Field, FormatParser, Preview, TableRow } from '../core/types';
 import { debugInfo } from './debug-info';
 import { decodeDib } from './dib';
+import { pictureFinder, readDialog } from './win-dialogs';
 import { neOffset } from './ne-sniff';
 import { bitmapFile, iconGroupFile, readStringTable, readVersionInfo, versionText, resourceCounts, RESOURCE_TYPES as TYPES, type VersionInfo } from './win-resources';
 
@@ -154,6 +155,11 @@ const parser: FormatParser = {
         const items: { title: string; preview: Preview }[] = [];
         const inside = new Map<Resource, { value: string; fields: Field[] }>();
         const stringRows: TableRow[] = [];
+        const dialogs: { title: string; preview: Preview }[] = [];
+        const pictures = pictureFinder(
+            data,
+            resources.filter((r) => fits(r.at, r.length))
+        );
         let version: VersionInfo | null = null;
         for (const r of resources) {
             if (!fits(r.at, r.length)) continue;
@@ -183,6 +189,15 @@ const parser: FormatParser = {
                 warnings.push(...t.problems);
                 for (const x of t.strings) stringRows.push({ group: 'Strings', cells: { id: String(x.id), text: x.text } });
                 inside.set(r, { value: `${t.strings.length} string${t.strings.length === 1 ? '' : 's'}`, fields: t.fields });
+            } else if (r.type === 5) {
+                const d = readDialog(data, r.at, r.length, false, pictures);
+                if (!d) {
+                    warnings.push(`${r.typeName} ${r.name} is too short for a dialog’s header.`);
+                    continue;
+                }
+                warnings.push(...d.problems.map((p) => `${r.typeName} ${r.name}: ${p}`));
+                inside.set(r, { value: d.preview.title ? `"${d.preview.title}"` : `${d.preview.controls.length} controls`, fields: d.fields });
+                dialogs.push({ title: `${r.typeName} ${r.name}${d.preview.title ? `: ${d.preview.title}` : ''}`, preview: d.preview });
             }
         }
         if (stringRows.length)
@@ -200,6 +215,7 @@ const parser: FormatParser = {
             });
         const versionLines = version ? versionText(version) : '';
         if (versionLines) items.push({ title: 'Version information', preview: { kind: 'text', text: versionLines } });
+        items.push(...dialogs);
 
         // Each resource to save as it's stored (bitmaps as .bmp files), except icons and cursors and their groups: those come together, below.
         const entries: Entry[] = [];
@@ -214,6 +230,8 @@ const parser: FormatParser = {
                 size: bmp?.length ?? r.length,
                 data: bmp ?? data.subarray(r.at, r.at + r.length),
                 meta: { Type: bmp ? 'Bitmap file, from the resource' : r.typeName },
+                // String tables and dialogs have no signature: say what they are, for when they're opened.
+                ...(r.type === 5 ? { format: 'win-dialog-16' } : r.type === 6 ? { format: 'win-strings-16' } : {}),
             });
         }
 

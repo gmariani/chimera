@@ -1,5 +1,5 @@
 import type { Entry, Preview } from '../core/types';
-import { detect } from '../formats';
+import { detect, FORMATS } from '../formats';
 import { inspect } from '../formats/inspect';
 import { readNameList } from '../formats/mix/names';
 import { expandPalette } from '../formats/westwood/vga';
@@ -72,7 +72,9 @@ export function serve(post: (message: FromWorker, transfer?: Transferable[]) => 
             const { data, ...rest } = e;
             // A part of the file itself goes back as its place; the page has the bytes.
             const inside = data.buffer === parent.buffer && data.byteOffset >= parent.byteOffset && data.byteOffset + data.length <= parent.byteOffset + parent.length;
-            return { ...rest, format: detect(data, e.name).id, data: inside ? { offset: data.byteOffset - parent.byteOffset, length: data.length } : own(data) };
+            // What the file it came from says it is, when that's a format here; otherwise what its bytes and name say.
+            const said = e.format && FORMATS.some((f) => f.id === e.format) ? e.format : null;
+            return { ...rest, format: said ?? detect(data, e.name).id, data: inside ? { offset: data.byteOffset - parent.byteOffset, length: data.length } : own(data) };
         });
 
     async function run<R extends Request>(request: R): Promise<Results[R['op']]> {
@@ -90,7 +92,7 @@ export function serve(post: (message: FromWorker, transfer?: Transferable[]) => 
                 return { learned: library.learned } as Results[R['op']];
             case 'inspect': {
                 const data = resolve(r.data);
-                const found = await inspect(data, { name: r.name, names: library.names, find: (name) => library.find(name, r.near) }, { as: r.as, shownName: r.shownName });
+                const found = await inspect(data, { name: r.name, names: library.names, find: (name) => library.find(name, r.near) }, { as: r.as, hint: r.hint, shownName: r.shownName });
                 const { entries, preview, ...parsed } = found.parsed;
                 const result: WireInspection = {
                     ...parsed,
