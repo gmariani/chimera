@@ -171,6 +171,15 @@ export const FORMATS: FormatDescriptor[] = [
     // A program's resources with no signature of their own: read so only when the program they come from says that's what they are.
     { id: 'win-menu', name: 'Menu (Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/menu')) },
     { id: 'win-menu-16', name: 'Menu (16-bit Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/menu-16')) },
+    { id: 'win-accelerators', name: 'Shortcut keys (Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/accelerators')) },
+    {
+        id: 'win-accelerators-16',
+        name: 'Shortcut keys (16-bit Windows resource)',
+        extensions: ['bin'],
+        sniff: () => false,
+        byNameAlone: false,
+        load: parserOf(() => import('./resources/accelerators-16')),
+    },
     { id: 'win-strings', name: 'String table (Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/strings')) },
     { id: 'win-strings-16', name: 'String table (16-bit Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/strings-16')) },
     { id: 'win-messages', name: 'Message table (Windows resource)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./resources/messages')) },

@@ -2,7 +2,8 @@ import { bytesLabel, field, hex } from '../core/bytes';
 import type { Entry, Field, Preview, TableRow } from '../core/types';
 import { decodeDib } from './dib';
 import { pictureFinder, readDialog } from './win-dialogs';
-import { readMenu } from './win-menus';
+import { readAccelerators } from './win-accelerators';
+import { readMenu, type MenuItem } from './win-menus';
 import {
     bitmapFile,
     iconGroupFile,
@@ -51,7 +52,7 @@ export interface ResourceView {
 }
 
 /** Resources with no signature of their own, and the readers that read them once saved. */
-const SAVED_AS: Record<number, string> = { 4: 'win-menu', 6: 'win-strings', 11: 'win-messages' };
+const SAVED_AS: Record<number, string> = { 4: 'win-menu', 9: 'win-accelerators', 6: 'win-strings', 11: 'win-messages' };
 
 const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`;
 
@@ -70,6 +71,8 @@ export function viewResources(
     const items: { title: string; preview: Preview }[] = [];
     const dialogs: { title: string; preview: Preview }[] = [];
     const menus: { title: string; preview: Preview }[] = [];
+    /** What each command does, by its ID, as the menus name it: for the shortcut keys that send it. */
+    const commands = new Map<number, string>();
     const inside = new Map<WinResource, { value: string; fields?: Field[] }>();
     const pictures = pictureFinder(data, resources);
     const stringRows: TableRow[] = [];
@@ -121,6 +124,9 @@ export function viewResources(
             m.problems.forEach((p) => repeat('menu', `${nameOf(r)}: ${p}`));
             inside.set(r, { value: m.items.map((i) => i.text.replace(/&(.)/g, '$1')).join(', ') || 'empty', fields: m.fields });
             if (m.text) menus.push({ title: `${nameOf(r)}${m.extended ? ' (extended)' : ''}`, preview: { kind: 'text', text: m.text } });
+            const walk = (list: MenuItem[]) =>
+                list.forEach((i) => (i.id !== null && i.text && !commands.has(i.id) && commands.set(i.id, i.text.split('\t')[0].replace(/&(.)/g, '$1')), i.items && walk(i.items)));
+            walk(m.items);
         } else if (r.type === 5) {
             const d = readDialog(data, r.at, r.length, true, pictures);
             if (!d) {
@@ -133,6 +139,29 @@ export function viewResources(
             dialogs.push({ title: `${nameOf(r)}${d.preview.title ? `: ${d.preview.title}` : ''}`, preview: d.preview });
         }
     }
+    // Shortcut keys, after the menus, which name what their commands do.
+    const keyRows: TableRow[] = [];
+    for (const r of resources) {
+        if (r.type !== 9) continue;
+        const a = readAccelerators(data, r.at, r.length, true);
+        a.problems.forEach((p) => repeat('keys', `${nameOf(r)}: ${p}`));
+        inside.set(r, { value: a.entries.map((e) => e.keys).join(', ') || 'none', fields: a.fields });
+        for (const e of a.entries) keyRows.push({ group: nameOf(r), cells: { keys: e.keys, id: String(e.id), does: commands.get(e.id) ?? '' } });
+    }
+    if (keyRows.length)
+        items.push({
+            title: `Shortcut keys: ${keyRows.length.toLocaleString('en-US')}`,
+            preview: {
+                kind: 'table',
+                columns: [
+                    { key: 'keys', label: 'Keys' },
+                    { key: 'id', label: 'Command', numeric: true },
+                    { key: 'does', label: 'Its menu item' },
+                ],
+                groups: [...new Set(keyRows.map((r) => r.group))],
+                rows: keyRows,
+            },
+        });
     if (stringRows.length)
         items.push({
             title: `Strings and messages: ${stringRows.length.toLocaleString('en-US')}`,

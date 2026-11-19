@@ -5,6 +5,7 @@ import type { Entry, Field, FormatParser, Preview, TableRow } from '../core/type
 import { debugInfo } from './debug-info';
 import { decodeDib } from './dib';
 import { pictureFinder, readDialog } from './win-dialogs';
+import { readAccelerators } from './win-accelerators';
 import { readMenu } from './win-menus';
 import { neOffset } from './ne-sniff';
 import { bitmapFile, iconGroupFile, readStringTable, readVersionInfo, versionText, resourceCounts, RESOURCE_TYPES as TYPES, type VersionInfo } from './win-resources';
@@ -196,6 +197,11 @@ const parser: FormatParser = {
                 warnings.push(...m.problems.map((p) => `${r.typeName} ${r.name}: ${p}`));
                 inside.set(r, { value: m.items.map((i) => i.text.replace(/&(.)/g, '$1')).join(', ') || 'empty', fields: m.fields });
                 if (m.text) menus.push({ title: `${r.typeName} ${r.name}`, preview: { kind: 'text', text: m.text } });
+            } else if (r.type === 9) {
+                const a = readAccelerators(data, r.at, r.length, false);
+                warnings.push(...a.problems.map((p) => `${r.typeName} ${r.name}: ${p}`));
+                inside.set(r, { value: a.entries.map((e) => e.keys).join(', ') || 'none', fields: a.fields });
+                if (a.entries.length) menus.push({ title: `${r.typeName} ${r.name}`, preview: { kind: 'text', text: a.entries.map((e) => `${e.keys}    [${e.id}]`).join('\n') } });
             } else if (r.type === 5) {
                 const d = readDialog(data, r.at, r.length, false, pictures);
                 if (!d) {
@@ -238,7 +244,15 @@ const parser: FormatParser = {
                 data: bmp ?? data.subarray(r.at, r.at + r.length),
                 meta: { Type: bmp ? 'Bitmap file, from the resource' : r.typeName },
                 // String tables and dialogs have no signature: say what they are, for when they're opened.
-                ...(r.type === 4 ? { format: 'win-menu-16' } : r.type === 5 ? { format: 'win-dialog-16' } : r.type === 6 ? { format: 'win-strings-16' } : {}),
+                ...(r.type === 9
+                    ? { format: 'win-accelerators-16' }
+                    : r.type === 4
+                      ? { format: 'win-menu-16' }
+                      : r.type === 5
+                        ? { format: 'win-dialog-16' }
+                        : r.type === 6
+                          ? { format: 'win-strings-16' }
+                          : {}),
             });
         }
 
