@@ -80,3 +80,26 @@ export function bytesLabel(bytes: number): string {
 export function field(name: string, offset: number, length: number, value?: string | number, note?: string): Field {
     return { name, offset, length, value: value === undefined ? undefined : String(value), note };
 }
+
+/**
+ * The fields inside `from` to `to`, in order, with what lies between them made fields too: zeros as "Zeros", anything
+ * else named `between`. A field running past `to` is cut there. Empty when nothing's inside but one stretch of `between`.
+ */
+export function fillGaps(data: Uint8Array, inside: Field[], from: number, to: number, between: string): Field[] {
+    inside.sort((x, y) => x.offset - y.offset || y.length - x.length);
+    const out: Field[] = [];
+    let covered = from;
+    const gap = (end: number) => {
+        if (end <= covered) return;
+        const zeros = data.subarray(covered, end).every((v) => v === 0);
+        out.push(field(zeros ? 'Zeros' : between, covered, end - covered, bytesLabel(end - covered)));
+    };
+    for (const f of inside) {
+        const clipped = f.offset + f.length > to ? { ...f, length: to - f.offset } : f;
+        gap(clipped.offset);
+        out.push(clipped);
+        covered = Math.max(covered, clipped.offset + clipped.length);
+    }
+    gap(to);
+    return out.length === 1 && out[0].name === between ? [] : out;
+}

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Parsed, TableRow } from '../core/types';
-import { gameDir } from '../testing/game-data';
+import { gameDir, gameFile } from '../testing/game-data';
 import { windowsProgram } from '../testing/samples';
 import { detect } from './index';
 import { inspect } from './inspect';
@@ -249,7 +249,34 @@ for (const [game, quirks] of [
                     r.parsed.fields.reduce((n, f) => n + f.length, 0),
                     at
                 ).toBe(data.length);
+                // Its bitmaps and version information, saved, open as files of their own, with nothing to warn about either.
+                for (const e of r.parsed.entries ?? []) {
+                    const kind = e.label.match(/^(Bitmap|Version) .*\.(bmp|bin)$/)?.[1];
+                    if (!kind) continue;
+                    const opened = await inspect(e.data, { name: e.label, names: [] });
+                    const where = `${at} › ${e.label}`;
+                    expect(opened.format.id, where).toBe(kind === 'Bitmap' ? 'bmp' : 'version');
+                    expect(opened.parsed.warnings, where).toEqual([]);
+                    expect(
+                        opened.checks.filter((c) => c.level !== 'info'),
+                        where
+                    ).toEqual([]);
+                }
             }
         });
     });
 }
+
+const launcher = gameFile('redAlert2', 'Ra2.exe');
+describe.skipIf(!launcher)('Red Alert 2’s launcher', () => {
+    it('shows its string table: what it says when it needs a patch', () => {
+        const r = parse(new Uint8Array(readFileSync(launcher!)), 'Ra2.exe');
+        const p = r.preview!;
+        const table = p.kind === 'stack' ? p.items.find((i) => i.title.startsWith('Strings'))?.preview : undefined;
+        const rows = table?.kind === 'table' ? table.rows : [];
+        expect(rows.slice(0, 2).map((row) => [row.cells.id, row.cells.text])).toEqual([
+            ['1', 'Your computer needs to be restarted to continue the patch. Press OK to continue.'],
+            ['2', 'About to restart'],
+        ]);
+    });
+});

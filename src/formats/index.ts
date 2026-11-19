@@ -12,6 +12,7 @@ import { sniffNe } from './ne-sniff';
 import { sniffPe } from './pe-sniff';
 import { sniffMz } from './mz-sniff';
 import { sniffPif } from './pif-sniff';
+import { sniffVersion } from './version-sniff';
 import { sniffAil } from './ail-sniff';
 import { sniffSos } from './sos-sniff';
 import { sniffDrv } from './westwood/drv-layout';
@@ -158,6 +159,8 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'sos', name: 'Sound drivers (HMI SOS)', extensions: ['386'], sniff: sniffSos, byNameAlone: false, load: parserOf(() => import('./sos')) },
     { id: 'pif', name: 'Program information file (PIF)', extensions: ['pif'], sniff: sniffPif, load: parserOf(() => import('./pif')) },
     { id: 'ico', name: 'Icon or cursor (ICO, CUR)', extensions: ['ico', 'cur'], sniff: sniffIco, load: parserOf(() => import('./ico')) },
+    // Saved from a program's resources: it has no name of its own.
+    { id: 'version', name: 'Version information (Windows resource)', extensions: ['bin'], sniff: sniffVersion, byNameAlone: false, load: parserOf(() => import('./version')) },
     // Programs of every kind are named .exe and .dll, so the name alone says nothing.
     {
         id: 'pe',

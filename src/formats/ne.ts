@@ -1,11 +1,11 @@
-import { Bytes, bytesLabel, field, hex } from '../core/bytes';
+import { Bytes, bytesLabel, field, fillGaps, hex } from '../core/bytes';
 import { checkCount } from '../core/limits';
 import { minOf } from '../core/math';
-import type { Entry, Field, FormatParser, Preview } from '../core/types';
+import type { Entry, Field, FormatParser, Preview, TableRow } from '../core/types';
 import { debugInfo } from './debug-info';
 import { decodeDib } from './dib';
 import { neOffset } from './ne-sniff';
-import { iconGroupFile, resourceCounts, RESOURCE_TYPES as TYPES } from './win-resources';
+import { bitmapFile, iconGroupFile, readStringTable, readVersionInfo, versionText, resourceCounts, RESOURCE_TYPES as TYPES, type VersionInfo } from './win-resources';
 
 /**
  * 16-bit Windows (and OS/2) modules, "New Executable": Windows 3's programs,
@@ -149,33 +149,73 @@ const parser: FormatParser = {
         for (const r of resources)
             if (!fits(r.at, r.length)) warnings.push(`${r.typeName} ${r.name} is said to be ${bytesLabel(r.length)} at ${r.at.toLocaleString('en-US')}, past the end of the file.`);
 
-        // What's drawn here: the bitmaps. Icons and cursors are in Contents, as the .ico and .cur files their groups make,
-        // which open (and draw) as files of their own.
+        // What's inside the resources this reads (bitmaps, version information, strings), field by field, and what's shown of
+        // them. Icons and cursors are in Contents, as the .ico and .cur files their groups make, which open as files of their own.
         const items: { title: string; preview: Preview }[] = [];
+        const inside = new Map<Resource, { value: string; fields: Field[] }>();
+        const stringRows: TableRow[] = [];
+        let version: VersionInfo | null = null;
         for (const r of resources) {
-            if (r.type !== 2 || !fits(r.at, r.length)) continue;
-            const dib = decodeDib(data, r.at, r.length, false);
-            if ('problem' in dib) {
-                warnings.push(`${r.typeName} ${r.name} can't be drawn: ${dib.problem}.`);
-                continue;
+            if (!fits(r.at, r.length)) continue;
+            if (r.type === 2) {
+                const dib = decodeDib(data, r.at, r.length, false);
+                if ('problem' in dib) {
+                    warnings.push(`${r.typeName} ${r.name} can't be drawn: ${dib.problem}.`);
+                    continue;
+                }
+                const { width, height, bits, colors, headerSize, colorsAt, pixelsAt, length } = dib.info;
+                const value = `${width} × ${height}, ${colors ? `${colors} colors` : `${bits}-bit`}`;
+                items.push({ title: `${r.typeName} ${r.name}: ${value}`, preview: { kind: 'picture', width, height, rgba: dib.rgba } });
+                inside.set(r, {
+                    value,
+                    fields: [
+                        field('Header', r.at, headerSize, `${width} × ${height}, ${bits} bits a pixel`),
+                        ...(pixelsAt > colorsAt ? [field('Colors', r.at + colorsAt, pixelsAt - colorsAt, `${colors} colors`)] : []),
+                        field('Pixels', r.at + pixelsAt, length - pixelsAt, bytesLabel(length - pixelsAt), 'Row by row, the bottom row first, each padded to 4 bytes.'),
+                    ],
+                });
+            } else if (r.type === 16 && !version) {
+                version = readVersionInfo(data, r.at, r.length);
+                warnings.push(...version.problems);
+                inside.set(r, { value: version.fileVersion ?? bytesLabel(r.length), fields: version.fields[0]?.children ?? [] });
+            } else if (r.type === 6) {
+                const t = readStringTable(data, r.at, r.length, r.id, false);
+                warnings.push(...t.problems);
+                for (const x of t.strings) stringRows.push({ group: 'Strings', cells: { id: String(x.id), text: x.text } });
+                inside.set(r, { value: `${t.strings.length} string${t.strings.length === 1 ? '' : 's'}`, fields: t.fields });
             }
-            const { width, height, bits, colors } = dib.info;
-            items.push({ title: `${r.typeName} ${r.name}: ${width} × ${height}, ${colors ? `${colors} colors` : `${bits}-bit`}`, preview: { kind: 'picture', width, height, rgba: dib.rgba } });
         }
+        if (stringRows.length)
+            items.push({
+                title: `Strings: ${stringRows.length.toLocaleString('en-US')}`,
+                preview: {
+                    kind: 'table',
+                    columns: [
+                        { key: 'id', label: 'ID', numeric: true },
+                        { key: 'text', label: 'Text' },
+                    ],
+                    groups: ['Strings'],
+                    rows: stringRows,
+                },
+            });
+        const versionLines = version ? versionText(version) : '';
+        if (versionLines) items.push({ title: 'Version information', preview: { kind: 'text', text: versionLines } });
 
-        // Each resource to save as it's stored, except icons and cursors and their groups: those come together, below.
+        // Each resource to save as it's stored (bitmaps as .bmp files), except icons and cursors and their groups: those come together, below.
         const entries: Entry[] = [];
         const stem = (context.name ?? 'module').replace(/\.[^.]*$/, '');
-        for (const r of resources)
-            if (![1, 3, 12, 14].includes(r.type) && fits(r.at, r.length))
-                entries.push({
-                    name: null,
-                    label: `${r.typeName} ${r.name}.${TYPES[r.type]?.ext ?? 'bin'}`,
-                    offset: r.at,
-                    size: r.length,
-                    data: data.subarray(r.at, r.at + r.length),
-                    meta: { Type: r.typeName },
-                });
+        for (const r of resources) {
+            if ([1, 3, 12, 14].includes(r.type) || !fits(r.at, r.length)) continue;
+            const bmp = r.type === 2 ? bitmapFile(data, r.at, r.length) : null;
+            entries.push({
+                name: null,
+                label: `${r.typeName} ${r.name}.${bmp ? 'bmp' : r.type === 2 ? 'bin' : (TYPES[r.type]?.ext ?? 'bin')}`,
+                offset: r.at,
+                size: bmp?.length ?? r.length,
+                data: bmp ?? data.subarray(r.at, r.at + r.length),
+                meta: { Type: bmp ? 'Bitmap file, from the resource' : r.typeName },
+            });
+        }
 
         // Each icon or cursor group as the file Windows would save it as (see win-resources.ts).
         for (const r of resources) {
@@ -283,7 +323,12 @@ const parser: FormatParser = {
                 tableField(`Segment ${s.i + 1}`, s.start, s.start + s.length, `${s.data ? 'Data' : 'Code'}, ${bytesLabel(s.length)}`);
                 if (s.relocations) tableField(`Segment ${s.i + 1} relocations`, s.start + s.length, s.start + s.length + 2 + s.relocations * 8, `${s.relocations}`);
             }
-        for (const r of resources) if (fits(r.at, 1)) tableField(`${r.typeName} ${r.name}`, r.at, r.at + r.length, bytesLabel(r.length));
+        for (const r of resources) {
+            if (!fits(r.at, 1)) continue;
+            const known = inside.get(r);
+            const children = known && fillGaps(data, known.fields, r.at, Math.min(data.length, r.at + r.length), 'Not read');
+            tableField(`${r.typeName} ${r.name}`, r.at, r.at + r.length, known?.value ?? bytesLabel(r.length), children?.length ? children : undefined);
+        }
 
         // Overlaps aside, what nothing above points to: zeros are padding to the alignment; anything else is worth a look.
         fields.sort((x, y) => x.offset - y.offset || y.length - x.length);

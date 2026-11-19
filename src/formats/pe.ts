@@ -1,10 +1,22 @@
-import { Bytes, bytesLabel, field, hex } from '../core/bytes';
+import { Bytes, bytesLabel, field, fillGaps, hex } from '../core/bytes';
 import { minOf } from '../core/math';
 import type { Entry, Field, FormatParser, Preview, TableRow } from '../core/types';
 import { decodeDib } from './dib';
 import { entropy, signature } from './identify';
 import { peOffset } from './pe-sniff';
-import { iconGroupFile, readVersionInfo, resourceCounts, RESOURCE_TYPES, type VersionInfo } from './win-resources';
+import {
+    bitmapFile,
+    iconGroupFile,
+    languageName,
+    readMessageTable,
+    readStringTable,
+    readVersionInfo,
+    versionText,
+    resourceCounts,
+    RESOURCE_TYPES,
+    type ResourceString,
+    type VersionInfo,
+} from './win-resources';
 
 /**
  * Windows programs and libraries from Windows 95 and NT on, "Portable Executable" (PE): .exe, .dll, .sys, .ocx, .cpl,
@@ -142,38 +154,6 @@ const DEBUG_TYPES: Record<number, string> = {
     19: 'PDB checksum',
     20: 'more DLL flags',
 };
-/** Common languages, by Windows' language IDs ([MS-LCID], https://learn.microsoft.com/openspecs/windows_protocols/ms-lcid). */
-const LANGUAGES: Record<number, string> = {
-    0: 'neutral',
-    0x400: 'the user’s language',
-    0x401: 'Arabic',
-    0x404: 'Chinese (Traditional)',
-    0x405: 'Czech',
-    0x406: 'Danish',
-    0x407: 'German',
-    0x408: 'Greek',
-    0x409: 'English (US)',
-    0x40a: 'Spanish (traditional sort)',
-    0x40b: 'Finnish',
-    0x40c: 'French',
-    0x40d: 'Hebrew',
-    0x40e: 'Hungarian',
-    0x410: 'Italian',
-    0x411: 'Japanese',
-    0x412: 'Korean',
-    0x413: 'Dutch',
-    0x414: 'Norwegian',
-    0x415: 'Polish',
-    0x416: 'Portuguese (Brazil)',
-    0x419: 'Russian',
-    0x41d: 'Swedish',
-    0x41f: 'Turkish',
-    0x804: 'Chinese (Simplified)',
-    0x809: 'English (UK)',
-    0x816: 'Portuguese',
-    0xc0a: 'Spanish',
-};
-const languageName = (id: number) => LANGUAGES[id] ?? `language ${hex(id, 4)}`;
 
 /** Each named flag set in `value`, in words. */
 const flagWords = (value: number, names: [number, string][]) =>
@@ -659,21 +639,85 @@ const parser: FormatParser = {
             if (crowded) warnings.push('The resource tree lists more entries than its table could hold: its directories overlap, so the rest weren’t read.');
             runs('Resource names', nameFields);
         }
-        // Icons and cursors are in Contents, as the .ico and .cur files their groups make; everything else as it's stored.
-        const entries: Entry[] = [];
-        const stem = (context.name ?? 'program').replace(/\.[^.]*$/, '');
         const several = (r: Resource) => resources.filter((x) => x.type === r.type && x.typeName === r.typeName && x.name === r.name).length > 1;
         const resName = (r: Resource) => `${r.typeName} ${r.name}${several(r) ? ` (${languageName(r.lang)})` : ''}`;
+        // What's inside the resources this reads (bitmaps, version information, strings, messages), field by field, and what's shown of them.
+        const items: { title: string; preview: Preview }[] = [];
+        const stringRows: TableRow[] = [];
+        const languages = new Set(resources.filter((r) => r.type === 6 || r.type === 11).map((r) => r.lang));
+        const listed = (r: Resource, kind: string, found: ResourceString[]) => {
+            const group = languages.size > 1 ? `${kind} (${languageName(r.lang)})` : kind;
+            for (const s of found) stringRows.push({ group, cells: { id: String(s.id), text: s.text } });
+        };
+        // Bitmaps of a kind not drawn here (compressed) are no fault of the program's: they're said in the summary, not warned about.
+        let undrawn = 0;
+        let version: VersionInfo | null = null;
         for (const r of resources) {
-            part(resName(r), r.at, r.length, bytesLabel(r.length));
+            let inside: Field[] | undefined;
+            let value = bytesLabel(r.length);
+            if (r.type === 2) {
+                const dib = decodeDib(data, r.at, r.length, false);
+                if ('problem' in dib) {
+                    if (dib.unsupported) undrawn++;
+                    else repeat('bitmap', `${resName(r)} can't be drawn: ${dib.problem}.`);
+                } else {
+                    const { width, height, bits, colors, headerSize, colorsAt, pixelsAt, length } = dib.info;
+                    value = `${width} × ${height}, ${colors ? `${colors} colors` : `${bits}-bit`}`;
+                    items.push({ title: `${resName(r)}: ${value}`, preview: { kind: 'picture', width, height, rgba: dib.rgba } });
+                    inside = [
+                        field('Header', r.at, headerSize, `${width} × ${height}, ${bits} bits a pixel`),
+                        ...(pixelsAt > colorsAt ? [field('Colors', r.at + colorsAt, pixelsAt - colorsAt, plural(colors, 'color'))] : []),
+                        field('Pixels', r.at + pixelsAt, length - pixelsAt, bytesLabel(length - pixelsAt), 'Row by row, the bottom row first, each padded to 4 bytes.'),
+                    ];
+                }
+            } else if (r.type === 16 && !version) {
+                version = readVersionInfo(data, r.at, r.length);
+                warnings.push(...version.problems);
+                inside = version.fields[0]?.children ?? [];
+                value = version.fileVersion ?? value;
+            } else if (r.type === 6) {
+                const t = readStringTable(data, r.at, r.length, r.id, true);
+                t.problems.forEach((p) => repeat('strings', p));
+                listed(r, 'Strings', t.strings);
+                inside = t.fields;
+                value = plural(t.strings.length, 'string');
+            } else if (r.type === 11) {
+                const t = readMessageTable(data, r.at, r.length);
+                t.problems.forEach((p) => repeat('messages', p));
+                listed(r, 'Messages', t.strings);
+                inside = t.fields;
+                value = plural(t.strings.length, 'message');
+            }
+            part(resName(r), r.at, r.length, value, undefined, inside && fillGaps(data, inside, r.at, r.at + r.length, 'Not read'));
+        }
+        if (stringRows.length)
+            items.push({
+                title: `Strings and messages: ${stringRows.length.toLocaleString('en-US')}`,
+                preview: {
+                    kind: 'table',
+                    columns: [
+                        { key: 'id', label: 'ID', numeric: true },
+                        { key: 'text', label: 'Text' },
+                    ],
+                    groups: [...new Set(stringRows.map((r) => r.group))],
+                    rows: stringRows,
+                },
+            });
+        const versionLines = version ? versionText(version) : '';
+        if (versionLines) items.push({ title: 'Version information', preview: { kind: 'text', text: versionLines } });
+        // Icons and cursors are in Contents, as the .ico and .cur files their groups make; bitmaps as .bmp files; everything else as it's stored.
+        const entries: Entry[] = [];
+        const stem = (context.name ?? 'program').replace(/\.[^.]*$/, '');
+        for (const r of resources) {
             if ([1, 3, 12, 14].includes(r.type)) continue;
+            const bmp = r.type === 2 ? bitmapFile(data, r.at, r.length) : null;
             entries.push({
                 name: null,
-                label: `${resName(r)}.${RESOURCE_TYPES[r.type]?.ext ?? 'bin'}`,
+                label: `${resName(r)}.${bmp ? 'bmp' : r.type === 2 ? 'bin' : (RESOURCE_TYPES[r.type]?.ext ?? 'bin')}`,
                 offset: r.at,
-                size: r.length,
-                data: data.subarray(r.at, r.at + r.length),
-                meta: { Type: r.typeName, Language: languageName(r.lang) },
+                size: bmp?.length ?? r.length,
+                data: bmp ?? data.subarray(r.at, r.at + r.length),
+                meta: { Type: bmp ? 'Bitmap file, from the resource' : r.typeName, Language: languageName(r.lang) },
             });
         }
         for (const r of resources) {
@@ -694,29 +738,6 @@ const parser: FormatParser = {
                 data: file,
                 meta: { Type: `${cursor ? 'Cursor' : 'Icon'} file, from the group and its ${images === 1 ? 'image' : `${images} images`}`, Language: languageName(r.lang) },
             });
-        }
-        // What's shown: the bitmaps, the version information and the manifest.
-        const items: { title: string; preview: Preview }[] = [];
-        // Bitmaps of a kind not drawn here (compressed) are no fault of the program's: they're said in the summary, not warned about.
-        let undrawn = 0;
-        for (const r of resources) {
-            if (r.type !== 2) continue;
-            const dib = decodeDib(data, r.at, r.length, false);
-            if ('problem' in dib) {
-                if (dib.unsupported) undrawn++;
-                else repeat('bitmap', `${resName(r)} can't be drawn: ${dib.problem}.`);
-                continue;
-            }
-            const { width, height, bits, colors } = dib.info;
-            items.push({ title: `${resName(r)}: ${width} × ${height}, ${colors ? `${colors} colors` : `${bits}-bit`}`, preview: { kind: 'picture', width, height, rgba: dib.rgba } });
-        }
-        const versionRes = resources.find((r) => r.type === 16);
-        let version: VersionInfo | null = null;
-        if (versionRes) {
-            version = readVersionInfo(data, versionRes.at, versionRes.length);
-            warnings.push(...version.problems);
-            const lines = [...(version.fileVersion ? [`File version: ${version.fileVersion}`, `Product version: ${version.productVersion}`] : []), ...version.strings.map(([k, v]) => `${k}: ${v}`)];
-            if (lines.length) items.push({ title: 'Version information', preview: { kind: 'text', text: lines.join('\n') } });
         }
         const manifest = resources.find((r) => r.type === 24);
         if (manifest)
@@ -1064,7 +1085,7 @@ const parser: FormatParser = {
                     `${code ? 'Code' : 'Data'}, ${bytesLabel(to - from)}`,
                     bits > RANDOM ? `Its bytes look random (${bits.toFixed(2)} bits a byte, of 8): compressed or encrypted, to be unpacked when it runs.` : undefined
                 ),
-                children: fill(data, inside, from, to, code ? 'Code' : 'Data'),
+                children: fillGaps(data, inside, from, to, code ? 'Code' : 'Data'),
             });
         }
         // The tables outside every section: in the headers (bound imports), or appended.
@@ -1193,26 +1214,6 @@ function rotl(v: number, n: number): number {
 function findRich(data: Uint8Array, from: number, to: number): number {
     for (let p = from; p + 8 <= to; p += 4) if (data[p] === 0x52 && data[p + 1] === 0x69 && data[p + 2] === 0x63 && data[p + 3] === 0x68) return p;
     return -1;
-}
-
-/** A section's tables, in order, with what's between them named for what the section holds. */
-function fill(data: Uint8Array, inside: Field[], from: number, to: number, between: string): Field[] {
-    inside.sort((x, y) => x.offset - y.offset || y.length - x.length);
-    const out: Field[] = [];
-    let covered = from;
-    const gap = (end: number) => {
-        if (end <= covered) return;
-        const zeros = data.subarray(covered, end).every((v) => v === 0);
-        out.push(field(zeros ? 'Zeros' : between, covered, end - covered, bytesLabel(end - covered)));
-    };
-    for (const f of inside) {
-        const clipped = f.offset + f.length > to ? { ...f, length: to - f.offset } : f;
-        gap(clipped.offset);
-        out.push(clipped);
-        covered = Math.max(covered, clipped.offset + clipped.length);
-    }
-    gap(to);
-    return out.length === 1 && out[0].name === between ? [] : out;
 }
 
 export default parser;

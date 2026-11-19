@@ -46,6 +46,13 @@ describe('Windows bitmaps (BMP)', () => {
         expect(r.warnings).toEqual([]);
         expect(r.fields.at(-1)).toMatchObject({ name: 'Padding', offset: plain.length, length: 2 });
         expect((await inspect(padded, { name: 'picture.bmp', names: [] })).checks).toEqual([]);
+        // Counted in the pixels' size too, as the Remastered Collection's launcher's bitmaps have it: still quiet.
+        new DataView(padded.buffer).setUint32(34, 360 + 2, true);
+        expect(parse(padded).warnings).toEqual([]);
+        // But only when the padding is there.
+        new DataView(plain.buffer).setUint32(34, 360 + 2, true);
+        expect(parse(plain).warnings).toEqual(['The header says the pixels take 362 bytes, but 33 × 10 at 8 bits a pixel takes 360 bytes.']);
+        new DataView(plain.buffer).setUint32(34, 360, true);
 
         const tail = new Uint8Array(plain.length + 2);
         tail.set(plain);

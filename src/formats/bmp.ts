@@ -141,8 +141,6 @@ const parser: FormatParser = {
         const stride = ((d.width * bits + 31) >> 5) * 4;
         const pixelsEnd = offset + stride * d.height;
         fields.push(field('Pixels', offset, pixelsEnd - offset, `${d.width} × ${d.height}`, `Each row padded to 4 bytes; ${topDown ? 'the top row first' : 'the bottom row first'}.`));
-        if (imageSize && imageSize !== stride * d.height)
-            warnings.push(`The header says the pixels take ${bytesLabel(imageSize)}, but ${d.width} × ${d.height} at ${bits} bits a pixel takes ${bytesLabel(stride * d.height)}.`);
         if (important > d.colors && d.colors) warnings.push(`It says ${important} colors are important, but it has only ${d.colors}.`);
         if (d.beyond)
             warnings.push(
@@ -151,12 +149,17 @@ const parser: FormatParser = {
 
         // Paint and other Windows programs of the time pad the file to a multiple of 4 with zeros after the pixels, and
         // count the padding in the file size: TS's and RA2's launcher and autorun bitmaps have 2 bytes of it.
+        // Some count it in the pixels' size in the header too: the 24-bit bitmaps in the Remastered Collection's launcher, in
+        // C&C 3's and RA3's, and in FinalSun and FinalAlert 2 say their pixels take the 2 bytes more that they're padded with.
         let end = pixelsEnd;
         const after = data.subarray(pixelsEnd);
-        if (after.length > 0 && after.length < 4 && after.every((v) => v === 0) && data.length % 4 === 0) {
+        const padded = after.length > 0 && after.length < 4 && after.every((v) => v === 0) && data.length % 4 === 0;
+        if (padded) {
             fields.push(field('Padding', pixelsEnd, after.length, bytesLabel(after.length), 'Zeros to round the file up to a multiple of 4 bytes, which some programs write.'));
             end = data.length;
         }
+        if (imageSize && imageSize !== stride * d.height && !(padded && imageSize === stride * d.height + after.length))
+            warnings.push(`The header says the pixels take ${bytesLabel(imageSize)}, but ${d.width} × ${d.height} at ${bits} bits a pixel takes ${bytesLabel(stride * d.height)}.`);
 
         const colors = bits <= 8 ? `${d.colors} (${bits} bit${bits === 1 ? '' : 's'} a pixel)` : `${bits}-bit`;
         return {

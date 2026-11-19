@@ -876,11 +876,42 @@ const pad4 = (b: number[]) => [...b, ...new Array((4 - (b.length % 4)) % 4).fill
  * A version resource (VS_VERSIONINFO): each node its length, its value's length, its type (1: text, counted in
  * characters), its key, then its value and its children, each on a 4-byte boundary.
  */
-function versionNode(key: string, type: number, value: number[], children: number[][] = []): number[] {
+export function versionNode(key: string, type: number, value: number[], children: number[][] = []): number[] {
     const head = pad4([0, 0, 0, 0, ...u16(type), ...utf16z(key)]);
     const body = [...head, ...pad4(value), ...children.flatMap(pad4)];
     const valueLength = type === 1 ? value.length / 2 : value.length;
     return [...u16(body.length), ...u16(valueLength), ...body.slice(4)];
+}
+
+/**
+ * A version resource as a program carries it (32-bit): the fixed numbers (file and product version 1.0.0.0, for
+ * 32-bit Windows, a program), one string table in English (US) and Unicode, and the translation list naming it.
+ */
+export function versionResource(): number[] {
+    const strings = [
+        ['CompanyName', 'Chimera'],
+        ['FileDescription', 'Chimera sample program'],
+        ['FileVersion', '1.0.0.0'],
+        ['OriginalFilename', 'program-pe.exe'],
+        ['ProductName', 'Chimera'],
+    ];
+    const fixed = [...u32(0xfeef04bd), ...u32(0x10000), ...u32(0x10000), ...u32(0), ...u32(0x10000), ...u32(0), ...u32(0x3f), ...u32(0), ...u32(0x40004), ...u32(1), ...u32(0), ...u32(0), ...u32(0)];
+    return versionNode('VS_VERSION_INFO', 0, fixed, [
+        versionNode(
+            'StringFileInfo',
+            1,
+            [],
+            [
+                versionNode(
+                    '040904B0',
+                    1,
+                    [],
+                    strings.map(([k, v]) => versionNode(k, 1, utf16z(v)))
+                ),
+            ]
+        ),
+        versionNode('VarFileInfo', 1, [], [versionNode('Translation', 0, [...u16(0x409), ...u16(0x4b0)])]),
+    ]);
 }
 
 /**
@@ -948,30 +979,7 @@ export function windowsProgram({ wide = false, rich = false }: { wide?: boolean;
     const RS = 0x3000;
     const icon = iconDib();
     const group = [...u16(0), ...u16(1), ...u16(1), 16, 16, 16, 0, ...u16(1), ...u16(4), ...u32(icon.length), ...u16(1)];
-    const strings = [
-        ['CompanyName', 'Chimera'],
-        ['FileDescription', 'Chimera sample program'],
-        ['FileVersion', '1.0.0.0'],
-        ['OriginalFilename', 'program-pe.exe'],
-        ['ProductName', 'Chimera'],
-    ];
-    const fixed = [...u32(0xfeef04bd), ...u32(0x10000), ...u32(0x10000), ...u32(0), ...u32(0x10000), ...u32(0), ...u32(0x3f), ...u32(0), ...u32(0x40004), ...u32(1), ...u32(0), ...u32(0), ...u32(0)];
-    const version = versionNode('VS_VERSION_INFO', 0, fixed, [
-        versionNode(
-            'StringFileInfo',
-            1,
-            [],
-            [
-                versionNode(
-                    '040904B0',
-                    1,
-                    [],
-                    strings.map(([k, v]) => versionNode(k, 1, utf16z(v)))
-                ),
-            ]
-        ),
-        versionNode('VarFileInfo', 1, [], [versionNode('Translation', 0, [...u16(0x409), ...u16(0x4b0)])]),
-    ]);
+    const version = versionResource();
     const leaves = 184;
     const iconAt = leaves + 48;
     const groupAt = up(iconAt + icon.length, 4);
@@ -1552,6 +1560,12 @@ export function samples(): Sample[] {
             data: windowsProgram(),
         },
         { name: 'program-pe64.exe', format: 'pe', about: 'The same program, 64-bit (PE32+), with a Rich header as Microsoft’s linker leaves', data: windowsProgram({ wide: true, rich: true }) },
+        {
+            name: 'version-info.bin',
+            format: 'version',
+            about: 'Version information saved from a Windows program: version 1.0.0.0, five strings in English (US)',
+            data: Uint8Array.from(versionResource()),
+        },
         { name: 'program.pif', format: 'pif', about: 'Windows program information file: runs CHIMERA.EXE /SAMPLE, with the Windows 3 sections', data: pif() },
         { name: 'strings-dune2.eng', format: 'strings', about: 'Dune II string table, compressed as the game does', data: stringTable(true) },
         { name: 'strings-dos.ger', format: 'strings', about: 'C&C-style string table, plain, with accented letters in DOS characters', data: stringTable(false) },
