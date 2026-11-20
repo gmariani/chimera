@@ -37,6 +37,10 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `video.avi` | AVI video: Microsoft RLE frames, one drawn over the last, a palette change, an empty frame, 8-bit sound, an index | 8,622 bytes |
 | `cabinet.cab` | Microsoft cabinet: a folder stored, a folder in MSZIP whose second block reaches back into the first, checksums | 482 bytes |
 | `cabinet-signed.cab` | Microsoft cabinet, signed: the same files, an Authenticode signature after it that its header points to | 1,330 bytes |
+| `certificate-v1.cer` | X.509 certificate, version 1: no version written, no extensions, as the first roots were | 357 bytes |
+| `certificates.spc` | A bag of certificates: PKCS #7 signed data alone with two certificates and no signer, as Internet Explorer 3 keeps one | 772 bytes |
+| `archive.zip` | ZIP archive: stored, Deflate and DCL-imploded files, a folder, a name in UTF-8, sizes in a descriptor, a comment | 879 bytes |
+| `archive-zip64.zip` | ZIP archive with ZIP64’s end record, locator, and header offsets in ZIP64 extra fields | 1,005 bytes |
 | `icons.icl` | Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon | 528 bytes |
 | `music.mid` | Standard MIDI file, two tracks: a tempo change halfway, a named melody written with running status | 90 bytes |
 | `music.xmi` | XMIDI music, two sequences: a phrase with an instrument from the bank, and a chord with a branch point | 148 bytes |

@@ -369,11 +369,17 @@ export function readSignature(data: Uint8Array, at: number, end: number): Signat
 
     let what: string;
     // The first Authenticode signatures (1996 and 1997: Internet Explorer 3's and Acrobat Reader 3's installers, in
-    // Counterstrike's INTERNET folder) are the signed data alone, version 0, without the ContentInfo around it.
-    const bare = root.tag === SEQUENCE && root.children?.[0]?.tag === INTEGER && root.children[1]?.tag === SET && oidOf(root.children[2]?.children?.[0]) === '1.3.6.1.4.1.311.2.1.4';
+    // Counterstrike's INTERNET folder) are the signed data alone, version 0, without the ContentInfo around it; so is
+    // the bag of certificates Internet Explorer 3's softpub.dll keeps, holding plain data, certificates and no signers.
+    const held = root.tag === SEQUENCE && root.children?.[0]?.tag === INTEGER && root.children[1]?.tag === SET ? oidOf(root.children[2]?.children?.[0]) : '';
+    const bare = held === '1.3.6.1.4.1.311.2.1.4' || (held === '1.2.840.113549.1.7.1' && root.children?.[3]?.tag === 0xa0);
     if (bare || (root.tag === SEQUENCE && oidOf(root.children?.[0]))) {
         readSignedData(root, 0, undefined, bare);
-        what = digest ? `Authenticode signature${bare ? ' (the first kind, 1996–97)' : ''}` : 'Signed data (PKCS #7)';
+        what = digest
+            ? `Authenticode signature${bare ? ' (the first kind, 1996–97)' : ''}`
+            : !signers.length && certificates.length
+              ? `Certificates (PKCS #7, no signer${bare ? '; the signed data alone' : ''})`
+              : 'Signed data (PKCS #7)';
         if (!bare) label(root, what);
     } else {
         const alone = readCertificate(root, 1);
@@ -447,7 +453,10 @@ const parser: FormatParser = {
                           ['Valid', `${info.certificates[0].from} to ${info.certificates[0].to}`] as [string, string],
                           ['Key', info.certificates[0].key] as [string, string],
                       ]
-                    : [['Signed by', signedBy(info)] as [string, string]]),
+                    : info.signers.length
+                      ? [['Signed by', signedBy(info)] as [string, string]]
+                      : // A bag of certificates: nothing in it is signed, only carried.
+                        [['Signed by', 'no one: it only carries certificates'] as [string, string]]),
                 ...(signer?.program || signer?.url ? [['Program', [signer.program, signer.url].filter(Boolean).join(', ')] as [string, string]] : []),
                 ...(info.digest ? [['Program’s hash', `${info.digest.algorithm}: ${info.digest.value}`] as [string, string]] : []),
                 ...(signer?.signedAt ? [['Signed on', signer.signedAt] as [string, string]] : []),

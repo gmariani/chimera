@@ -9,6 +9,7 @@
  * out every time. This runs in Node (the script, without a bundler, and the
  * tests), so it imports only the plain test encoders.
  */
+import { crc32 } from '../core/crc32.ts';
 import { implode } from '../core/implode.test-util.ts';
 import { dune2Compress, lcwLiterals, lzw, rle } from '../formats/westwood/encoders.test-util.ts';
 
@@ -885,14 +886,15 @@ const derName = (parts: [string, string][]) => der(0x30, ...parts.map(([oid, v])
  * from 2020-01-01 to 2030-12-31, a 1,024-bit RSA key (its modulus 0x80 followed by 127 bytes of 0x11; exponent 65537),
  * an extended key usage of code signing, and 32 bytes standing in for the issuer's signature.
  */
-export function certificate(): number[] {
+export function certificate({ v1 = false }: { v1?: boolean } = {}): number[] {
     const sha256Rsa = der(0x30, derOid('1.2.840.113549.1.1.11'), der(0x05));
     const modulus = der(0x02, [0x00, 0x80, ...new Array(127).fill(0x11)]);
     const key = der(0x30, der(0x30, derOid('1.2.840.113549.1.1.1'), der(0x05)), der(0x03, [0, ...der(0x30, modulus, der(0x02, [1, 0, 1]))]));
     const eku = der(0x30, derOid('2.5.29.37'), der(0x04, der(0x30, derOid('1.3.6.1.5.5.7.3.3'))));
     const tbs = der(
         0x30,
-        der(0xa0, der(0x02, [2])),
+        // Version 1 writes no version, and has no extensions.
+        ...(v1 ? [] : [der(0xa0, der(0x02, [2]))]),
         der(0x02, [0x12, 0x34]),
         sha256Rsa,
         derName([['2.5.4.3', 'Chimera Test CA']]),
@@ -903,9 +905,18 @@ export function certificate(): number[] {
             ['2.5.4.3', 'Chimera Sample'],
         ]),
         key,
-        der(0xa3, der(0x30, eku))
+        ...(v1 ? [] : [der(0xa3, der(0x30, eku))])
     );
     return der(0x30, tbs, sha256Rsa, der(0x03, [0, ...new Array(32).fill(0x5a)]));
+}
+
+/**
+ * A bag of certificates as Internet Explorer 3's softpub.dll keeps one: PKCS #7 signed data alone, without the
+ * ContentInfo around it (version 1, no hash algorithms, plain data with nothing in it), holding the certificate above
+ * and its version 1 form, and no signers.
+ */
+export function certificateBag(): Uint8Array {
+    return Uint8Array.from(der(0x30, der(0x02, [1]), der(0x31), der(0x30, derOid('1.2.840.113549.1.7.1')), der(0xa0, certificate(), certificate({ v1: true })), der(0x31)));
 }
 
 /**
@@ -1603,6 +1614,106 @@ export function cabinet({ signed = false, short = false }: { signed?: boolean; s
     return bytes(header, folders, fileBytes, blockBytes, signature);
 }
 
+/** A file for zipArchive: its name, its data, and how it's packed. */
+export interface ZipFile {
+    name: string;
+    data: Uint8Array;
+    /** 0 stored, 8 Deflate (fixed codes, the data as literals), 10 PKWARE DCL implode. */
+    method?: 0 | 8 | 10;
+    /** Sizes and CRC in a descriptor after the data, its header leaving them 0 (flag 8). */
+    descriptor?: boolean;
+    /** The name in UTF-8 (flag 0x800), not code page 437. */
+    utf8?: boolean;
+}
+
+/**
+ * A ZIP archive (PKWARE's APPNOTE): each file's header and data (and descriptor), then the directory, then the end
+ * record with `comment`. Dates are 1997-04-23 14:02:10, made on MS-DOS (ZIP64: Unix). `prefix` goes before it all, as a
+ * self-extractor's program does, with the offsets counting from after it; `zip64` writes ZIP64's end record and
+ * locator, and each directory entry's header offset as 0xFFFFFFFF with the real one in a ZIP64 extra field.
+ */
+export function zipArchive(files: ZipFile[], { comment = '', prefix = [], zip64 = false }: { comment?: string; prefix?: number[]; zip64?: boolean } = {}): Uint8Array {
+    const [date, time] = [(17 << 9) | (4 << 5) | 23, (14 << 11) | (2 << 5) | 5];
+    const local: number[] = [];
+    const central: number[] = [];
+    for (const f of files) {
+        const method = f.method ?? 0;
+        const packed = method === 8 ? fixedDeflate(Array.from(f.data)) : method === 10 ? Array.from(implode(f.data)) : Array.from(f.data);
+        const crc = crc32(f.data);
+        const name = f.utf8 ? Array.from(new TextEncoder().encode(f.name)) : text(f.name);
+        const flags = (f.descriptor ? 8 : 0) | (f.utf8 ? 0x800 : 0);
+        const at = local.length;
+        const sizes = f.descriptor ? [...u32(0), ...u32(0), ...u32(0)] : [...u32(crc), ...u32(packed.length), ...u32(f.data.length)];
+        // ZIP64 needs version 4.5 to read it; the rest, 2.0.
+        const needed = zip64 ? 45 : 20;
+        local.push(...text('PK\x03\x04'), ...u16(needed), ...u16(flags), ...u16(method), ...u16(time), ...u16(date), ...sizes, ...u16(name.length), ...u16(0), ...name, ...packed);
+        if (f.descriptor) local.push(...text('PK\x07\x08'), ...u32(crc), ...u32(packed.length), ...u32(f.data.length));
+        const extra = zip64 ? [...u16(1), ...u16(8), ...u32(at), ...u32(0)] : [];
+        central.push(
+            ...text('PK\x01\x02'),
+            // Made on MS-DOS, or for ZIP64 on Unix, as Python makes them: Info-ZIP's UnZip 6.0 takes a UTF-8 name from
+            // MS-DOS for code page 437 when there's a ZIP64 extra field, and says the names disagree.
+            ...u16(needed | ((zip64 ? 3 : 0) << 8)),
+            ...u16(needed),
+            ...u16(flags),
+            ...u16(method),
+            ...u16(time),
+            ...u16(date),
+            ...u32(crc),
+            ...u32(packed.length),
+            ...u32(f.data.length),
+            ...u16(name.length),
+            ...u16(extra.length),
+            ...u16(0),
+            ...u16(0),
+            ...u16(0),
+            ...u32(f.name.endsWith('/') ? 0x10 : 0x20),
+            ...u32(zip64 ? 0xffffffff : at),
+            ...name,
+            ...extra
+        );
+    }
+    const end64 = zip64
+        ? [
+              ...text('PK\x06\x06'),
+              ...u32(44),
+              ...u32(0),
+              ...u16(45),
+              ...u16(45),
+              ...u32(0),
+              ...u32(0),
+              ...u32(files.length),
+              ...u32(0),
+              ...u32(files.length),
+              ...u32(0),
+              ...u32(central.length),
+              ...u32(0),
+              ...u32(local.length),
+              ...u32(0),
+          ]
+        : [];
+    const locator = zip64 ? [...text('PK\x06\x07'), ...u32(0), ...u32(local.length + central.length), ...u32(0), ...u32(1)] : [];
+    const note = text(comment);
+    const end = [...text('PK\x05\x06'), ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(central.length), ...u32(local.length), ...u16(note.length), ...note];
+    return bytes(prefix, local, central, end64, locator, end);
+}
+
+/** The sample ZIP: a stored file, one in Deflate, one imploded, a folder, a name in UTF-8, one with a descriptor. */
+export function zipSample(options: { comment?: string; prefix?: number[]; zip64?: boolean } = { comment: 'Chimera sample archive' }): Uint8Array {
+    const line = text('ZIP keeps each file whole, and lists them again at its end. ');
+    return zipArchive(
+        [
+            { name: 'readme.txt', data: Uint8Array.from(text('Chimera sample ZIP.\r\n')) },
+            { name: 'data/', data: new Uint8Array(0) },
+            { name: 'data/deflated.txt', data: Uint8Array.from([...line, ...line]), method: 8 },
+            { name: 'data/imploded.txt', data: Uint8Array.from([...line, ...line, ...line]), method: 10 },
+            { name: 'Grüße.txt', data: Uint8Array.from(text('Hallo.\n')), utf8: true },
+            { name: 'later.txt', data: Uint8Array.from(text('Sizes after the data.\n')), descriptor: true },
+        ],
+        options
+    );
+}
+
 /**
  * Dune II's mentat encyclopedia, made small: a heading, a briefing topic (its text is the mission's), and a topic with its
  * animation, description and text. Each topic in NAME: its length, where its text is (big-endian), its heading's number, "0"
@@ -1991,6 +2102,20 @@ export function samples(): Sample[] {
             about: 'Microsoft cabinet, signed: the same files, an Authenticode signature after it that its header points to',
             data: cabinet({ signed: true }),
         },
+        {
+            name: 'certificate-v1.cer',
+            format: 'x509',
+            about: 'X.509 certificate, version 1: no version written, no extensions, as the first roots were',
+            data: Uint8Array.from(certificate({ v1: true })),
+        },
+        {
+            name: 'certificates.spc',
+            format: 'pkcs7',
+            about: 'A bag of certificates: PKCS #7 signed data alone with two certificates and no signer, as Internet Explorer 3 keeps one',
+            data: certificateBag(),
+        },
+        { name: 'archive.zip', format: 'zip', about: 'ZIP archive: stored, Deflate and DCL-imploded files, a folder, a name in UTF-8, sizes in a descriptor, a comment', data: zipSample() },
+        { name: 'archive-zip64.zip', format: 'zip', about: 'ZIP archive with ZIP64’s end record, locator, and header offsets in ZIP64 extra fields', data: zipSample({ zip64: true }) },
         { name: 'icons.icl', format: 'ne', about: 'Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon', data: iconLibrary() },
         { name: 'music.mid', format: 'midi', about: 'Standard MIDI file, two tracks: a tempo change halfway, a named melody written with running status', data: standardMidi() },
         { name: 'music.xmi', format: 'xmi', about: 'XMIDI music, two sequences: a phrase with an instrument from the bank, and a chord with a branch point', data: xmidiMusic() },

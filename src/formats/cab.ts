@@ -1,4 +1,4 @@
-import { Bytes, bytesLabel, field, fillGaps, hex } from '../core/bytes';
+import { Bytes, bytesLabel, dosDateTime, field, fillGaps, hex } from '../core/bytes';
 import { inflate } from '../core/inflate';
 import { checkBytes } from '../core/limits';
 import type { Entry, Field, FormatParser, TableRow } from '../core/types';
@@ -44,11 +44,6 @@ export function cabChecksum(bytes: Uint8Array, seed = 0): number {
     return (sum ^ rest) >>> 0;
 }
 
-/** A DOS date and time, as a cabinet stores a file's: "1997-04-23 14:02:10". */
-function dosTime(date: number, time: number): string {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${1980 + (date >> 9)}-${pad((date >> 5) & 15)}-${pad(date & 31)} ${pad(time >> 11)}:${pad((time >> 5) & 63)}:${pad((time & 31) * 2)}`;
-}
 const ATTRIBUTES: [number, string][] = [
     [0x01, 'read-only'],
     [0x02, 'hidden'],
@@ -213,7 +208,7 @@ const parser: FormatParser = {
                 warnings.push(`File ${i + 1}’s name runs past the end of the cabinet, or past 255 bytes.`);
                 break;
             }
-            const f = { name: name.text, size: b.u32(p), offset: b.u32(p + 4), folder: b.u16(p + 8), date: dosTime(b.u16(p + 10), b.u16(p + 12)), attributes, at: p };
+            const f = { name: name.text, size: b.u32(p), offset: b.u32(p + 4), folder: b.u16(p + 8), date: dosDateTime(b.u16(p + 10), b.u16(p + 12)), attributes, at: p };
             files.push(f);
             const folderText =
                 f.folder === 0xfffd

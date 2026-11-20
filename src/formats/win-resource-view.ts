@@ -52,6 +52,8 @@ export interface ResourceView {
 }
 
 /** Resources with no signature of their own, and the readers that read them once saved. */
+/** Extensions for resource types a program names itself, when the name says what they hold. */
+const NAMED_TYPES: Record<string, string> = { AVI: 'avi', CERT: 'cer', SPC: 'spc' };
 const SAVED_AS: Record<number, string> = { 4: 'win-menu', 9: 'win-accelerators', 6: 'win-strings', 11: 'win-messages' };
 
 const plural = (n: number, word: string) => `${n.toLocaleString('en-US')} ${word}${n === 1 ? '' : 's'}`;
@@ -233,8 +235,9 @@ export function viewResources(
         }
         entries.push({
             name: null,
-            // "AVI" is a type of the program's own, but the one Windows' animation control plays its movies from.
-            label: `${nameOf(r)}.${RESOURCE_TYPES[r.type]?.ext ?? (r.typeName === 'AVI' ? 'avi' : 'bin')}`,
+            // Types of the program's own, named for what they hold: "AVI", what Windows' animation control plays its
+            // movies from; "CERT" and "SPC", certificates and bags of them (Internet Explorer 3's DLLs).
+            label: `${nameOf(r)}.${RESOURCE_TYPES[r.type]?.ext ?? NAMED_TYPES[r.typeName] ?? 'bin'}`,
             offset: r.at,
             size: r.length,
             data: data.subarray(r.at, r.at + r.length),

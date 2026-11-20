@@ -103,3 +103,9 @@ export function fillGaps(data: Uint8Array, inside: Field[], from: number, to: nu
     gap(to);
     return out.length === 1 && out[0].name === between ? [] : out;
 }
+
+/** An MS-DOS date and time, as ZIP and cabinets store a file's (local time, 2-second steps): "1997-04-23 14:02:10". */
+export function dosDateTime(date: number, time: number): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${1980 + (date >> 9)}-${pad((date >> 5) & 15)}-${pad(date & 31)} ${pad(time >> 11)}:${pad((time >> 5) & 63)}:${pad((time & 31) * 2)}`;
+}

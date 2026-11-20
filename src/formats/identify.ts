@@ -148,6 +148,7 @@ export function signature(data: Uint8Array): Signature | null {
             name: 'ZIP archive (or a .docx, .xlsx, .jar, .apk)',
             ext: 'zip',
             exts: ['zip', 'docx', 'xlsx', 'pptx', 'jar', 'apk', 'odt', 'ods', 'odp', 'epub', 'xpi', 'crx', 'nupkg', 'whl', 'vsix', 'ipa', 'appx', 'msix', 'kmz', '3mf', 'pk3', 'pk4'],
+            format: 'zip',
             length: 4,
         };
     if (ascii(data, 0, 'Rar!\x1a\x07')) return { name: 'RAR archive', ext: 'rar', length: 6 };

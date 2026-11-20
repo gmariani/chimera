@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Parsed } from '../core/types';
 import { gameDir, gameFile } from '../testing/game-data';
-import { authenticode, certificate } from '../testing/samples';
+import { authenticode, certificate, certificateBag } from '../testing/samples';
 import { detect } from './index';
 import { inspect } from './inspect';
 import pe from './pe';
@@ -53,6 +53,31 @@ describe('signatures and certificates (PKCS #7, X.509)', () => {
         expect(p.kind === 'table' && p.rows).toEqual([{ group: 'Code signing', cells: expect.objectContaining({ serial: '1234', from: '2020-01-01', to: '2030-12-31' }) }]);
     });
 
+    it('reads a version 1 certificate, which writes no version', async () => {
+        const data = Uint8Array.from(certificate({ v1: true }));
+        expect(detect(data, null).id).toBe('x509');
+        const inspected = await inspect(data, { name: null, names: [] });
+        expect(inspected.checks).toEqual([]);
+        expect(inspected.parsed.warnings).toEqual([]);
+        expect(summary(inspected.parsed)).toMatchObject({ Subject: 'Chimera Sample (Chimera, US)', Issuer: 'Chimera Test CA' });
+        expect(inspected.parsed.fields.reduce((n, f) => n + f.length, 0)).toBe(data.length);
+    });
+
+    it('reads a bag of certificates: the signed data alone, with no signer', async () => {
+        const data = certificateBag();
+        expect(detect(data, null).id).toBe('pkcs7');
+        const inspected = await inspect(data, { name: 'certificates.spc', names: [] });
+        expect(inspected.checks).toEqual([]);
+        const r = inspected.parsed;
+        expect(r.warnings).toEqual([]);
+        expect(r.title).toBe('Certificates (PKCS #7, no signer; the signed data alone)');
+        expect(summary(r)).toMatchObject({ 'Signed by': 'no one: it only carries certificates', Certificates: '2' });
+        expect(r.entries!.map((e) => [...e.data])).toEqual([certificate(), certificate({ v1: true })]);
+        // Plain data with no certificates after it isn't taken for one.
+        const empty = data.slice(0, data.indexOf(0xa0, 10));
+        expect(detect(empty, null).id).not.toBe('pkcs7');
+    });
+
     it('says what doesn’t fit, and refuses what isn’t one', () => {
         // The signer's certificate missing: its serial number changed.
         const data = authenticode();
@@ -94,6 +119,25 @@ describe.skipIf(!openssl)('what OpenSSL makes', () => {
                 Valid: `${date('notBefore')} to ${date('notAfter')}`,
                 Key: 'RSA, 2048 bits',
             });
+            // A version 1 certificate (x509 -req with no extensions), and a bag of both (crl2pkcs7), with its
+            // ContentInfo and without it.
+            run('req', '-new', '-key', 'key.pem', '-out', 'v1.csr', '-subj', '/C=US/O=Chimera Test/CN=Chimera Version 1');
+            run('x509', '-req', '-in', 'v1.csr', '-signkey', 'key.pem', '-out', 'v1.der', '-outform', 'DER', '-days', '30');
+            expect(run('x509', '-inform', 'DER', '-in', 'v1.der', '-noout', '-text')).toContain('Version: 1 (0x0)');
+            const v1 = new Uint8Array(readFileSync(join(dir, 'v1.der')));
+            expect(detect(v1, null).id).toBe('x509');
+            expect(summary(parse(v1))).toMatchObject({ Subject: 'Chimera Version 1 (Chimera Test, US)', Issuer: 'Chimera Version 1 (Chimera Test, US)' });
+            run('x509', '-inform', 'DER', '-in', 'v1.der', '-out', 'v1.pem');
+            run('crl2pkcs7', '-nocrl', '-certfile', 'cert.pem', '-certfile', 'v1.pem', '-outform', 'DER', '-out', 'bag.p7b');
+            const bag = new Uint8Array(readFileSync(join(dir, 'bag.p7b')));
+            const wrapped = parse(bag);
+            expect([wrapped.title, summary(wrapped).Certificates, wrapped.warnings]).toEqual(['Certificates (PKCS #7, no signer)', '2', []]);
+            // The signed data inside its ContentInfo: [0] at the ContentInfo's second value, holding it.
+            const inner = parse(bag).fields[0].children![1].children![0];
+            const alone = bag.slice(inner.offset, inner.offset + inner.length);
+            expect(detect(alone, null).id).toBe('pkcs7');
+            expect([parse(alone).title, summary(parse(alone)).Certificates]).toEqual(['Certificates (PKCS #7, no signer; the signed data alone)', '2']);
+
             const sig = new Uint8Array(readFileSync(join(dir, 'sig.p7s')));
             expect(detect(sig, 'sig.p7s').id).toBe('pkcs7');
             const r = parse(sig);
@@ -124,6 +168,25 @@ describe.skipIf(!game)('Tiberian Sun’s Game.exe', () => {
 });
 
 const CNC = gameDir('cncRemastered');
+describe.skipIf(!CNC)('Internet Explorer 3’s certificates, in Counterstrike’s INTERNET folder', () => {
+    it('reads schannel.dll’s 1996 roots, version 1, and softpub.dll’s bag of 14', async () => {
+        // IE301M95.EXE › its CABINET resource › Iexplore.cab › the DLLs.
+        const open = async (data: Uint8Array, name: string | null, label = name ?? '') => (await inspect(data, { name, names: [] }, { shownName: label })).parsed;
+        const ie = await open(new Uint8Array(readFileSync(join(CNC!, 'RED_ALERT/COUNTERSTRIKE/INTERNET/MSIE/IE301M95.EXE'))), 'IE301M95.EXE');
+        const outer = await open(ie.entries!.find((e) => e.label === 'Raw data CABINET.bin')!.data, null, 'CABINET.bin');
+        const inner = await open(outer.entries!.find((e) => e.name === 'Iexplore.cab')!.data, 'Iexplore.cab');
+        const dll = async (name: string) => open(inner.entries!.find((e) => e.name === name)!.data, name);
+        const roots = (await dll('schannel.dll')).entries!.filter((e) => e.label.startsWith('CERT'));
+        expect(roots).toHaveLength(14);
+        const verisign = await inspect(roots.find((e) => e.label === 'CERT #110.cer')!.data, { name: null, names: [] });
+        expect([verisign.format.id, verisign.parsed.warnings]).toEqual(['x509', []]);
+        expect(summary(verisign.parsed)).toMatchObject({ Subject: 'VeriSign, Inc. (Class 3 Public Primary Certification Authority, US)', Valid: '1996-01-29 00:00:00 UTC to 1999-12-31 23:59:59 UTC' });
+        const bag = (await dll('softpub.dll')).entries!.find((e) => e.label === 'SPC #108.spc')!;
+        const read = await inspect(bag.data, { name: null, names: [] });
+        expect([read.format.id, read.parsed.title, summary(read.parsed).Certificates, read.parsed.warnings]).toEqual(['pkcs7', 'Certificates (PKCS #7, no signer; the signed data alone)', '14', []]);
+    });
+});
+
 describe.skipIf(!CNC)('the first Authenticode signatures', () => {
     it('reads Acrobat Reader 3’s installer’s, from 1996: the signed data alone', () => {
         const r = pe.parse(new Uint8Array(readFileSync(join(CNC!, 'RED_ALERT/COUNTERSTRIKE/INTERNET/TA/ACROREAD.EXE'))), { name: 'ACROREAD.EXE', names: [] }) as Parsed;
