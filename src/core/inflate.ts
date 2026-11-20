@@ -36,17 +36,23 @@ const FIXED_DISTANCES = huffman(new Array(30).fill(5));
 /**
  * `expected` is how big the output should be (a header's say-so, to size the
  * buffer once); `limit` is the most it may grow to before it's refused, since
- * a small stream can claim, or inflate to, gigabytes.
+ * a small stream can claim, or inflate to, gigabytes. `raw` says there's no
+ * zlib header to look for (raw deflate can start with bytes that look like one).
+ * `dictionary` is what came before, which back-references can reach into
+ * (MSZIP's blocks each carry on from the 32 KB before them); it isn't returned.
  */
-export function inflate(input: Uint8Array, expected = 0, limit = MAX_BYTES): Uint8Array {
+export function inflate(input: Uint8Array, expected = 0, limit = MAX_BYTES, { raw = false, dictionary }: { raw?: boolean; dictionary?: Uint8Array } = {}): Uint8Array {
     // A zlib header: CM 8 (deflate) and a check that makes the first two bytes a multiple of 31.
-    let pos = (input[0] & 0x0f) === 8 && ((input[0] << 8) | input[1]) % 31 === 0 ? 2 : 0;
+    let pos = !raw && (input[0] & 0x0f) === 8 && ((input[0] << 8) | input[1]) % 31 === 0 ? 2 : 0;
     let bitBuffer = 0;
     let bitCount = 0;
+    const before = dictionary ? dictionary.subarray(Math.max(0, dictionary.length - 32768)) : new Uint8Array(0);
     // Deflate can't do better than about 1032 to 1, so a bigger claim is wrong; it's only a hint.
     const hint = Math.min(expected, input.length * 1032 + 1024, limit);
-    let out = new Uint8Array(Math.max(hint, Math.min(input.length * 4, limit), 1024));
-    let size = 0;
+    let out = new Uint8Array(before.length + Math.max(hint, Math.min(input.length * 4, limit), 1024));
+    out.set(before);
+    let size = before.length;
+    limit += before.length;
 
     const bits = (n: number): number => {
         while (bitCount < n) {
@@ -136,5 +142,5 @@ export function inflate(input: Uint8Array, expected = 0, limit = MAX_BYTES): Uin
             }
         }
     }
-    return out.subarray(0, size);
+    return out.subarray(before.length, size);
 }

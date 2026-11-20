@@ -1388,6 +1388,221 @@ export function iconFile(images: { image: ArrayLike<number>; width: number; heig
     return bytes([0, 0, ...u16(type), ...u16(images.length)], entries, ...images.map((x) => x.image));
 }
 
+/** A RIFF chunk: its 4-letter ID, its size, its data, and a byte of padding when the size is odd. */
+const riffChunk = (id: string, body: ArrayLike<number>) => [...text(id), ...u32(body.length), ...Array.from(body), ...(body.length & 1 ? [0] : [])];
+
+/**
+ * An animated cursor (.ani): its title and author (an odd-length title, so padded), the header, each step's time and the
+ * order of its steps, and two frames, each a whole .cur: the arrow, then the fading disc with its hot spot in the middle.
+ * It plays arrow, disc, arrow, for 10, 20 and 10 jiffies. `wholeLength` gives the RIFF size as Westwood's tools did,
+ * counting the RIFF header's 8 bytes too.
+ */
+export function animatedCursor({ wholeLength = false }: { wholeLength?: boolean } = {}): Uint8Array {
+    const arrow = iconFile([{ image: cursorDib(), width: 32, height: 32, colors: 2, planes: 0, bits: 0 }], 2);
+    const disc = iconFile([{ image: iconDib32(), width: 32, height: 32, planes: 16, bits: 16 }], 2);
+    const body = [
+        ...text('ACON'),
+        ...riffChunk('LIST', [...text('INFO'), ...riffChunk('INAM', text('Spinning\0')), ...riffChunk('IART', text('Sample\0'))]),
+        ...riffChunk('anih', [...u32(36), ...u32(2), ...u32(3), ...u32(0), ...u32(0), ...u32(0), ...u32(0), ...u32(10), ...u32(3)]),
+        ...riffChunk('rate', [...u32(10), ...u32(20), ...u32(10)]),
+        ...riffChunk('seq ', [...u32(0), ...u32(1), ...u32(0)]),
+        ...riffChunk('LIST', [...text('fram'), ...riffChunk('icon', arrow), ...riffChunk('icon', disc)]),
+    ];
+    return bytes(text('RIFF'), u32(body.length + (wholeLength ? 8 : 0)), body);
+}
+
+/**
+ * An AVI video, 8 × 4 in Microsoft RLE at 8 bits, with a 4-color palette and a second of 8-bit sound at 8,000 Hz. Four
+ * frames at 4 a second: a key frame (the top two rows color 1, the bottom two color 2), one drawn over it (two pixels
+ * of color 3 on the second row from the top, put there by a delta and a run of colors as they are), then a palette
+ * change (color 3 to white) and a frame that's empty (the one before it again, in the new colors), and a last key
+ * frame of color 0. The sound is in four chunks, one with each frame, and an index lists every chunk.
+ */
+export function aviVideo(): Uint8Array {
+    const W = 8;
+    const H = 4;
+    // Blue, green, red and a spare byte each: black, blue, green, red.
+    const colors = [0, 0, 0, 0, 0xff, 0, 0, 0, 0, 0xc0, 0, 0, 0, 0, 0xc0, 0];
+    // From the bottom row up: two rows of color 2, two of color 1, each ending its row; then the end of the picture.
+    const key = [8, 2, 0, 0, 8, 2, 0, 0, 8, 1, 0, 0, 8, 1, 0, 0, 0, 1];
+    // Move 3 right and 2 up (to the second row from the top), then 3 colors as they are (3, 3, 1), padded; the end.
+    const over = [0, 2, 3, 2, 0, 3, 3, 3, 1, 0, 0, 1];
+    const blank = [8, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0, 8, 0, 0, 0, 0, 1];
+    const tone = Array.from({ length: 8000 }, (_, i) => 128 + Math.round(60 * Math.sin((2 * Math.PI * 440 * i) / 8000)));
+    const strh = (type: string, handler: string, scale: number, rate: number, length: number, sampleSize: number) => [
+        ...text(type),
+        ...text(handler),
+        ...u32(0),
+        ...u16(0),
+        ...u16(0),
+        ...u32(0),
+        ...u32(scale),
+        ...u32(rate),
+        ...u32(0),
+        ...u32(length),
+        ...u32(0),
+        ...u32(0xffffffff),
+        ...u32(sampleSize),
+        ...u16(0),
+        ...u16(0),
+        ...u16(type === 'vids' ? W : 0),
+        ...u16(type === 'vids' ? H : 0),
+    ];
+    const bitmap = [...u32(40), ...u32(W), ...u32(H), ...u16(1), ...u16(8), ...u32(1), ...u32(0), ...u32(0), ...u32(0), ...u32(4), ...u32(0), ...colors];
+    const sound = [...u16(1), ...u16(1), ...u32(8000), ...u32(8000), ...u16(1), ...u16(8), ...u16(0)];
+    const hdrl = riffChunk('LIST', [
+        ...text('hdrl'),
+        ...riffChunk('avih', [...u32(250000), ...u32(0), ...u32(0), ...u32(0x110), ...u32(4), ...u32(0), ...u32(2), ...u32(0), ...u32(W), ...u32(H), ...new Array(16).fill(0)]),
+        ...riffChunk('LIST', [...text('strl'), ...riffChunk('strh', strh('vids', 'mrle', 1, 4, 4, 0)), ...riffChunk('strf', bitmap)]),
+        ...riffChunk('LIST', [...text('strl'), ...riffChunk('strh', strh('auds', '\0\0\0\0', 1, 8000, 8000, 1)), ...riffChunk('strf', sound)]),
+    ]);
+    // Palette change: from color 3, 1 color, flags 0, then red, green, blue and flags.
+    const change = [3, 1, 0, 0, 255, 255, 255, 0];
+    const parts: [string, number[], number][] = [
+        ['00dc', key, 0x10],
+        ['01wb', tone.slice(0, 2000), 0x10],
+        ['00dc', over, 0],
+        ['01wb', tone.slice(2000, 4000), 0x10],
+        ['00pc', change, 0],
+        ['00dc', [], 0],
+        ['01wb', tone.slice(4000, 6000), 0x10],
+        ['00dc', blank, 0x10],
+        ['01wb', tone.slice(6000), 0x10],
+    ];
+    const movi: number[] = [...text('movi')];
+    const index: number[] = [];
+    for (const [id, body, flags] of parts) {
+        index.push(...text(id), ...u32(flags), ...u32(movi.length), ...u32(body.length));
+        movi.push(...riffChunk(id, body));
+    }
+    const body = [...text('AVI '), ...hdrl, ...riffChunk('LIST', movi), ...riffChunk('idx1', index)];
+    return bytes(text('RIFF'), u32(body.length), body);
+}
+
+/**
+ * Raw Deflate (RFC 1951) in one block with the fixed codes, from literal bytes and back-references given as
+ * [length, distance]: a back-reference can reach into what came before this data (`before` bytes of it), as MSZIP's
+ * blocks do. Written by hand, not by zlib, so the bytes are the same everywhere.
+ */
+function fixedDeflate(ops: (number | [number, number])[]): number[] {
+    const out: number[] = [];
+    let bits = 0;
+    let count = 0;
+    const put = (value: number, n: number) => {
+        for (let i = 0; i < n; i++) {
+            bits |= ((value >> i) & 1) << count++;
+            if (count === 8) {
+                out.push(bits);
+                bits = 0;
+                count = 0;
+            }
+        }
+    };
+    // Huffman codes go most significant bit first.
+    const code = (value: number, n: number) => put(Number.parseInt(value.toString(2).padStart(n, '0').split('').reverse().join(''), 2), n);
+    const symbol = (s: number) => (s < 144 ? code(0x30 + s, 8) : s < 256 ? code(0x190 + s - 144, 9) : s < 280 ? code(s - 256, 7) : code(0xc0 + s - 280, 8));
+    const LENGTHS = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258];
+    const LENGTH_BITS = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0];
+    const DISTANCES = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577];
+    const DISTANCE_BITS = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13];
+    put(1, 1);
+    put(1, 2);
+    for (const op of ops) {
+        if (typeof op === 'number') {
+            symbol(op);
+            continue;
+        }
+        const [length, distance] = op;
+        const l = LENGTHS.findLastIndex((v) => v <= length);
+        symbol(257 + l);
+        put(length - LENGTHS[l], LENGTH_BITS[l]);
+        const d = DISTANCES.findLastIndex((v) => v <= distance);
+        code(d, 5);
+        put(distance - DISTANCES[d], DISTANCE_BITS[d]);
+    }
+    symbol(256);
+    if (count) out.push(bits);
+    return out;
+}
+
+/** A cabinet data block's checksum (Microsoft's CSUMCompute): its data, then its two sizes, 4 bytes at a time, XORed. */
+function cabSum(bytes: number[], seed = 0): number {
+    let sum = seed;
+    const whole = bytes.length & ~3;
+    for (let i = 0; i < whole; i += 4) sum ^= bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16) | (bytes[i + 3] << 24);
+    let rest = 0;
+    for (let i = whole; i < bytes.length; i++) rest = (rest << 8) | bytes[i];
+    return (sum ^ rest) >>> 0;
+}
+
+/**
+ * A Microsoft cabinet of three files in two folders. The first folder isn't compressed and holds readme.txt. The
+ * second is MSZIP, in two blocks: the first unpacks to a full 32 KB (data\one.txt, a sentence again and again, and
+ * the start of data\two.txt), and the second finishes two.txt with a back-reference reaching into the first block.
+ * Every block has its checksum. `signed` sets aside 20 bytes in the header saying where a signature is, and puts one
+ * (the sample Authenticode) after the cabinet. `short` makes one.txt the sentence once, so the first block is 32 bytes,
+ * not 32 KB: what no real cabinet does, and where programs differ on what the second block reaches back into.
+ */
+export function cabinet({ signed = false, short = false }: { signed?: boolean; short?: boolean } = {}): Uint8Array {
+    const readme = text('Chimera sample cabinet.\r\n');
+    const sentence = text('The first file in MSZIP. ');
+    const twoStart = text('Twice: ');
+    const oneLength = short ? sentence.length : 32768 - twoStart.length;
+    const one = Array.from({ length: oneLength }, (_, i) => sentence[i % sentence.length]);
+    // one.txt: the sentence, then copies of what came before, 258 bytes at most each.
+    const ops: (number | [number, number])[] = [...sentence];
+    for (let left = oneLength - sentence.length; left > 0; left -= Math.min(258, left)) ops.push([Math.min(258, left), sentence.length]);
+    const block1 = [...text('CK'), ...fixedDeflate([...ops, ...twoStart])];
+    // two.txt ends with a copy of the sentence from where it starts in one.txt, 43 bytes before the second block.
+    const reach = oneLength + twoStart.length - Math.floor((oneLength - sentence.length) / sentence.length) * sentence.length;
+    const block2 = [...text('CK'), ...fixedDeflate([[sentence.length, reach]])];
+    const blocks = [
+        { folder: 0, packed: readme, size: readme.length },
+        { folder: 1, packed: block1, size: oneLength + twoStart.length },
+        { folder: 1, packed: block2, size: sentence.length },
+    ];
+    const files = [
+        { name: 'readme.txt', size: readme.length, offset: 0, folder: 0 },
+        { name: 'data\\one.txt', size: one.length, offset: 0, folder: 1 },
+        { name: 'data\\two.txt', size: twoStart.length + sentence.length, offset: one.length, folder: 1 },
+    ];
+    const reserve = signed ? 20 : 0;
+    const headerSize = 36 + (signed ? 4 + reserve : 0);
+    const foldersAt = headerSize;
+    const filesAt = foldersAt + 2 * 8;
+    // 1997-04-23 14:02:10.
+    const [date, time] = [(17 << 9) | (4 << 5) | 23, (14 << 11) | (2 << 5) | 5];
+    const fileBytes = files.flatMap((f) => [...u32(f.size), ...u32(f.offset), ...u16(f.folder), ...u16(date), ...u16(time), ...u16(0x20), ...text(f.name), 0]);
+    let at = filesAt + fileBytes.length;
+    const dataAt = [at, 0];
+    const blockBytes = blocks.flatMap((k, i) => {
+        if (i === 1) dataAt[1] = at;
+        const sizes = [...u16(k.packed.length), ...u16(k.size)];
+        at += 8 + k.packed.length;
+        return [...u32(cabSum(sizes, cabSum(Array.from(k.packed)))), ...sizes, ...Array.from(k.packed)];
+    });
+    const size = at;
+    const signature = signed ? Array.from(authenticode()) : [];
+    const header = [
+        ...text('MSCF'),
+        ...u32(0),
+        ...u32(size),
+        ...u32(0),
+        ...u32(filesAt),
+        ...u32(0),
+        3,
+        1,
+        ...u16(2),
+        ...u16(files.length),
+        ...u16(signed ? 4 : 0),
+        ...u16(0x1997),
+        ...u16(0),
+        ...(signed ? [...u16(reserve), 0, 0, ...u16(0), ...u16(16), ...u32(size), ...u32(signature.length), ...u32(0), ...u32(0)] : []),
+    ];
+    const folders = [...u32(dataAt[0]), ...u16(1), ...u16(0), ...u32(dataAt[1]), ...u16(2), ...u16(1)];
+    return bytes(header, folders, fileBytes, blockBytes, signature);
+}
+
 /**
  * Dune II's mentat encyclopedia, made small: a heading, a briefing topic (its text is the mission's), and a topic with its
  * animation, description and text. Each topic in NAME: its length, where its text is (big-endian), its heading's number, "0"
@@ -1766,6 +1981,15 @@ export function samples(): Sample[] {
             format: 'ico',
             about: 'Windows cursor: a 32 × 32 arrow in 2 colors, its hot spot at the tip',
             data: iconFile([{ image: cursorDib(), width: 32, height: 32, colors: 2, planes: 0, bits: 0 }], 2),
+        },
+        { name: 'cursor.ani', format: 'ani', about: 'Animated cursor: two frames (an arrow, a fading disc) in three steps of their own times and order, with a title', data: animatedCursor() },
+        { name: 'video.avi', format: 'avi', about: 'AVI video: Microsoft RLE frames, one drawn over the last, a palette change, an empty frame, 8-bit sound, an index', data: aviVideo() },
+        { name: 'cabinet.cab', format: 'cab', about: 'Microsoft cabinet: a folder stored, a folder in MSZIP whose second block reaches back into the first, checksums', data: cabinet() },
+        {
+            name: 'cabinet-signed.cab',
+            format: 'cab',
+            about: 'Microsoft cabinet, signed: the same files, an Authenticode signature after it that its header points to',
+            data: cabinet({ signed: true }),
         },
         { name: 'icons.icl', format: 'ne', about: 'Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon', data: iconLibrary() },
         { name: 'music.mid', format: 'midi', about: 'Standard MIDI file, two tracks: a tempo change halfway, a named melody written with running status', data: standardMidi() },

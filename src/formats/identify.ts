@@ -100,6 +100,7 @@ export function signature(data: Uint8Array): Signature | null {
     if (ascii(data, 0, 'FWS') || ascii(data, 0, 'CWS') || ascii(data, 0, 'ZWS')) return { name: 'Flash movie', ext: 'swf', format: 'swf', length: 3 };
     if (ascii(data, 0, 'OggS')) return { name: 'Ogg', ext: 'ogg', format: 'ogg', length: 4 };
     if (ascii(data, 0, 'MThd') && data[7] >= 6) return { name: 'MIDI music', ext: 'mid', format: 'midi', length: 8 };
+    if (ascii(data, 0, 'RIFF') && ascii(data, 8, 'ACON')) return { name: 'Animated cursor', ext: 'ani', format: 'ani', length: 12 };
     if (ascii(data, 0, 'RIFF') && ascii(data, 8, 'WAVE')) return { name: 'WAV sound', ext: 'wav', format: 'wav', length: 12 };
     if (ascii(data, 0, 'Creative Voice')) return { name: 'Creative Voice sound', ext: 'voc', format: 'voc', length: ascii(data, 14, ' File\x1a') ? 20 : 14 };
     if (ascii(data, 0, 'ID3')) return { name: 'MP3 sound', ext: 'mp3', format: 'mp3', length: 3 };
@@ -155,7 +156,7 @@ export function signature(data: Uint8Array): Signature | null {
     if (ascii(data, 0, 'BZh') && data[3] >= 0x31 && data[3] <= 0x39) return { name: 'bzip2-compressed data', ext: 'bz2', length: 4 };
     if (bytes(data, 0, [0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00])) return { name: 'xz-compressed data', ext: 'xz', length: 6 };
     if (bytes(data, 0, [0x28, 0xb5, 0x2f, 0xfd])) return { name: 'Zstandard-compressed data', ext: 'zst', length: 4 };
-    if (ascii(data, 0, 'MSCF')) return { name: 'Windows cabinet archive', ext: 'cab', length: 4 };
+    if (ascii(data, 0, 'MSCF')) return { name: 'Windows cabinet archive', ext: 'cab', format: 'cab', length: 4 };
     if (data.length > 0x8006 && ascii(data, 0x8001, 'CD001')) return { name: 'Disc image (ISO 9660)', ext: 'iso', length: 0 };
 
     // Documents.
@@ -171,7 +172,7 @@ export function signature(data: Uint8Array): Signature | null {
     if (ascii(data, 0, 'ITSF')) return { name: 'Compiled help (CHM)', ext: 'chm', length: 4, runs: true };
     if (ascii(data, 0, 'SQLite format 3\0')) return { name: 'SQLite database', ext: 'sqlite', length: 16 };
     if (ascii(data, 0, 'RIFF') && ascii(data, 8, 'WEBP')) return { name: 'WebP picture', ext: 'webp', length: 12 };
-    if (ascii(data, 0, 'RIFF') && ascii(data, 8, 'AVI ')) return { name: 'AVI video', ext: 'avi', length: 12 };
+    if (ascii(data, 0, 'RIFF') && ascii(data, 8, 'AVI ')) return { name: 'AVI video', ext: 'avi', format: 'avi', length: 12 };
     if (ascii(data, 0, 'FLV\x01')) return { name: 'Flash video (FLV)', ext: 'flv', length: 4 };
 
     // Text.

@@ -206,7 +206,12 @@ const parser: FormatParser = {
         const opt = pe + 24;
         const magic = b.u16(opt);
         if (magic === 0x107) throw new Error('It’s a ROM image (its optional header says 0x107), which isn’t read here.');
-        if (magic !== 0x10b && magic !== 0x20b) throw new Error(`Its optional header starts with ${hex(magic, 4)}, not 0x10B (32-bit) or 0x20B (64-bit): it isn’t a program Windows could load.`);
+        // Win32s 1.30's own system DLLs (COMDLG32, LZ32, W32SKRNL and the rest built on 31 January and 1 February 1996,
+        // linker 2.5) have 0 here, and an OS version of 0: Win32s's loader doesn't look. Their optional header is the
+        // 32-bit one's size, and read as that; seen in the copy of Win32s that Counterstrike's Planet Westwood installs.
+        const win32s = magic === 0 && optSize === 0xe0;
+        if (magic !== 0x10b && magic !== 0x20b && !win32s)
+            throw new Error(`Its optional header starts with ${hex(magic, 4)}, not 0x10B (32-bit) or 0x20B (64-bit): it isn’t a program Windows could load.`);
         const wide = magic === 0x20b;
         const fixed = wide ? 112 : 96;
         if (optSize < fixed) throw new Error(`Its optional header is said to be ${optSize} bytes, too short for the ${fixed} a ${wide ? '64' : '32'}-bit one needs before its data directories.`);
@@ -235,7 +240,9 @@ const parser: FormatParser = {
         if (!pow2(fa) || fa > 0x10000 || (fa < 512 && fa !== sa))
             warnings.push(`Its sections are aligned to ${fa.toLocaleString('en-US')} bytes in the file; the spec allows a power of 2 from 512 to 65,536 (or less, when the same as in memory).`);
         if (sa < fa) warnings.push(`Its sections are aligned to ${sa.toLocaleString('en-US')} bytes in memory, less than the ${fa.toLocaleString('en-US')} they are in the file.`);
-        if (sa && sizeOfImage % sa) warnings.push(`It says it takes ${bytesLabel(sizeOfImage)} in memory, which isn’t a multiple of its section alignment (${sa.toLocaleString('en-US')}).`);
+        // The same Win32s DLLs (W32SCOMB, W32SKRNL) round it only to the file's alignment.
+        if (sa && sizeOfImage % sa && !(win32s && fa && sizeOfImage % fa === 0))
+            warnings.push(`It says it takes ${bytesLabel(sizeOfImage)} in memory, which isn’t a multiple of its section alignment (${sa.toLocaleString('en-US')}).`);
         const alignUp = (n: number, to: number) => (to ? Math.ceil(n / to) * to : n);
 
         // The section table, after the optional header.
@@ -908,7 +915,13 @@ const parser: FormatParser = {
             length: Math.min(optSize, data.length - opt),
             value: wide ? 'PE32+ (64-bit)' : 'PE32 (32-bit)',
             children: [
-                field('Magic', opt, 2, hex(magic, 4), wide ? '0x20B: 64-bit.' : '0x10B: 32-bit.'),
+                field(
+                    'Magic',
+                    opt,
+                    2,
+                    hex(magic, 4),
+                    wide ? '0x20B: 64-bit.' : win32s ? 'Should be 0x10B (32-bit). 0 is what Win32s’s own DLLs of 1996 have: Win32s loads them, Windows NT wouldn’t.' : '0x10B: 32-bit.'
+                ),
                 field('Linker version', opt + 2, 2, `${data[opt + 2]}.${data[opt + 3]}`),
                 field('Code size', opt + 4, 4, bytesLabel(b.u32(opt + 4))),
                 field('Data size', opt + 8, 4, bytesLabel(b.u32(opt + 8))),

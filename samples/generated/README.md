@@ -33,6 +33,10 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `fnt-nox.fnt` | Nox font (tNoF), the letters of CHIMERA | 244 bytes |
 | `icon.ico` | Windows icon at three sizes: 16 × 16 in 16 colors, 32 × 32 with its own transparency, and 48 × 48 as a PNG | 11,642 bytes |
 | `cursor.cur` | Windows cursor: a 32 × 32 arrow in 2 colors, its hot spot at the tip | 326 bytes |
+| `cursor.ani` | Animated cursor: two frames (an arrow, a fading disc) in three steps of their own times and order, with a title | 4,782 bytes |
+| `video.avi` | AVI video: Microsoft RLE frames, one drawn over the last, a palette change, an empty frame, 8-bit sound, an index | 8,622 bytes |
+| `cabinet.cab` | Microsoft cabinet: a folder stored, a folder in MSZIP whose second block reaches back into the first, checksums | 482 bytes |
+| `cabinet-signed.cab` | Microsoft cabinet, signed: the same files, an Authenticode signature after it that its header points to | 1,330 bytes |
 | `icons.icl` | Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon | 528 bytes |
 | `music.mid` | Standard MIDI file, two tracks: a tempo change halfway, a named melody written with running status | 90 bytes |
 | `music.xmi` | XMIDI music, two sequences: a phrase with an instrument from the bank, and a chord with a branch point | 148 bytes |

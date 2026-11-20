@@ -74,6 +74,9 @@ describe('Dune II credits', () => {
         expect(sniffDuneCredits(latin1('\x02Title\r\0x'))).toBe(false);
         expect(sniffDuneCredits(latin1('\x02Title\r'))).toBe(false);
         expect(sniffDuneCredits(latin1('\x02Title\r\0\0'))).toBe(true);
+        // A style byte with no text after it: Internet Explorer 3's installer's REBOOT flag, 01 00 00 00.
+        expect(sniffDuneCredits(Uint8Array.of(1, 0, 0, 0))).toBe(false);
+        expect(sniffDuneCredits(latin1('\x02 \r\0'))).toBe(false);
     });
 
     // 1.07's, loose and in ENGLISH.PAK, when a copy sits beside the installed game; 1.00's ENGLISH.PAK has a C header by the name.

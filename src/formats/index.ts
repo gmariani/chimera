@@ -7,6 +7,9 @@ import { sniffMix, sniffXccDatabase } from './mix/sniff';
 import { sniffOgg } from './ogg/sniff';
 import { sniffBmp } from './bmp-sniff';
 import { sniffIco } from './ico-sniff';
+import { sniffAni } from './ani-sniff';
+import { sniffAvi } from './avi-sniff';
+import { sniffCab } from './cab-sniff';
 import { sniffInstallShieldEngine, sniffInstallShieldPkg, sniffInstallShieldScript, sniffInstallShieldZ } from './installshield/sniff';
 import { sniffNe } from './ne-sniff';
 import { sniffPe } from './pe-sniff';
@@ -163,6 +166,9 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'sos', name: 'Sound drivers (HMI SOS)', extensions: ['386'], sniff: sniffSos, byNameAlone: false, load: parserOf(() => import('./sos')) },
     { id: 'pif', name: 'Program information file (PIF)', extensions: ['pif'], sniff: sniffPif, load: parserOf(() => import('./pif')) },
     { id: 'ico', name: 'Icon or cursor (ICO, CUR)', extensions: ['ico', 'cur'], sniff: sniffIco, load: parserOf(() => import('./ico')) },
+    { id: 'ani', name: 'Animated cursor (ANI)', extensions: ['ani'], sniff: sniffAni, load: parserOf(() => import('./ani')) },
+    { id: 'avi', name: 'Video (AVI)', extensions: ['avi'], sniff: sniffAvi, load: parserOf(() => import('./avi')) },
+    { id: 'cab', name: 'Microsoft cabinet (CAB)', extensions: ['cab'], sniff: sniffCab, load: parserOf(() => import('./cab')) },
     // Saved from a program's resources: it has no name of its own.
     { id: 'pkcs7', name: 'Signature (PKCS #7, Authenticode)', extensions: ['p7s', 'p7b', 'p7c', 'p7m'], sniff: sniffPkcs7, load: parserOf(() => import('./pkcs7')) },
     { id: 'x509', name: 'Certificate (X.509)', extensions: ['cer', 'crt', 'der'], sniff: sniffCertificate, load: parserOf(() => import('./pkcs7')) },

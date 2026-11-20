@@ -233,7 +233,8 @@ export function viewResources(
         }
         entries.push({
             name: null,
-            label: `${nameOf(r)}.${RESOURCE_TYPES[r.type]?.ext ?? 'bin'}`,
+            // "AVI" is a type of the program's own, but the one Windows' animation control plays its movies from.
+            label: `${nameOf(r)}.${RESOURCE_TYPES[r.type]?.ext ?? (r.typeName === 'AVI' ? 'avi' : 'bin')}`,
             offset: r.at,
             size: r.length,
             data: data.subarray(r.at, r.at + r.length),

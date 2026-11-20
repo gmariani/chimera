@@ -44,7 +44,8 @@ export function creditStrings(data: Uint8Array): { strings: CreditString[]; end:
 
 /**
  * Credits by content: a NUL ending them (and nothing but zeros after it), no control bytes but the style bytes, 0x05
- * and CR, no LF (the game's lines end in a bare CR), and a style byte starting at least one string.
+ * and CR, no LF (the game's lines end in a bare CR), and a style byte starting at least one string that has text: a
+ * lone style byte and its NUL (01 00 00 00, a flag in Internet Explorer 3's installer) aren't credits.
  */
 export function sniffDuneCredits(data: Uint8Array): boolean {
     if (data.length < 2 || data.length > MOST) return false;
@@ -52,5 +53,5 @@ export function sniffDuneCredits(data: Uint8Array): boolean {
     if (nul < 1) return false;
     for (let i = nul + 1; i < data.length; i++) if (data[i]) return false;
     for (let i = 0; i < nul; i++) if (!drawn(data[i]) && !(data[i] >= 1 && data[i] <= 5) && data[i] !== 13) return false;
-    return creditStrings(data).strings.some((s) => s.style);
+    return creditStrings(data).strings.some((s) => s.style && s.text.trim());
 }

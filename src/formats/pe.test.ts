@@ -96,6 +96,25 @@ describe('Windows programs (PE)', () => {
         expect(() => parse(changed((v) => v.setUint16(OPT, 0x1234, true)))).toThrow(/starts with 1234, not 0x10B/);
         expect(() => parse(changed((v) => v.setUint16(PE + 20, 64, true)))).toThrow(/optional header is said to be 64 bytes, too short for the 96/);
         expect(() => parse(windowsProgram().slice(0, OPT + 50))).toThrow(/ends inside its optional header/);
+        // 0 is Win32s's quirk only with the 32-bit optional header's size.
+        expect(() => parse(windowsProgram({ wide: true }).map((v, i) => (i === OPT || i === OPT + 1 ? 0 : v)))).toThrow(/starts with 0000, not 0x10B/);
+    });
+
+    it('reads Win32s’s own DLLs of 1996, whose magic is 0 and size only file-aligned', () => {
+        const r = parse(
+            changed((v) => {
+                v.setUint16(OPT, 0, true);
+                v.setUint32(OPT + 56, v.getUint32(OPT + 56, true) - 0x200, true);
+            })
+        );
+        expect(r.warnings).toEqual([]);
+        expect(r.title).toBe('Windows program (PE, 32-bit)');
+        const magic = r.fields.find((f) => f.name === 'Optional header')!.children!.find((f) => f.name === 'Magic')!;
+        expect(magic.note).toMatch(/Win32s loads them, Windows NT wouldn’t/);
+        // Rounded to neither alignment, it's still said.
+        expect(warningsOf((v) => (v.setUint16(OPT, 0, true), v.setUint32(OPT + 56, 0x3801, true)))).toContain(
+            'It says it takes 14,337 bytes in memory, which isn’t a multiple of its section alignment (4,096).'
+        );
     });
 
     it('says what its headers get wrong', () => {
@@ -312,5 +331,17 @@ describe.skipIf(!totalAccess)('Counterstrike’s TotalAccess setup', () => {
             ['61440', 'Open'],
             ['61441', 'Save As'],
         ]);
+    });
+});
+
+const win32s = gameDir('cncRemastered') && join(gameDir('cncRemastered')!, 'RED_ALERT/COUNTERSTRIKE/PLANETWW/WIN32S.Z');
+describe.skipIf(!win32s)('the Win32s that Planet Westwood installs', () => {
+    it('reads every 32-bit DLL in it, the eleven with magic 0, with no warnings', async () => {
+        const archive = await inspect(new Uint8Array(readFileSync(win32s!)), { name: 'WIN32S.Z', names: [] });
+        const odd = ['COMDLG32.DLL', 'LZ32.DLL', 'NETAPI32.DLL', 'OLECLI32.DLL', 'OLESVR32.DLL', 'SHELL32.DLL', 'VERSION.DLL', 'W32SCOMB.DLL', 'W32SKRNL.DLL', 'WSOCK32.DLL', 'WINSPOOL.DRV'];
+        for (const name of odd) {
+            const r = parse(archive.parsed.entries!.find((e) => e.name === name)!.data, name);
+            expect([name, r.title, r.warnings]).toEqual([name, 'Windows library (DLL, 32-bit)', []]);
+        }
     });
 });
