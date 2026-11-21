@@ -67,6 +67,10 @@ No code is taken from any of these: they're where the facts about each format co
 - **The Just Solve the File Format Problem wiki** (http://justsolve.archiveteam.org/): InstallShield's PKG and installer archive pages.
 - **Sample files** collected for that wiki (https://sembiance.com/fileFormatSamples/): SETUP.PKG and SETUP.INS from other programs' installers, used to check the readers. They aren't in this repository.
 
+### Help files
+
+- **helpdeco's helpfile.txt** (Manfred Winterhoff, 1997, after Pete Davis's "The Windows Help File Format", Dr. Dobb's Journal, 1993; https://github.com/joncampbell123/helpdeco, GPL 2 or later): Windows Help files and their SHG and MRB pictures. **helpdeco's source** (same license) where the description leaves a doubt: Hall compression's two-byte codes, where a topic position lands, how a paragraph, a table and each code are laid out, and how a DDB becomes a DIB. No code was taken from it. helpdeco itself, built from that source with its 64-bit bit-reading bug fixed (its `GetBit` kept 32-bit words in `unsigned long`), is what the topics' text and the pictures were checked against during development; it isn't in this repository. That the date in |SYSTEM counts from 1970, and RoboHELP's stamp after the file, were worked out from Westwood Chat's, RealAudio's and Internet Explorer 3's help files.
+
 ### Programs and drivers
 
 - **Microsoft's MS-DOS Programmer's Reference** and **Ralf Brown's Interrupt List** (INT 21h function 4Bh): DOS programs (MZ).

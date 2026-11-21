@@ -171,6 +171,8 @@ export function signature(data: Uint8Array): Signature | null {
         };
     if (ascii(data, 0, '{\\rtf')) return { name: 'RTF document', ext: 'rtf', length: 5 };
     if (ascii(data, 0, 'ITSF')) return { name: 'Compiled help (CHM)', ext: 'chm', length: 4, runs: true };
+    // Its macros can start programs and call into DLLs (ExecProgram, RegisterRoutine): it runs, as a CHM does.
+    if (bytes(data, 0, [0x3f, 0x5f, 0x03, 0x00])) return { name: 'Windows Help file (HLP)', ext: 'hlp', exts: ['hlp', 'ann', 'gid', 'mvb'], format: 'winhelp', length: 4, runs: true };
     if (ascii(data, 0, 'SQLite format 3\0')) return { name: 'SQLite database', ext: 'sqlite', length: 16 };
     if (ascii(data, 0, 'RIFF') && ascii(data, 8, 'WEBP')) return { name: 'WebP picture', ext: 'webp', length: 12 };
     if (ascii(data, 0, 'RIFF') && ascii(data, 8, 'AVI ')) return { name: 'AVI video', ext: 'avi', format: 'avi', length: 12 };

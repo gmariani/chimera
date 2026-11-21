@@ -41,6 +41,8 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `certificates.spc` | A bag of certificates: PKCS #7 signed data alone with two certificates and no signer, as Internet Explorer 3 keeps one | 772 bytes |
 | `archive.zip` | ZIP archive: stored, Deflate and DCL-imploded files, a folder, a name in UTF-8, sizes in a descriptor, a comment | 879 bytes |
 | `archive-zip64.zip` | ZIP archive with ZIP64’s end record, locator, and header offsets in ZIP64 extra fields | 1,005 bytes |
+| `help.hlp` | Windows Help file (Windows 3.1): two topics, one with a table, phrase-compressed and LZ77, indexes, a window, a picture with a hotspot | 5,068 bytes |
+| `help-hall.hlp` | Windows Help file (Windows 95): the same, its phrases Hall-compressed | 5,096 bytes |
 | `icons.icl` | Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon | 528 bytes |
 | `music.mid` | Standard MIDI file, two tracks: a tempo change halfway, a named melody written with running status | 90 bytes |
 | `music.xmi` | XMIDI music, two sequences: a phrase with an instrument from the bank, and a chord with a branch point | 148 bytes |

@@ -1714,6 +1714,255 @@ export function zipSample(options: { comment?: string; prefix?: number[]; zip64?
     );
 }
 
+/** LZ77 as Windows Help packs it, with every byte as it is: a flag byte of 0 before each 8. */
+function helpLz77(data: number[]): number[] {
+    const out: number[] = [];
+    for (let i = 0; i < data.length; i += 8) out.push(0, ...data.slice(i, i + 8));
+    return out;
+}
+
+/** A Windows Help B+ tree of one leaf page: its header, then the page, its entries, the rest unused. */
+function helpBtree(structure: string, entries: number[][], directory = false): number[] {
+    const PAGE = 1024;
+    const used = entries.reduce((n, e) => n + e.length, 0);
+    const name = [...text(structure), ...new Array(16 - structure.length).fill(0)];
+    const header = [...u16(0x293b), ...u16(directory ? 0x0402 : 0x0002), ...u16(PAGE), ...name, ...u16(0), ...u16(0), ...u16(0), ...u16(0xffff), ...u16(1), ...u16(1), ...u32(entries.length)];
+    const page = [...u16(PAGE - 8 - used), ...u16(entries.length), ...u16(0xffff), ...u16(0xffff), ...entries.flat()];
+    return [...header, ...page, ...new Array(PAGE - page.length).fill(0)];
+}
+
+/** A compressed number of Windows Help: a word as a byte (value × 2) or two (× 2 + 1); a long as two bytes or four. */
+const helpWord = (v: number) => (v < 128 ? [v * 2] : u16(v * 2 + 1));
+const helpLong = (v: number) => (v < 32768 ? u16(v * 2) : u32(v * 2 + 1));
+/** A signed one, as a record's sizes are: 0x4000 added in the short form (0x40000000 in the long). */
+const helpSignedLong = (v: number) => (v + 0x4000 < 32768 ? u16((v + 0x4000) * 2) : u32((v + 0x40000000) * 2 + 1));
+
+/**
+ * A Windows Help file, made small: two topics, the first with a font change, a tab, a line break, a jump (to the
+ * second) and a picture, the second with a table of two cells. Its phrase table shortens the text, as Windows 3.1's
+ * help compiler does (|Phrases, the file version 21), or with `hall` as Windows 95's does (|PhrIndex and |PhrImage,
+ * version 33). |SYSTEM gives a title, a copyright, the contents topic, a macro and a window; there are title, context,
+ * keyword and map indexes, and |bm0, a 1-bit picture packed in runs, with a hotspot that jumps to the second topic.
+ * The topics are LZ77-packed (every byte as it is), in one 4 KB block. Made by hand after helpdeco's helpfile.txt.
+ */
+export function winHelp({ hall = false }: { hall?: boolean } = {}): Uint8Array {
+    // Windows' character set: ’ is 0x92.
+    const ansi = (s: string) => [...s].map((c) => (c === '’' ? 0x92 : c.charCodeAt(0)));
+    const zstr = (s: string) => [...ansi(s), 0];
+    const phrases = ['Chimera', 'sample', 'the '];
+
+    // A topic record (TOPICLINK): its size, its text's size unpacked, the records before and after, its first part's size, its kind.
+    type Link = { type: number; first: number[]; strings: string[] };
+    /** The strings, with the phrases put in: Windows 3.1's codes (1 to 15 and a byte) or Hall's. */
+    const shorten = (s: number[]): number[] => {
+        const out: number[] = [];
+        const literal: number[] = [];
+        const flush = () => {
+            // Hall: runs of up to 32 bytes as they are, after (length - 1) × 8 + 3.
+            for (let i = 0; i < literal.length; i += 32) {
+                const part = literal.slice(i, i + 32);
+                out.push(((part.length - 1) << 3) | 3, ...part);
+            }
+            literal.length = 0;
+        };
+        for (let i = 0; i < s.length;) {
+            const n = phrases.findIndex((ph) => ansi(ph).every((v, k) => s[i + k] === v));
+            if (n < 0) {
+                if (hall) literal.push(s[i]);
+                else out.push(s[i]);
+                i++;
+                continue;
+            }
+            i += phrases[n].length;
+            if (hall) {
+                flush();
+                out.push(n * 2);
+            } else {
+                // A space after it, when there is one, goes in the code's low bit.
+                const space = s[i] === 0x20 && !phrases[n].endsWith(' ');
+                if (space) i++;
+                const v = n * 2 + (space ? 1 : 0);
+                out.push((v >> 8) + 1, v & 0xff);
+            }
+        }
+        flush();
+        return out;
+    };
+    const topicOffsets: number[] = [];
+    const links: Link[] = [];
+    // The first topic: its header, then its text.
+    const textStrings = ['Chimera’s sample help, ', 'in bold.', 'Name', 'Value', 'See ', 'the second topic', '.', '', ''];
+    const charsOf = (strings: string[]) => strings.reduce((n, s) => n + ansi(s).length + 1, 0);
+    const firstChars = charsOf(textStrings);
+    // Its codes: a font, the end of a paragraph, a tab, a line break, a jump (to the second topic: the hash of its context
+    // name, as |CONTEXT has it), its end, the end of a paragraph, a picture (bm0, with 1 hotspot), and the end.
+    const paragraph = [0, 0x80, ...u16(0), ...u16(0x0002), ...helpWord(0x40 + 5)];
+    const picture = [0x86, 0x22, ...helpSignedLong(4), ...helpWord(1), ...u16(0), ...u16(0)];
+    const SECOND = 0x5f8b1e74;
+    const codes1 = [0x80, ...u16(0), 0x82, 0x83, 0x81, 0xe3, ...u32(SECOND), 0x89, 0x82, ...picture, 0xff];
+    const tableStrings = ['Left', '', 'Right', '', ''];
+    const tableChars = charsOf(tableStrings);
+    // A table of 2 columns, of normal width; each cell's paragraph its column, then the end of its paragraph and the end.
+    const cell = (column: number) => [...u16(column), ...u16(0), 0, 0, 0x80, ...u16(0), ...u16(0)];
+    const table = [2, 1, ...u16(0), ...u16(16000), ...u16(0), ...u16(16000), ...cell(0), 0x82, 0xff, ...cell(1), 0x82, 0xff, ...u16(0xffff)];
+    topicOffsets.push(0, firstChars);
+    links.push({ type: 2, first: [], strings: ['Welcome', 'Chimera()'] });
+    links.push({ type: 0x20, first: [...helpSignedLong(0), ...helpWord(firstChars), ...paragraph, ...codes1], strings: textStrings });
+    links.push({ type: 2, first: [], strings: ['Second topic'] });
+    links.push({ type: 0x23, first: [...helpSignedLong(0), ...helpWord(tableChars), ...table], strings: tableStrings });
+    // The records, laid out from TOPICPOS 12; a topic header's first part is its TOPICHEADER.
+    const stream: number[] = [];
+    const sizes = links.map((l) => {
+        const raw = l.strings.flatMap((s) => [...ansi(s), 0]);
+        // Stored as it is when shortening wouldn't make it shorter, as the compilers do (its size then says it isn't shortened).
+        const short = l.type === 2 ? raw : shorten(raw);
+        const packed = short.length < raw.length ? short : raw;
+        const first = l.type === 2 ? 28 : l.first.length;
+        return { raw, packed, first: 21 + first };
+    });
+    const positions: number[] = [];
+    let at = 12;
+    for (const s of sizes) {
+        positions.push(at);
+        at += s.first + s.packed.length;
+    }
+    const endAt = at;
+    links.forEach((l, i) => {
+        const s = sizes[i];
+        const next = positions[i + 1] ?? endAt;
+        const first = l.type === 2 ? [...u32(0), ...u32(0xffffffff), ...u32(0xffffffff), ...u32(i >> 1), ...u32(0xffffffff), ...u32(positions[i]), ...u32(positions[i + 2] ?? endAt)] : l.first;
+        stream.push(...u32(s.first + s.packed.length), ...u32(s.raw.length), ...u32(positions[i - 1] ?? 0xffffffff), ...u32(next), ...u32(s.first), l.type, ...first, ...s.packed);
+    });
+    // The last record: it only ends the chain.
+    stream.push(...u32(21), ...u32(0), ...u32(positions.at(-1)!), ...u32(0xffffffff), ...u32(21), 2);
+    const topic = [...u32(0xffffffff), ...u32(12), ...u32(positions[2]), ...helpLz77(stream)];
+    const endOffset = firstChars + tableChars;
+
+    // The phrases.
+    const phraseBytes = phrases.flatMap(ansi);
+    let phraseFiles: [string, number[]][];
+    if (!hall) {
+        const offsets: number[] = [];
+        let o = 2 * (phrases.length + 1);
+        for (const p of phrases) {
+            offsets.push(o);
+            o += p.length;
+        }
+        offsets.push(o);
+        phraseFiles = [['|Phrases', [...u16(phrases.length), ...u16(0x0100), ...u32(phraseBytes.length), ...offsets.flatMap(u16), ...helpLz77(phraseBytes)]]];
+    } else {
+        // Each length: as many 1s as it has 4s past the first, a 0, then 2 bits of what's left; the bits from the lowest up.
+        const bits: number[] = [];
+        for (const p of phrases) {
+            const n = p.length - 1;
+            for (let k = 0; k < n >> 2; k++) bits.push(1);
+            bits.push(0, n & 1, (n >> 1) & 1);
+        }
+        const words: number[] = [];
+        for (let i = 0; i < bits.length; i += 32) words.push(bits.slice(i, i + 32).reduce((w, v, k) => w | (v << k), 0) >>> 0);
+        const index = [...u32(1), ...u32(phrases.length), ...u32(0), ...u32(phraseBytes.length), ...u32(phraseBytes.length), ...u32(0), ...u16(2), ...u16(0x4a00), ...words.flatMap(u32), ...u32(0)];
+        phraseFiles = [
+            ['|PhrIndex', index],
+            ['|PhrImage', phraseBytes],
+        ];
+    }
+
+    // |SYSTEM: its header (1997-01-01), then its records.
+    const record = (type: number, data: number[]) => [...u16(type), ...u16(data.length), ...data];
+    const fixed = (s: string, n: number) => [...ansi(s), ...new Array(n - s.length).fill(0)];
+    const window = [
+        ...u16(0x7f),
+        ...fixed('main', 10),
+        ...fixed('main', 9),
+        ...fixed('Chimera Help', 51),
+        ...u16(100),
+        ...u16(100),
+        ...u16(600),
+        ...u16(800),
+        ...u16(0),
+        ...u32(0xffffff),
+        ...u32(0xc0c0c0),
+    ];
+    const system = [
+        ...u16(0x036c),
+        ...u16(hall ? 33 : 21),
+        ...u16(1),
+        ...u32(852076800),
+        ...u16(4),
+        ...record(1, zstr('Chimera Sample Help')),
+        ...record(2, zstr('Chimera, 1997')),
+        ...record(3, u32(0)),
+        ...record(4, zstr('BrowseButtons()')),
+        ...record(6, window),
+    ];
+    // |bm0: a 1-bit 8 × 2 picture, its rows packed in runs, and a hotspot (a jump to "second") over all of it.
+    // Rows of 4 bytes (8 pixels, padded), the bottom one first: F0 00 00 00 and 0F 00 00 00, each a byte as it is, then 3 zeros.
+    const pixels = [0x81, 0xf0, 0x03, 0x00, 0x81, 0x0f, 0x03, 0x00];
+    const hotspots = [1, ...u16(1), ...u32(0), 0xe3, 0, 0, ...u16(0), ...u16(0), ...u16(8), ...u16(2), ...u32(0x12345678), ...zstr('arrow'), ...zstr('second')];
+    const head = [
+        6,
+        1,
+        ...helpLong(96),
+        ...helpLong(96),
+        ...helpWord(1),
+        ...helpWord(1),
+        ...helpLong(8),
+        ...helpLong(2),
+        ...helpLong(2),
+        ...helpLong(0),
+        ...helpLong(pixels.length),
+        ...helpLong(hotspots.length),
+    ];
+    const pictureAt = 8;
+    const dataAt = head.length + 8 + 8;
+    const bm0 = [...u16(0x506c), ...u16(1), ...u32(pictureAt), ...head, ...u32(dataAt), ...u32(dataAt + pixels.length), ...[0, 0, 0, 0, 255, 255, 255, 0], ...pixels, ...hotspots];
+    const files: [string, number[]][] = [
+        ['|SYSTEM', system],
+        ...phraseFiles,
+        ['|TOPIC', topic],
+        [
+            '|TTLBTREE',
+            helpBtree('Lz', [
+                [...u32(0), ...zstr('Welcome')],
+                [...u32(topicOffsets[1]), ...zstr('Second topic')],
+                [...u32(endOffset), 0],
+            ]),
+        ],
+        [
+            '|CONTEXT',
+            helpBtree('L4', [
+                [...u32(0x1d32c0e3), ...u32(0)],
+                [...u32(SECOND), ...u32(topicOffsets[1])],
+            ]),
+        ],
+        [
+            '|KWBTREE',
+            helpBtree('F24', [
+                [...zstr('chimera'), ...u16(2), ...u32(0)],
+                [...zstr('table'), ...u16(1), ...u32(8)],
+            ]),
+        ],
+        ['|KWDATA', [...u32(0), ...u32(topicOffsets[1]), ...u32(topicOffsets[1])]],
+        ['|CTXOMAP', [...u16(1), ...u32(100), ...u32(0)]],
+        ['|bm0', bm0],
+    ];
+    // Laid out from byte 16: each file's 9-byte header and its bytes, then the directory.
+    const out: number[] = [];
+    const where: [string, number][] = [];
+    for (const [name, bytes] of files) {
+        where.push([name, 16 + out.length]);
+        out.push(...u32(9 + bytes.length), ...u32(bytes.length), 4, ...bytes);
+    }
+    const directoryAt = 16 + out.length;
+    const directory = helpBtree(
+        'z4',
+        where.sort(([x], [y]) => (x < y ? -1 : 1)).map(([name, at]) => [...zstr(name), ...u32(at)]),
+        true
+    );
+    out.push(...u32(9 + directory.length), ...u32(directory.length), 4, ...directory);
+    return bytes([...u32(0x00035f3f), ...u32(directoryAt), ...u32(0xffffffff), ...u32(16 + out.length)], out);
+}
+
 /**
  * Dune II's mentat encyclopedia, made small: a heading, a briefing topic (its text is the mission's), and a topic with its
  * animation, description and text. Each topic in NAME: its length, where its text is (big-endian), its heading's number, "0"
@@ -2116,6 +2365,13 @@ export function samples(): Sample[] {
         },
         { name: 'archive.zip', format: 'zip', about: 'ZIP archive: stored, Deflate and DCL-imploded files, a folder, a name in UTF-8, sizes in a descriptor, a comment', data: zipSample() },
         { name: 'archive-zip64.zip', format: 'zip', about: 'ZIP archive with ZIP64’s end record, locator, and header offsets in ZIP64 extra fields', data: zipSample({ zip64: true }) },
+        {
+            name: 'help.hlp',
+            format: 'winhelp',
+            about: 'Windows Help file (Windows 3.1): two topics, one with a table, phrase-compressed and LZ77, indexes, a window, a picture with a hotspot',
+            data: winHelp(),
+        },
+        { name: 'help-hall.hlp', format: 'winhelp', about: 'Windows Help file (Windows 95): the same, its phrases Hall-compressed', data: winHelp({ hall: true }) },
         { name: 'icons.icl', format: 'ne', about: 'Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon', data: iconLibrary() },
         { name: 'music.mid', format: 'midi', about: 'Standard MIDI file, two tracks: a tempo change halfway, a named melody written with running status', data: standardMidi() },
         { name: 'music.xmi', format: 'xmi', about: 'XMIDI music, two sequences: a phrase with an instrument from the bank, and a chord with a branch point', data: xmidiMusic() },

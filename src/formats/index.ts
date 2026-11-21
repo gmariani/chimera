@@ -11,6 +11,7 @@ import { sniffAni } from './ani-sniff';
 import { sniffAvi } from './avi-sniff';
 import { sniffCab } from './cab-sniff';
 import { sniffZip } from './zip-sniff';
+import { sniffShg, sniffWinHelp } from './winhelp/sniff';
 import { sniffInstallShieldEngine, sniffInstallShieldPkg, sniffInstallShieldScript, sniffInstallShieldZ } from './installshield/sniff';
 import { sniffNe } from './ne-sniff';
 import { sniffPe } from './pe-sniff';
@@ -170,6 +171,8 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'ani', name: 'Animated cursor (ANI)', extensions: ['ani'], sniff: sniffAni, load: parserOf(() => import('./ani')) },
     { id: 'avi', name: 'Video (AVI)', extensions: ['avi'], sniff: sniffAvi, load: parserOf(() => import('./avi')) },
     { id: 'cab', name: 'Microsoft cabinet (CAB)', extensions: ['cab'], sniff: sniffCab, load: parserOf(() => import('./cab')) },
+    { id: 'winhelp', name: 'Windows Help file (HLP)', extensions: ['hlp', 'ann', 'gid', 'mvb'], sniff: sniffWinHelp, load: parserOf(() => import('./winhelp')) },
+    { id: 'shg', name: 'Windows Help picture (SHG, MRB)', extensions: ['shg', 'mrb'], sniff: sniffShg, load: parserOf(() => import('./winhelp/shg')) },
     // What's built on ZIP is named as itself: a .docx or .jar is a ZIP, and isn't misnamed.
     {
         id: 'zip',
