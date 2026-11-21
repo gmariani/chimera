@@ -1738,8 +1738,8 @@ const helpLong = (v: number) => (v < 32768 ? u16(v * 2) : u32(v * 2 + 1));
 const helpSignedLong = (v: number) => (v + 0x4000 < 32768 ? u16((v + 0x4000) * 2) : u32((v + 0x40000000) * 2 + 1));
 
 /**
- * A Windows Help file, made small: two topics, the first with a font change, a tab, a line break, a jump (to the
- * second) and a picture, the second with a table of two cells. Its phrase table shortens the text, as Windows 3.1's
+ * A Windows Help file, made small: two topics, the first with a font change (to bold green Arial, from |FONT), a tab, a
+ * line break, a jump (to the second) and a picture, the second with a table of two cells, all of it non-scrolling. Its phrase table shortens the text, as Windows 3.1's
  * help compiler does (|Phrases, the file version 21), or with `hall` as Windows 95's does (|PhrIndex and |PhrImage,
  * version 33). |SYSTEM gives a title, a copyright, the contents topic, a macro and a window; there are title, context,
  * keyword and map indexes, and |bm0, a 1-bit picture packed in runs, with a hotspot that jumps to the second topic.
@@ -1798,13 +1798,17 @@ export function winHelp({ hall = false }: { hall?: boolean } = {}): Uint8Array {
     // name, as |CONTEXT has it), its end, the end of a paragraph, a picture (bm0, with 1 hotspot), and the end.
     const paragraph = [0, 0x80, ...u16(0), ...u16(0x0002), ...helpWord(0x40 + 5)];
     const picture = [0x86, 0x22, ...helpSignedLong(4), ...helpWord(1), ...u16(0), ...u16(0)];
-    const SECOND = 0x5f8b1e74;
-    const codes1 = [0x80, ...u16(0), 0x82, 0x83, 0x81, 0xe3, ...u32(SECOND), 0x89, 0x82, ...picture, 0xff];
+    // The hashes of the topics' context names, "welcome" and "second", as WinHelp makes them (helpfile.txt).
+    const WELCOME = 0x2454ab76;
+    const SECOND = 0x370e6d04;
+    const codes1 = [0x80, ...u16(1), 0x82, 0x83, 0x81, 0xe3, ...u32(SECOND), 0x89, 0x82, ...picture, 0xff];
     const tableStrings = ['Left', '', 'Right', '', ''];
     const tableChars = charsOf(tableStrings);
-    // A table of 2 columns, of normal width; each cell's paragraph its column, then the end of its paragraph and the end.
+    // A table of 2 columns, of fixed width: each 2 inches wide (288 half points), the first's gap (its left margin) 0, the
+    // second's 5.5 points, as real ones are (helpfile.txt puts the gap first; real files, and helpdeco, the width). Each
+    // cell's paragraph its column, then the end of its paragraph and the end.
     const cell = (column: number) => [...u16(column), ...u16(0), 0, 0, 0x80, ...u16(0), ...u16(0)];
-    const table = [2, 1, ...u16(0), ...u16(16000), ...u16(0), ...u16(16000), ...cell(0), 0x82, 0xff, ...cell(1), 0x82, 0xff, ...u16(0xffff)];
+    const table = [2, 1, ...u16(288), ...u16(0), ...u16(288), ...u16(11), ...cell(0), 0x82, 0xff, ...cell(1), 0x82, 0xff, ...u16(0xffff)];
     topicOffsets.push(0, firstChars);
     links.push({ type: 2, first: [], strings: ['Welcome', 'Chimera()'] });
     links.push({ type: 0x20, first: [...helpSignedLong(0), ...helpWord(firstChars), ...paragraph, ...codes1], strings: textStrings });
@@ -1830,7 +1834,9 @@ export function winHelp({ hall = false }: { hall?: boolean } = {}): Uint8Array {
     links.forEach((l, i) => {
         const s = sizes[i];
         const next = positions[i + 1] ?? endAt;
-        const first = l.type === 2 ? [...u32(0), ...u32(0xffffffff), ...u32(0xffffffff), ...u32(i >> 1), ...u32(0xffffffff), ...u32(positions[i]), ...u32(positions[i + 2] ?? endAt)] : l.first;
+        // The second topic is all non-scrolling: its band starts at its table, and the scrolling part is -1.
+        const band = i === 2 ? [...u32(positions[3]), ...u32(0xffffffff)] : [...u32(0xffffffff), ...u32(positions[i])];
+        const first = l.type === 2 ? [...u32(0), ...u32(0xffffffff), ...u32(0xffffffff), ...u32(i >> 1), ...band, ...u32(positions[i + 2] ?? endAt)] : l.first;
         stream.push(...u32(s.first + s.packed.length), ...u32(s.raw.length), ...u32(positions[i - 1] ?? 0xffffffff), ...u32(next), ...u32(s.first), l.type, ...first, ...s.packed);
     });
     // The last record: it only ends the chain.
@@ -1898,7 +1904,7 @@ export function winHelp({ hall = false }: { hall?: boolean } = {}): Uint8Array {
     // |bm0: a 1-bit 8 × 2 picture, its rows packed in runs, and a hotspot (a jump to "second") over all of it.
     // Rows of 4 bytes (8 pixels, padded), the bottom one first: F0 00 00 00 and 0F 00 00 00, each a byte as it is, then 3 zeros.
     const pixels = [0x81, 0xf0, 0x03, 0x00, 0x81, 0x0f, 0x03, 0x00];
-    const hotspots = [1, ...u16(1), ...u32(0), 0xe3, 0, 0, ...u16(0), ...u16(0), ...u16(8), ...u16(2), ...u32(0x12345678), ...zstr('arrow'), ...zstr('second')];
+    const hotspots = [1, ...u16(1), ...u32(0), 0xe3, 0, 0, ...u16(0), ...u16(0), ...u16(8), ...u16(2), ...u32(SECOND), ...zstr('arrow'), ...zstr('second')];
     const head = [
         6,
         1,
@@ -1931,7 +1937,7 @@ export function winHelp({ hall = false }: { hall?: boolean } = {}): Uint8Array {
         [
             '|CONTEXT',
             helpBtree('L4', [
-                [...u32(0x1d32c0e3), ...u32(0)],
+                [...u32(WELCOME), ...u32(0)],
                 [...u32(SECOND), ...u32(topicOffsets[1])],
             ]),
         ],
@@ -1945,6 +1951,21 @@ export function winHelp({ hall = false }: { hall?: boolean } = {}): Uint8Array {
         ['|KWDATA', [...u32(0), ...u32(topicOffsets[1]), ...u32(topicOffsets[1])]],
         ['|CTXOMAP', [...u16(1), ...u32(100), ...u32(0)]],
         ['|bm0', bm0],
+        // Two faces of 20 bytes, then two fonts: MS Sans Serif, 10 points, in the window's color (1, 1, 0); Arial, 12
+        // points, bold and green.
+        [
+            '|FONT',
+            [
+                ...u16(2),
+                ...u16(2),
+                ...u16(8),
+                ...u16(48),
+                ...fixed('MS Sans Serif', 20),
+                ...fixed('Arial', 20),
+                ...[0, 20, 3, ...u16(0), 1, 1, 0, 1, 1, 0],
+                ...[1, 24, 3, ...u16(1), 0, 0x80, 0, 1, 1, 0],
+            ],
+        ],
     ];
     // Laid out from byte 16: each file's 9-byte header and its bytes, then the directory.
     const out: number[] = [];
@@ -2368,7 +2389,7 @@ export function samples(): Sample[] {
         {
             name: 'help.hlp',
             format: 'winhelp',
-            about: 'Windows Help file (Windows 3.1): two topics, one with a table, phrase-compressed and LZ77, indexes, a window, a picture with a hotspot',
+            about: 'Windows Help file (Windows 3.1): two topics, one with a table in its non-scrolling band, two fonts, phrase-compressed and LZ77, indexes, a window, a picture with a hotspot',
             data: winHelp(),
         },
         { name: 'help-hall.hlp', format: 'winhelp', about: 'Windows Help file (Windows 95): the same, its phrases Hall-compressed', data: winHelp({ hall: true }) },

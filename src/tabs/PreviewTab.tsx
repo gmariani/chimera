@@ -7,6 +7,7 @@ import { download, safeName } from '../lib/download';
 import { PaletteSelect, usePalettes } from '../lib/palettes';
 import { zip } from '../lib/zip';
 import { DialogPreview } from './DialogPreview';
+import { DocumentPreview } from './DocumentPreview';
 import { TablePreview } from './TablePreview';
 import { VoxelViewer } from './VoxelViewer';
 import { TeamColorSelect, useTeamColor } from '../components/TeamColor';
@@ -83,6 +84,8 @@ export function PreviewTab({
             return <TablePreview columns={preview.columns} groups={preview.groups} rows={preview.rows} onOpenName={onOpenName} />;
         case 'dialog':
             return <DialogPreview preview={preview} />;
+        case 'document':
+            return <DocumentPreview preview={preview} />;
         case 'voxels':
             return <VoxelViewer parts={preview.parts} frameCount={preview.frameCount} ownPalette={preview.palette} remap={preview.remap} fileName={fileName} />;
         case 'text':

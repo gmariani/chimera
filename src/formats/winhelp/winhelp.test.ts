@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { Parsed, Preview } from '../../core/types';
+import type { DocumentPreview, Parsed, Preview } from '../../core/types';
 import { gameDir } from '../../testing/game-data';
 import { winHelp } from '../../testing/samples';
 import { detect } from '../index';
 import { inspect } from '../inspect';
+import { contextHash } from './document';
 import winhelp from './index';
 import { unpackHelp, unpackRuns } from './lz77';
 
@@ -40,6 +41,19 @@ const edited = (change: (v: DataView, d: Uint8Array) => void, data = winHelp()) 
 };
 const warningsOf = (change: (v: DataView, d: Uint8Array) => void, data?: Uint8Array) => parse(edited(change, data)).warnings;
 const itemsOf = (p: Preview | undefined) => (p?.kind === 'stack' ? p.items : []);
+const documentOf = (r: Parsed) => {
+    const p = itemsOf(r.preview).find((i) => i.title.startsWith('Topics'))?.preview;
+    if (p?.kind !== 'document') throw new Error('no topics laid out');
+    return p;
+};
+/** Every hotspot in a document's text: what it says, and where it leads. */
+const linksOf = (doc: DocumentPreview) =>
+    doc.pages.flatMap((page) =>
+        [...page.fixed, ...page.body]
+            .flatMap((b) => (b.kind === 'table' ? b.rows.flat(2) : [b]))
+            .flatMap((p) => p.runs)
+            .flatMap((r) => (r.kind === 'text' && r.link ? [{ text: r.text, ...r.link }] : []))
+    );
 
 describe('Windows Help files', () => {
     for (const hall of [false, true])
@@ -80,8 +94,94 @@ describe('Windows Help files', () => {
             const shade = (x: number, y: number) => p.rgba[(y * 8 + x) * 4];
             expect([0, 3, 4, 7].map((x) => shade(x, 0))).toEqual([0, 0, 255, 255]);
             expect([0, 3, 4, 7].map((x) => shade(x, 1))).toEqual([255, 255, 0, 0]);
-            expect(r.entries!.map((e) => e.label)).toEqual(expect.arrayContaining(['help-bm0.bmp', 'SYSTEM.bin', 'TOPIC.bin']));
+            expect(r.entries!.map((e) => e.label)).toEqual(expect.arrayContaining(['help-bm0.bmp', 'SYSTEM.bin', 'TOPIC.bin', 'FONT.bin']));
         });
+
+    it('lays its topics out as WinHelp did: fonts, paragraphs, hotspots, pictures, tables, the non-scrolling band', () => {
+        const doc = documentOf(parse(winHelp()));
+        expect([doc.title, doc.start, doc.pages.map((p) => p.title)]).toEqual(['Chimera Sample Help', 0, ['Welcome', 'Second topic']]);
+        // |FONT's two fonts, and the second again as a jump shows it: green and underlined.
+        expect(doc.styles).toMatchObject([
+            { face: 'MS Sans Serif', family: 'sans-serif', size: 10, bold: false, color: undefined },
+            { face: 'Arial', size: 12, bold: true, color: '#008000' },
+            { face: 'Arial', size: 12, bold: true, color: '#008000', underline: 'single' },
+        ]);
+        const toSecond = { page: 1, popup: false, about: 'Opens “Second topic”' };
+        const [first, second] = doc.pages;
+        expect(first.fixed).toEqual([]);
+        expect(first.body).toEqual([
+            {
+                kind: 'paragraph',
+                spaceBefore: 2.5,
+                runs: [
+                    { kind: 'text', text: 'Chimera’s sample help, ', style: 0 },
+                    { kind: 'text', text: 'in bold.', style: 1 },
+                ],
+            },
+            {
+                kind: 'paragraph',
+                spaceBefore: 2.5,
+                runs: [
+                    { kind: 'text', text: 'Name', style: 1 },
+                    { kind: 'tab' },
+                    { kind: 'text', text: 'Value', style: 1 },
+                    { kind: 'break' },
+                    { kind: 'text', text: 'See ', style: 1 },
+                    { kind: 'text', text: 'the second topic', style: 2, link: toSecond },
+                    { kind: 'text', text: '.', style: 1 },
+                ],
+            },
+            { kind: 'paragraph', spaceBefore: 2.5, runs: [{ kind: 'picture', picture: 0, place: 'inline' }] },
+        ]);
+        // The picture's hotspot leads where the text's jump does: by its context name's hash.
+        expect(doc.pictures[0]).toMatchObject({ width: 8, height: 2, hotspots: [{ x: 0, y: 0, width: 8, height: 2, link: toSecond }] });
+        // The second topic is all in its non-scrolling band: a table of two 2-inch columns.
+        const paragraph = (text: string) => ({ kind: 'paragraph', runs: [{ kind: 'text', text, style: 1 }] });
+        expect(second.body).toEqual([]);
+        expect(second.fixed).toEqual([
+            {
+                kind: 'table',
+                relative: false,
+                columns: [
+                    { width: 144, gap: 0 },
+                    { width: 144, gap: 5.5 },
+                ],
+                rows: [[[paragraph('Left')], [paragraph('Right')]]],
+            },
+        ]);
+    });
+
+    it('hashes context names as WinHelp does', () => {
+        // The sample's, which helpdeco names; and names helpdeco gave to hashes in Microsoft's PSS help (psspos.hlp).
+        expect(contextHash('second')).toBe(0x370e6d04);
+        expect(contextHash('SECOND')).toBe(0x370e6d04);
+        expect(contextHash('136HWYD')).toBe(0x94691a2e);
+        expect(contextHash('O_L5IY')).toBe(0x126a972f);
+        expect(contextHash('')).toBe(1);
+    });
+
+    it('reads its fonts, and says what’s wrong with them', () => {
+        const r = parse(winHelp());
+        const font = r.fields.find((f) => f.name === '|FONT')!;
+        const fonts = font.children!.find((f) => f.name === 'Fonts')!;
+        expect(fonts.children!.map((f) => f.value)).toEqual(['MS Sans Serif, 10 points', 'Arial, 12 points, bold, #008000']);
+        expect(fonts.children![0].children!.map((f) => [f.name, f.value])).toEqual([
+            ['Attributes', 'none'],
+            ['Size', '10 points'],
+            ['Family', 'swiss (sans serif)'],
+            ['Face', 'MS Sans Serif'],
+            ['Color', 'the window’s own'],
+            ['Background', 'the window’s own'],
+        ]);
+        const at = (d: Uint8Array) => fileAt(d, '|FONT');
+        expect(warningsOf((v, d) => v.setUint32(at(d) - 5, 4, true))).toEqual(['Its |FONT file is too short for its header.']);
+        expect(warningsOf((v, d) => v.setUint16(at(d) + 2, 50, true))).toEqual(['Its |FONT file says it has 50 fonts, more than fit in it: those past its end aren’t read.']);
+        expect(warningsOf((v, d) => v.setUint16(at(d) + 6, 2000, true))).toEqual([
+            'Its |FONT file’s 2 face names don’t fit where it says they are.',
+            'Its |FONT file says it has 2 fonts, more than fit in it: those past its end aren’t read.',
+        ]);
+        expect(warningsOf((v, d) => v.setUint16(at(d) + 48 + 11 + 3, 7, true))).toEqual(['Font 1 of its |FONT file names face 7, which it doesn’t have.']);
+    });
 
     it('opens its pictures on their own, with their hotspots', async () => {
         const bm0 = parse(winHelp()).entries!.find((e) => e.label === 'bm0.bin')!;
@@ -178,6 +278,8 @@ describe('Windows Help files', () => {
         expect(warningsOf((v, d) => v.setUint16(at(d) + 24, 30000, true))).toContain('bm0’s data runs past the end of what holds it.');
         const hotspots = (d: Uint8Array) => at(d) + new DataView(d.buffer).getUint32(at(d) + 32, true) + 8;
         expect(warningsOf((v, d) => v.setUint16(hotspots(d) + 1, 50, true))).toEqual(['bm0’s hotspots run past the end of where they are.']);
+        // Its picture renamed bm7: the topic that shows bm0 shows one it doesn't have.
+        expect(warningsOf((_v, d) => (d[nameAt(d, '|bm0') + 3] = 0x37))).toEqual(['Its topics show a picture it doesn’t have.']);
     });
 
     it('refuses what isn’t one', () => {
@@ -207,6 +309,12 @@ describe.skipIf(!CNC)('the help files in Counterstrike’s folders', () => {
         const text = new TextDecoder().decode(help.parsed.entries!.find((e) => e.label === 'WCHAT-topics.txt')!.data);
         expect(text).toContain('■ What is Wchat?\r\n\r\nWhat is Westwood Chat?\r\n');
         expect(text).toContain('The Westwood Chat program allows you to connect to the Westwood chat server');
+        // Its contents page: a heading, then a jump to each topic, every one leading to a topic it has.
+        const doc = documentOf(help.parsed);
+        const links = linksOf(doc);
+        expect(links.length).toBe(20);
+        expect(links.every((l) => l.page !== undefined)).toBe(true);
+        expect(links[0]).toEqual({ text: 'What is Westwood Chat?', page: 1, popup: false, about: 'Opens “What is Wchat?”' });
     });
 
     it('reads Internet Explorer 3’s, Hall-compressed, with its pictures', async () => {

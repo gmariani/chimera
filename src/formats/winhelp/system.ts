@@ -16,6 +16,9 @@ export interface HelpWindow {
     caption: string;
     /** Left, top, width, height, in thousandths of the screen. */
     place?: [number, number, number, number];
+    /** CSS colors of its scrolling part and of its non-scrolling band, when it gives them. */
+    background?: string;
+    fixedBackground?: string;
 }
 
 export interface HelpSystem {
@@ -109,6 +112,10 @@ export function readSystem(data: Uint8Array, at: number, end: number): HelpSyste
             const valid = b.u16(v);
             const w: HelpWindow = { type: text(v + 2, v + 12), name: text(v + 12, v + 21), caption: text(v + 21, v + 72) };
             if (valid & 0x78) w.place = [b.i16(v + 72), b.i16(v + 74), b.i16(v + 76), b.i16(v + 78)];
+            // After the place, a maximize flag, then the two colors (COLORREFs: red, green, blue, 0).
+            const color = (q: number) => `#${[data[q], data[q + 1], data[q + 2]].map((x) => x.toString(16).padStart(2, '0')).join('')}`;
+            if (valid & 0x100) w.background = color(v + 82);
+            if (valid & 0x200) w.fixedBackground = color(v + 86);
             s.windows.push(w);
             value = [w.name || 'main', w.caption && JSON.stringify(w.caption)].filter(Boolean).join(', ');
         } else if (type === 8) value = s.citation = text(v, v + size);

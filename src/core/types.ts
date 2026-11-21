@@ -215,8 +215,103 @@ export type Preview =
           /** Said beneath it: how it's played, and what doesn't play. */
           note: string;
       }
+    /** Formatted pages, laid out as the program that shows them does: a help file's topics, with links between them. */
+    | DocumentPreview
     /** Several previews of the same file, e.g. a mission's map and its text. */
     | { kind: 'stack'; items: { title: string; preview: Preview }[] };
+
+export interface DocumentPreview {
+    kind: 'document';
+    /** What the window showing it is called. */
+    title: string;
+    pages: DocumentPage[];
+    /** The page it opens at. */
+    start: number;
+    /** How text is drawn; a run names one by its place here. */
+    styles: DocumentStyle[];
+    pictures: DocumentPicture[];
+    /** Said beneath it: how faithfully it's drawn. */
+    note?: string;
+}
+
+export interface DocumentPage {
+    title: string;
+    /** What stays put at the top while the rest scrolls (a help topic's title band). */
+    fixed: DocumentBlock[];
+    body: DocumentBlock[];
+    /** CSS colors; the page's own when it doesn't say. */
+    background?: string;
+    fixedBackground?: string;
+}
+
+export type DocumentBlock = DocumentParagraph | DocumentTable;
+
+/** Lengths are in points. */
+export interface DocumentParagraph {
+    kind: 'paragraph';
+    runs: DocumentRun[];
+    align?: 'left' | 'right' | 'center';
+    spaceBefore?: number;
+    spaceAfter?: number;
+    /** Positive: at least this; negative: exactly this. */
+    lineSpacing?: number;
+    indentLeft?: number;
+    indentRight?: number;
+    /** From the left indent, for the first line: negative hangs it out. */
+    indentFirst?: number;
+    tabs?: { at: number; align: 'left' | 'right' | 'center' }[];
+    border?: { top: boolean; left: boolean; bottom: boolean; right: boolean; thick: boolean; double: boolean };
+}
+
+export interface DocumentTable {
+    kind: 'table';
+    /** Each column's width and the gap before it; in points, or in shares of the page's width when `relative`. */
+    columns: { width: number; gap: number }[];
+    relative: boolean;
+    /** Each row's cells, each cell's paragraphs. */
+    rows: DocumentParagraph[][][];
+}
+
+export type DocumentRun =
+    | { kind: 'text'; text: string; style: number; link?: DocumentLink }
+    | { kind: 'break' }
+    | { kind: 'tab' }
+    | { kind: 'picture'; picture: number; place: 'inline' | 'left' | 'right'; link?: DocumentLink }
+    /** Something it holds that isn't drawn here (a button, a window from a DLL, a video), said in words. */
+    | { kind: 'object'; text: string };
+
+export interface DocumentLink {
+    /** The page it opens, when it's one of these. */
+    page?: number;
+    /** Opens over the page, rather than in its place. */
+    popup?: boolean;
+    /** What it does, in words: where it leads, or the macro it runs. */
+    about: string;
+}
+
+export interface DocumentStyle {
+    /** The font's name, as the file gives it. */
+    face?: string;
+    family?: 'serif' | 'sans-serif' | 'monospace' | 'cursive' | 'fantasy';
+    /** In points. */
+    size?: number;
+    bold?: boolean;
+    italic?: boolean;
+    underline?: 'single' | 'double' | 'dotted';
+    strike?: boolean;
+    /** A CSS color. */
+    color?: string;
+}
+
+export interface DocumentPicture {
+    width: number;
+    height: number;
+    /** 8-bit RGBA, row by row; none for one that can't be drawn here (a metafile). */
+    rgba?: Uint8Array;
+    about: string;
+    /** Places on it that lead somewhere, in its pixels. */
+    hotspots: { x: number; y: number; width: number; height: number; link: DocumentLink }[];
+}
 
 export interface MusicNote {
     start: number;

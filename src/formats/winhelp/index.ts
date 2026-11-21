@@ -1,6 +1,8 @@
 import { Bytes, bytesLabel, field, fillGaps } from '../../core/bytes';
 import type { Entry, Field, FormatParser, Preview, TableRow } from '../../core/types';
 import { readBtree, stringAt } from './btree';
+import { buildDocument } from './document';
+import { readFonts, type HelpFonts } from './font';
 import { readHallPhrases, readPhrases, type Phrases } from './phrases';
 import { readPictures, type HelpPicture } from './pictures';
 import { sniffWinHelp } from './sniff';
@@ -156,6 +158,16 @@ const parser: FormatParser = {
             }
         }
         const sys = system as HelpSystem | null;
+        let fonts: HelpFonts | null = null;
+        if (raw.has('|FONT')) {
+            const f = internal('|FONT', raw.get('|FONT')!, ABOUT['|FONT'], (from, to) => {
+                fonts = readFonts(data, from, to);
+                say(fonts.problems);
+                return fonts.fields;
+            });
+            if (f) files.set('|FONT', f);
+        }
+        const fontList = fonts as HelpFonts | null;
         let phrases: Phrases | null = null;
         if (raw.has('|Phrases')) {
             const f = internal('|Phrases', raw.get('|Phrases')!, ABOUT['|Phrases'], (from, to) => {
@@ -197,7 +209,7 @@ const parser: FormatParser = {
                         warnings.push('It has topics but no |SYSTEM file to say how they’re packed: they aren’t read.');
                         return [];
                     }
-                    const t = readTopics(data, from, to, sys.minor, sys.flags, phrases);
+                    const t = readTopics(data, from, to, sys.minor, sys.flags, phrases, fontList?.unit);
                     topics = t.topics;
                     endOffset = t.endOffset;
                     embedded.push(...t.embedded);
@@ -322,13 +334,26 @@ const parser: FormatParser = {
             keywordRows.push({ group: k.index === 'K' ? 'Keywords' : `Index ${k.index}`, cells: { keyword: k.keyword, topics: leads.join(', ') || `${count}` } });
         }
 
-        // What to show: the topics as text, the keywords, the pictures.
+        // What to show: the topics as WinHelp laid them out, the keywords, the pictures.
         const items: { title: string; preview: Preview }[] = [];
-        if (topics.length)
-            items.push({
-                title: `Topics (${topics.length.toLocaleString('en-US')})`,
-                preview: { kind: 'text', text: topics.map((t) => `■ ${nameOf(t)}\n\n${t.text}`).join('\n\n\n'), maxLines: 40 },
+        const contents = sys?.contents !== undefined ? topicAt(sys.contents) : null;
+        if (topics.length) {
+            const doc = buildDocument({
+                title: sys?.title || (context.name ?? 'Help').replace(/^.*[\\/]/, ''),
+                topics,
+                start: contents ? topics.indexOf(contents) : 0,
+                nameOf,
+                topicAt,
+                contexts,
+                styles: fontList?.styles ?? [],
+                pictures,
+                bmFiles: new Set(listed.filter((l) => /^\|?bm\d+$/.test(l.name)).map((l) => Number(l.name.replace(/^\D+/, '')))),
+                embedded,
+                window: sys?.windows.find((w) => w.name.toLowerCase() === 'main') ?? sys?.windows.find((w) => !w.name),
             });
+            say(doc.problems);
+            items.push({ title: `Topics (${topics.length.toLocaleString('en-US')})`, preview: doc.preview });
+        }
         if (keywordRows.length)
             items.push({
                 title: `Index (${keywordRows.length.toLocaleString('en-US')} keywords)`,
@@ -378,7 +403,6 @@ const parser: FormatParser = {
                     meta: { Type: f.name.startsWith('|') ? 'Internal file' : 'Baggage' },
                 });
 
-        const contents = sys?.contents !== undefined ? topicAt(sys.contents) : null;
         const title = sys ? `Windows Help file (${compilerOf(sys.minor)})` : 'Windows Help file system (annotations, or WinHelp’s index)';
         return {
             title,

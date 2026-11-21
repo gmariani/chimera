@@ -15,6 +15,10 @@ import { unpackHelp, unpackRuns } from './lz77';
 
 export interface Hotspot {
     kind: string;
+    /** Its code: 0xC8 and 0xCC a macro, 0xE2 to 0xE7 a popup or jump by context name, 0xEA to 0xEF into another file or window. */
+    code: number;
+    /** The context name's hash, for 0xE2 to 0xE7. */
+    hash: number;
     x: number;
     y: number;
     width: number;
@@ -238,6 +242,8 @@ export function readPictures(data: Uint8Array, at: number, end: number, what: st
                 const text = (from: number, to: number) => new TextDecoder('windows-1252').decode(data.subarray(from, to));
                 picture.hotspots.push({
                     kind: HOTSPOTS[data[h]] ?? `kind 0x${data[h].toString(16)}`,
+                    code: data[h],
+                    hash: b.u32(h + 11),
                     x: b.u16(h + 3),
                     y: b.u16(h + 5),
                     width: b.u16(h + 7),

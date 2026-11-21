@@ -1506,6 +1506,189 @@ html {
     image-rendering: pixelated;
 }
 
+/*
+ * Formatted pages (a help file's topics): a window drawn as a blueprint, as a dialog is, but the page in it in the
+ * file's own colors and fonts, black on white unless it says otherwise, as the program showed it.
+ */
+.doc-stage {
+    padding: 1.5rem;
+    background-color: var(--bp-deep);
+    background-image: linear-gradient(var(--bp-rule) 1px, transparent 1px), linear-gradient(90deg, var(--bp-rule) 1px, transparent 1px);
+    background-size: 24px 24px;
+}
+
+.doc-window {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    max-width: 52rem;
+    margin: auto;
+    border: 1px solid var(--bp-line);
+    outline: 1px solid var(--bp-rule);
+    outline-offset: 3px;
+    background: var(--bp-panel);
+}
+
+.doc-caption {
+    padding: 0.25em 0.5em;
+    border-bottom: 1px solid var(--bp-line);
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.doc-buttons {
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--bp-line);
+}
+
+.doc-buttons .btn {
+    --bs-btn-color: var(--bp-line);
+    --bs-btn-border-color: var(--bp-rule-strong);
+    --bs-btn-hover-color: var(--bp-ink);
+    --bs-btn-hover-bg: var(--bp-line);
+    --bs-btn-disabled-color: var(--bp-rule-strong);
+    --bs-btn-disabled-border-color: var(--bp-rule);
+}
+
+.doc-fixed,
+.doc-body,
+.doc-popup {
+    color-scheme: light;
+    color: #000;
+    background: #fff;
+    font:
+        10pt Arial,
+        Helvetica,
+        sans-serif;
+    line-height: normal;
+}
+
+.doc-fixed {
+    padding: 0.4rem 0.6rem;
+    border-bottom: 1px solid #000;
+}
+
+.doc-body {
+    padding: 0.4rem 0.6rem 1.5rem;
+    height: 32rem;
+    max-height: 70vh;
+    overflow: auto;
+}
+
+.doc-body::after {
+    content: '';
+    display: block;
+    clear: both;
+}
+
+.doc-paragraph {
+    margin: 0;
+    min-height: 1em;
+    overflow-wrap: break-word;
+}
+
+.doc-tab {
+    display: inline-block;
+}
+
+/* A first-line indent is the paragraph's, not its pictures' or cells'. */
+.doc-picture,
+.doc-table {
+    text-indent: 0;
+}
+
+.doc-table {
+    border-collapse: collapse;
+    margin-bottom: 0;
+}
+
+.doc-table td {
+    vertical-align: top;
+    padding: 0;
+}
+
+/* Hotspots are buttons, to reach from the keyboard, drawn as nothing but what's in them. */
+.doc-hotspot,
+.doc-picture-hotspot {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: inherit;
+    cursor: pointer;
+}
+
+.doc-hotspot {
+    display: inline;
+}
+
+.doc-hotspot.is-dead {
+    cursor: help;
+}
+
+.doc-hotspot:focus-visible,
+.doc-picture-hotspot:focus-visible {
+    outline: 1px dotted #000;
+}
+
+.doc-picture--inline {
+    display: inline-block;
+    vertical-align: baseline;
+}
+
+.doc-picture--left {
+    float: left;
+    margin-right: 0.5em;
+}
+
+.doc-picture--right {
+    float: right;
+    margin-left: 0.5em;
+}
+
+.doc-picture-frame {
+    position: relative;
+    display: inline-block;
+    line-height: 0;
+}
+
+.doc-picture-frame canvas {
+    display: block;
+}
+
+.doc-picture-hotspot {
+    position: absolute;
+}
+
+.doc-picture-hotspot.is-dead {
+    cursor: help;
+}
+
+.doc-object {
+    max-width: 20rem;
+    max-height: 12rem;
+    padding: 0 0.2em;
+    border: 1px dashed #808080;
+    color: #606060;
+    font:
+        italic 9pt Arial,
+        sans-serif;
+}
+
+.doc-popup {
+    position: absolute;
+    z-index: 2;
+    max-width: 75%;
+    max-height: 60%;
+    overflow: auto;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #000;
+    box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.45);
+}
+
 /* The 3D voxel view. */
 .voxel-canvas {
     display: block;
