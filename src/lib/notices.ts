@@ -4,7 +4,16 @@
  * table in SOURCES.md, so a file added there and not here is caught. Loaded only with the Credits list.
  */
 const sources = import.meta.glob<string>(
-    ['../core/explode.ts', '../core/implode.test-util.ts', '../core/opl2.ts', '../formats/westwood/adl-player.ts', '../formats/westwood/adpcm.ts', '../formats/voc.ts', '../formats/swf/nellymoser.ts'],
+    [
+        '../core/explode.ts',
+        '../core/implode.test-util.ts',
+        '../core/opl2.ts',
+        '../formats/westwood/adl-player.ts',
+        '../formats/westwood/adpcm.ts',
+        '../formats/voc.ts',
+        '../formats/swf/nellymoser.ts',
+        '../formats/rtpatch/program.ts',
+    ],
     { query: '?raw', import: 'default', eager: true }
 );
 

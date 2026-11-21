@@ -19,6 +19,7 @@ Each of these files carries its source's notice word for word and says what was 
 | `src/formats/westwood/adpcm.ts` | FFmpeg's Westwood SND1 decoder (libavcodec/ws-snd1.c; `decodeWestwood` only) | Konstantin Shishkov | LGPL 2.1 or later | Translated to TypeScript |
 | `src/formats/voc.ts` | FFmpeg's adpcm_sbpro_expand_nibble (libavcodec/adpcm.c; `expand` only) | The FFmpeg project | LGPL 2.1 or later | Translated to TypeScript |
 | `src/formats/swf/nellymoser.ts` | FFmpeg's nellymoser.c and nellymoserdec.c | Loic Minier, Benjamin Larsson and three authors named by hash | MIT | Translated to TypeScript |
+| `src/formats/rtpatch/program.ts` | rtptool's src/apply.rs (kr4uzi's fork of https://github.com/bwrsandman/rtptool, commit 258d175) | Sandy Carter | MIT | Translated to TypeScript; its strict mode only, every stop said in words; it can check a program without the old file; numbers of 5 bytes read without overflow |
 | `wasm/bink/` (the Bink WebAssembly module) | FFmpeg 7.1's Bink decoders; the Bink 2 video decoder from https://github.com/mrtnmtth/FFmpeg-bink2 | The FFmpeg developers; Paul B Mahol, on Konstantin Shishkov's work | LGPL 2.1 or later | Built into one module; five patches in `wasm/bink/`, described in its LICENSE.ffmpeg.md and the README |
 
 ## Data from other projects
@@ -66,6 +67,10 @@ No code is taken from any of these: they're where the facts about each format co
 - **isDcc 1.22** (Andrew de Quincey, https://github.com/incognitte/isDcc; its terms forbid reusing its code, so facts only): InstallShield scripts (SETUP.INS).
 - **The Just Solve the File Format Problem wiki** (http://justsolve.archiveteam.org/): InstallShield's PKG and installer archive pages.
 - **Sample files** collected for that wiki (https://sembiance.com/fileFormatSamples/): SETUP.PKG and SETUP.INS from other programs' installers, used to check the readers. They aren't in this repository.
+
+### Patches
+
+- **rtptool's SPEC.md** and **SPEC-0x0320.md** (Sandy Carter, and kr4uzi's fork, 2026, MIT: https://github.com/bwrsandman/rtptool, https://github.com/kr4uzi/rtptool): RTPatch patches (.rtp), worked out by their authors from the program, with an AI assistant; the program interpreter is ported from its code (above). Counterstrike's CSTRIKE.RTP (format 0x012C, older than both) was read against it here: that its record kinds are numbered as the fork found them in 3.20, that bit 2 of its records brings no name, that its entries' date and time are DOS's, and that the header's first long is its largest file's size were worked out from that file, and checked against the files Counterstrike's disc carries (the files it adds, byte for byte; the README it changes, the bytes it adds and the checksums it gives).
 
 ### Help files
 

@@ -1984,6 +1984,87 @@ export function winHelp({ hall = false }: { hall?: boolean } = {}): Uint8Array {
     return bytes([...u32(0x00035f3f), ...u32(directoryAt), ...u32(0xffffffff), ...u32(16 + out.length)], out);
 }
 
+/** RTPatch's checksum: each byte XORed in, then the whole rotated left by 8, within `bits` bits. As rtptool's SPEC.md has it. */
+function rtSum(data: ArrayLike<number>, bits: number): number {
+    const mask = (1n << BigInt(bits)) - 1n;
+    let w = 0n;
+    for (let i = 0; i < data.length; i++) {
+        const x = (w ^ BigInt(data[i])) & mask;
+        w = ((x << 8n) | (x >> BigInt(bits - 8))) & mask;
+    }
+    return Number(w);
+}
+
+/** The file the RTPatch sample changes: a line of text, then a long (1,000), a short (300) and a byte (7). */
+export function rtPatchOld(): Uint8Array {
+    return bytes(text('Red Alert 1996: v1.00 by Westwood\r\n'), u32(1000), u16(300), [7]);
+}
+
+/**
+ * An RTPatch patch, made small, laid out as Counterstrike's (format 0x012C, everything stored as it is): it adds
+ * NEWFILE.TXT, deletes OLDFILE.TXT, and changes PATCHME.DAT (rtPatchOld) with a program that uses every operation:
+ * copies, with a gap for new bytes before them and through a stored template; zero fills and fills of 1, 2 and 4 bytes,
+ * with and without a gap; the new bytes poured into the gaps; and numbers of 1, 2 and 4 bytes changed in place. Its
+ * numbers take 1, 2 and 3 bytes. Made by hand after rtptool's SPEC.md.
+ */
+export function rtPatch(): Uint8Array {
+    const date = [...u16((17 << 9) | (3 << 5) | 17), ...u16((16 << 11) | (46 << 5) | 22)];
+    const entry = (name: string, attributes: number, data: ArrayLike<number>) => [
+        ...text(name),
+        ...new Array(14 - name.length).fill(0),
+        ...u16(attributes),
+        ...u32(data.length),
+        ...date,
+        data.length % 31,
+        data.length % 30,
+        ...u32(rtSum(data, 31)),
+        ...u32(rtSum(data, 30)),
+    ];
+    const added = text('Added by the patch.\r\n');
+    const deleted = text('Notes the patch deletes.\r\n');
+    const old = rtPatchOld();
+    const made = rtPatchNew();
+    const program = [
+        ...[0x02, 0x00],
+        ...[0x08, 0x00, 0x09], // template 0: "Red Alert"
+        ...[0x03, 0x00, 0x0a], // "Red Alert "
+        ...[0x04, 0x04, 0x0e, 0x05], // a gap for "1997", then ": v1."
+        ...[0x04, 0x02, 0x15, 0x0e], // a gap for "10", then " by Westwood" and its line end
+        ...[0x03, 0x40, 0x23, 0x07], // the numbers, from 35 (a 2-byte number)
+        ...[0x09, 0x00], // template 0 again
+        ...[0x0b, 0x03], // 3 zeros
+        ...[0x11, 0x2d, 0x03], // "---"
+        ...[0x12, 0x61, 0x62, 0x04], // "abab"
+        ...[0x13, 0x57, 0x58, 0x59, 0x5a, 0x06], // "WXYZWX"
+        ...[0x0a, 0x01, 0x00], // a gap for "!", then template 0
+        ...[0x14, 0x02, 0x3d, 0x03], // a gap for the line end, then "==="
+        ...[0x0c, 0x01, 0x02], // a gap for "#", then 2 zeros
+        ...[0x16, 0x01, 0x31, 0x32, 0x33, 0x34, 0x04], // a gap for "+", then "1234"
+        ...[0x15, 0x01, 0x78, 0x79, 0x02], // a gap for "*", then "xy"
+        ...[0x05, ...text('1997'), ...text('10'), ...text('!'), 0x0d, 0x0a, ...text('#'), ...text('+'), ...text('*'), ...text('END')], // the last gap runs to the end
+        ...[0x10, ...u32(24), 0x01, 0x60, 0x23, 0x00], // the long at 35 (a 3-byte number), 1,000 to 1,024
+        ...[0x0f, ...u16(0xffff), 0x01, 0x27], // the short at 39, 300 to 299
+        ...[0x06, 0x02, 0x01], // 2 on from there, the byte at 41: 7 to 8
+        ...[0x0d, 0x02, 0x00, 0x20, 0x04, 0x20], // "R" and "A" at 0 and 4 to lower case
+        ...[0x07, 0x01, 0x02, 0x36, 0x01], // the dashes at 54 and 55 to dots
+        ...[0x0e, 0x02, 0x01, 0x39], // the "a" at 57 to "c"
+        0x01,
+    ];
+    const nothing = new Array(10).fill(0);
+    return bytes(
+        [0x4b, 0x2a, ...u16(0x012c), ...u16(0x90e4), ...u32(0), ...u16(0x0020), ...u32(made.length), ...u32(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0)],
+        [...u16(0x2441), ...nothing, 0x01, ...u32(added.length), ...u32(added.length), ...entry('NEWFILE.TXT', 0x20, added), ...added],
+        [...u16(0x3441), ...nothing, 0x01, ...entry('OLDFILE.TXT', 0x20, deleted)],
+        [...u16(0x4441), ...nothing, ...u16(0x0009), 0x01, 0x01, ...u32(program.length), ...u32(program.length), ...entry('PATCHME.DAT', 0x20, old), ...entry('PATCHME.DAT', 0x20, made), ...program],
+        u16(0x1000)
+    );
+}
+
+/** What the RTPatch sample makes of PATCHME.DAT, written out by hand. */
+export function rtPatchNew(): Uint8Array {
+    return bytes(text('red alert 1997: v1.10 by Westwood\r\n'), u32(1024), u16(299), [8], text('Red Alert'), [0, 0, 0], text('..-cbabWXYZWX!Red Alert\r\n===#'), [0, 0], text('+1234*xyEND'));
+}
+
 /**
  * Dune II's mentat encyclopedia, made small: a heading, a briefing topic (its text is the mission's), and a topic with its
  * animation, description and text. Each topic in NAME: its length, where its text is (big-endian), its heading's number, "0"
@@ -2391,6 +2472,12 @@ export function samples(): Sample[] {
             format: 'winhelp',
             about: 'Windows Help file (Windows 3.1): two topics, one with a table in its non-scrolling band, two fonts, phrase-compressed and LZ77, indexes, a window, a picture with a hotspot',
             data: winHelp(),
+        },
+        {
+            name: 'patch.rtp',
+            format: 'rtpatch',
+            about: 'RTPatch patch, laid out as Counterstrike’s: a file added, one deleted, and one changed by a program using every operation',
+            data: rtPatch(),
         },
         { name: 'help-hall.hlp', format: 'winhelp', about: 'Windows Help file (Windows 95): the same, its phrases Hall-compressed', data: winHelp({ hall: true }) },
         { name: 'icons.icl', format: 'ne', about: 'Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon', data: iconLibrary() },

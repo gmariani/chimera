@@ -42,6 +42,7 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `archive.zip` | ZIP archive: stored, Deflate and DCL-imploded files, a folder, a name in UTF-8, sizes in a descriptor, a comment | 879 bytes |
 | `archive-zip64.zip` | ZIP archive with ZIP64’s end record, locator, and header offsets in ZIP64 extra fields | 1,005 bytes |
 | `help.hlp` | Windows Help file (Windows 3.1): two topics, one with a table in its non-scrolling band, two fonts, phrase-compressed and LZ77, indexes, a window, a picture with a hotspot | 5,147 bytes |
+| `patch.rtp` | RTPatch patch, laid out as Counterstrike’s: a file added, one deleted, and one changed by a program using every operation | 355 bytes |
 | `help-hall.hlp` | Windows Help file (Windows 95): the same, its phrases Hall-compressed | 5,175 bytes |
 | `icons.icl` | Windows 3 icon library: a 16-bit module with no code, holding one 16 × 16 icon | 528 bytes |
 | `music.mid` | Standard MIDI file, two tracks: a tempo change halfway, a named melody written with running status | 90 bytes |
