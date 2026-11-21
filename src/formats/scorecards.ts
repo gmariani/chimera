@@ -1,0 +1,261 @@
+/**
+ * How well each reader has the format mapped out, for keeping track of what's done and what was only begun. Two things,
+ * kept apart: how far the reader goes, and what it's been checked against outside its own tests' samples. Each says in
+ * words what it reads and what it doesn't yet. Kept up to date with the readers: a test fails when a format in the
+ * registry has none.
+ */
+
+export type Depth = 'thorough' | 'solid' | 'partial' | 'early';
+export type Checked = 'reference' | 'real files' | 'samples';
+
+export interface Scorecard {
+    depth: Depth;
+    checked: Checked;
+    /** What it reads, of what exists. */
+    reads: string;
+    /** What it doesn't read yet. */
+    missing?: string;
+    /** What it was checked against, in words. */
+    against: string;
+}
+
+export const DEPTHS: Record<Depth, string> = {
+    thorough: 'Every variant known is read, and every byte named.',
+    solid: 'What real files use is read in full; some variants or parts aren’t yet.',
+    partial: 'The main structure is read; parts are left as bytes, or variants refused.',
+    early: 'A first pass: the outline only.',
+};
+
+export const CHECKS: Record<Checked, string> = {
+    reference: 'Checked against another program or the format’s own examples.',
+    'real files': 'Checked against real files, which read with nothing to warn about.',
+    samples: 'Checked only against the samples Chimera makes.',
+};
+
+const games = 'the TD, RA, TS and RA2 files, which read with nothing to warn about';
+
+export const SCORECARDS: Record<string, Scorecard> = {
+    mix: { depth: 'thorough', checked: 'real files', reads: 'TD, RA (plain and Blowfish-encrypted), TS and RA2 layouts; names from hashes', against: games },
+    meg: { depth: 'solid', checked: 'real files', reads: 'versions 1 to 3: header, names, records', against: 'the Remastered Collection’s' },
+    'installshield-z': {
+        depth: 'solid',
+        checked: 'real files',
+        reads: 'InstallShield 3 archives, PKWARE implode',
+        missing: 'InstallShield 5 and later cabinets',
+        against: 'Counterstrike’s and Westwood Chat’s installers',
+    },
+    'installshield-engine': { depth: 'solid', checked: 'real files', reads: 'InstallShield 3’s _INST32I.EX_ and _INST16.EX_', against: 'TD’s and Counterstrike’s installers' },
+    'installshield-ins': {
+        depth: 'solid',
+        checked: 'real files',
+        reads: 'versions 3 and 5: every table, the code marked',
+        missing: 'the code isn’t decompiled, on purpose',
+        against: 'TD’s and Counterstrike’s SETUP.INS',
+    },
+    'installshield-pkg': { depth: 'solid', checked: 'real files', reads: 'InstallShield 3 package lists, checked against their archives', against: 'Counterstrike’s and Westwood Chat’s' },
+    pak: { depth: 'thorough', checked: 'real files', reads: 'versions 1 to 3', against: 'Dune II 1.00’s and 1.07’s' },
+    'shp-td': { depth: 'solid', checked: 'real files', reads: 'TD and RA sprites, every frame format', against: games },
+    'shp-ts': { depth: 'solid', checked: 'real files', reads: 'TS and RA2 sprites, plain and RLE', against: games },
+    'shp-d2': { depth: 'solid', checked: 'real files', reads: 'Dune II’s sprites and TD/RA’s Dune II-style cursors', against: 'Dune II’s and TD’s' },
+    aud: { depth: 'solid', checked: 'real files', reads: 'PCM, IMA ADPCM and Westwood ADPCM (ported from FFmpeg)', against: games },
+    cmp: {
+        depth: 'solid',
+        checked: 'samples',
+        reads: '4-bit RLE across and down, 8-bit RLE, LZW 12 and 14; Lands of Lore’s packed files',
+        against: 'Chimera’s samples, and a Dune II sprite packed as Lands of Lore packs its own',
+    },
+    cps: { depth: 'thorough', checked: 'real files', reads: 'PC and Amiga; uncompressed, LZW 12 and 14, RLE, LCW', against: 'Dune II’s, TD’s and RA’s' },
+    vqa: {
+        depth: 'partial',
+        checked: 'real files',
+        reads: 'TD/RA version 2 and the high-color movies (TS, Dune 2000), played with sound',
+        missing: 'the chunks are listed, not read field by field; version 1 (Kyrandia’s, Lands of Lore’s) isn’t read',
+        against: games,
+    },
+    tmp: { depth: 'solid', checked: 'real files', reads: 'TS and RA2 isometric tiles, every cell', against: games },
+    vxl: { depth: 'solid', checked: 'real files', reads: 'every limb, span and voxel', against: games },
+    vpl: { depth: 'solid', checked: 'real files', reads: 'every table', against: games },
+    hva: { depth: 'solid', checked: 'real files', reads: 'every frame’s matrices', against: games },
+    wav: { depth: 'solid', checked: 'reference', reads: 'PCM, IMA ADPCM and Microsoft ADPCM', missing: 'other codecs are named, not played', against: 'FFmpeg, and the games’ files' },
+    csf: { depth: 'solid', checked: 'real files', reads: 'every label and value', against: 'RA2’s' },
+    loc: { depth: 'solid', checked: 'real files', reads: 'every record, key and value', against: 'the Remastered Collection’s' },
+    gaba: { depth: 'solid', checked: 'real files', reads: 'every sound’s entry', against: 'RA2’s' },
+    bag: { depth: 'solid', checked: 'real files', reads: 'every sound, with its index', against: 'RA2’s' },
+    bink: {
+        depth: 'solid',
+        checked: 'reference',
+        reads: 'Bink and Bink 2: the header and frame index; decoded by FFmpeg',
+        missing: 'the frames’ own structure isn’t mapped',
+        against: 'FFmpeg and RAD’s player, and the games’ movies',
+    },
+    'fnt-ts': { depth: 'solid', checked: 'real files', reads: '1-bit BitFonts: TS, RA2 and its map editor, Nox', against: 'TS’s and RA2’s' },
+    'icn-d2': { depth: 'thorough', checked: 'real files', reads: 'every chunk, tile, palette and table', against: 'Dune II’s' },
+    tiles: { depth: 'solid', checked: 'real files', reads: 'TD and RA terrain templates, every tile', against: games },
+    adl: { depth: 'thorough', checked: 'reference', reads: 'versions 1 to 4, every program’s commands and instrument', against: 'AdPlug, and Dune II’s and Kyrandia’s' },
+    wsa: { depth: 'thorough', checked: 'real files', reads: 'C&C’s, Kyrandia’s, Dune II 1.00’s and 1.07’s', against: 'Dune II’s, TD’s and RA’s' },
+    fnt: { depth: 'solid', checked: 'real files', reads: 'TD/RA 4-bit and TS 8-bit fonts', against: games },
+    jpeg: {
+        depth: 'thorough',
+        checked: 'reference',
+        reads: 'baseline, extended and progressive; every segment, EXIF',
+        missing: 'lossless, hierarchical and arithmetic-coded pictures are read, not drawn',
+        against: 'Pillow',
+    },
+    tiff: {
+        depth: 'solid',
+        checked: 'reference',
+        reads: 'strips and tiles; none, PackBits, LZW, Deflate, JPEG, CCITT; bilevel to CMYK and L*a*b*',
+        missing: 'old-style JPEG split across strips isn’t drawn',
+        against: 'Pillow',
+    },
+    gif: { depth: 'thorough', checked: 'samples', reads: '87a and 89a, interlacing, every disposal', against: 'Chimera’s samples only' },
+    bmp: {
+        depth: 'solid',
+        checked: 'real files',
+        reads: '1 to 32 bits a pixel, uncompressed',
+        missing: 'run-length compressed BMPs are read, not drawn',
+        against: 'TS’s, RA2’s and the Remastered Collection’s',
+    },
+    png: { depth: 'thorough', checked: 'reference', reads: 'every color type and depth, Adam7, every chunk', against: 'Pillow' },
+    swf: {
+        depth: 'solid',
+        checked: 'reference',
+        reads: 'every tag to the SWF 19 fields; its pictures, sounds and video taken out',
+        missing: 'the movie isn’t played',
+        against: 'FFmpeg (for its sounds)',
+    },
+    sfnt: {
+        depth: 'solid',
+        checked: 'samples',
+        reads: 'TrueType and CFF outlines, collections; the main tables',
+        missing: 'layout tables (GSUB, GPOS, kern) and hinting aren’t read',
+        against: 'Chimera’s samples only',
+    },
+    pbj: { depth: 'solid', checked: 'samples', reads: 'every record and instruction', against: 'Chimera’s samples only' },
+    mp3: { depth: 'solid', checked: 'samples', reads: 'ID3 tags and every frame’s header', missing: 'frames aren’t decoded here (the browser plays them)', against: 'Chimera’s samples only' },
+    'westwood-drv': { depth: 'solid', checked: 'real files', reads: 'Dune II’s ALFX.DRV and PCSOUND.DRV: entry points, every function, their tables', against: 'Dune II’s' },
+    ail: { depth: 'solid', checked: 'real files', reads: 'AIL 2 drivers: every function and the devices they drive', missing: 'later AIL versions', against: 'Dune II’s and Kyrandia’s' },
+    sos: { depth: 'partial', checked: 'real files', reads: 'every driver’s header', missing: 'the drivers’ code is left as bytes', against: 'TD’s HMIDRV.386 and HMIDET.386' },
+    pif: {
+        depth: 'solid',
+        checked: 'real files',
+        reads: 'the basic section and every section header',
+        missing: 'the other sections’ settings are shown whole, not field by field',
+        against: 'TD’s and RA’s',
+    },
+    ico: { depth: 'thorough', checked: 'real files', reads: '1 to 32 bits a pixel, and PNG; icons and cursors', against: 'the games’ and their installers’' },
+    ani: { depth: 'thorough', checked: 'real files', reads: 'every chunk, step and frame', against: 'RA’s cursor themes and Generals’' },
+    avi: {
+        depth: 'solid',
+        checked: 'reference',
+        reads: 'Microsoft RLE, uncompressed; PCM, Microsoft and IMA ADPCM; OpenDML',
+        missing: 'other video codecs (Cinepak, Indeo) are named, not drawn',
+        against: 'FFmpeg, and Internet Explorer 3’s animations',
+    },
+    cab: {
+        depth: 'solid',
+        checked: 'reference',
+        reads: 'stored and MSZIP folders, checksums, signatures',
+        missing: 'Quantum and LZX folders are listed, not unpacked',
+        against: 'cabextract, and IE 3’s and TS’s cabinets',
+    },
+    rtpatch: {
+        depth: 'partial',
+        checked: 'real files',
+        reads: 'format 0x012C, stored: every record, and changed files made from the old ones',
+        missing: 'compressed files and programs; the 3.00 layout (only its header)',
+        against: 'Counterstrike’s CSTRIKE.RTP, the one real patch at hand, and the files on its disc',
+    },
+    winhelp: {
+        depth: 'solid',
+        checked: 'reference',
+        reads: 'Windows 3.1 and 95 help: every internal file, the topics laid out, pictures, indexes',
+        missing: 'Windows 3.0’s topics; macros aren’t run',
+        against: 'helpdeco, and 22 real help files',
+    },
+    shg: { depth: 'solid', checked: 'reference', reads: 'bitmaps and DIBs in every packing, hotspots', missing: 'metafiles aren’t drawn', against: 'helpdeco' },
+    zip: {
+        depth: 'solid',
+        checked: 'reference',
+        reads: 'stored, Deflate and DCL implode; ZIP64; every header compared with the directory',
+        missing: 'other methods (BZIP2, LZMA) and encryption',
+        against: 'Python’s zipfile, and the installers’ ZIPs',
+    },
+    pkcs7: {
+        depth: 'solid',
+        checked: 'reference',
+        reads: 'every DER value named; Authenticode, timestamps, certificate bags',
+        missing: 'nothing is verified, only said',
+        against: 'OpenSSL, and the installers’ signatures',
+    },
+    x509: { depth: 'solid', checked: 'reference', reads: 'versions 1 to 3, every extension named', against: 'OpenSSL' },
+    res: { depth: 'solid', checked: 'reference', reads: '32-bit resource files and what’s inside them', missing: '16-bit .res files', against: 'Wine’s wrc' },
+    version: { depth: 'thorough', checked: 'real files', reads: '16- and 32-bit version information, every node', against: 'the games’ programs' },
+    'win-menu': { depth: 'thorough', checked: 'real files', reads: 'classic and extended menus', against: 'TS’s' },
+    'win-menu-16': { depth: 'solid', checked: 'reference', reads: '16-bit menus', against: 'Raymond Chen’s worked example' },
+    'win-accelerators': { depth: 'thorough', checked: 'real files', reads: 'every key', against: 'the games’ programs' },
+    'win-accelerators-16': { depth: 'solid', checked: 'samples', reads: 'every key', against: 'Chimera’s samples only' },
+    'win-strings': { depth: 'thorough', checked: 'real files', reads: 'every string, with its ID', against: 'the games’ programs' },
+    'win-strings-16': { depth: 'thorough', checked: 'samples', reads: 'every string, with its ID', against: 'Chimera’s samples only' },
+    'win-messages': { depth: 'thorough', checked: 'real files', reads: 'every message, ANSI and Unicode', against: 'the games’ programs' },
+    'win-dialog-16': { depth: 'solid', checked: 'real files', reads: 'every control, drawn', against: 'the 16-bit installers’' },
+    pe: {
+        depth: 'solid',
+        checked: 'real files',
+        reads: '32- and 64-bit: every header and data directory, the tables in each, resources, signatures',
+        missing: 'the exception and load-configuration tables are named, not read; no disassembly',
+        against: 'the games’, their installers’ and Windows’ programs',
+    },
+    ne: {
+        depth: 'solid',
+        checked: 'real files',
+        reads: 'every header, segment and resource; Borland’s and CodeView’s debug info',
+        missing: 'each segment’s relocations are one block, not listed',
+        against: 'TD’s and RA’s installers, Dune II’s icons',
+    },
+    le: { depth: 'solid', checked: 'real files', reads: 'LE and LX: every header field, object, page and fixup', against: 'TD’s and Counterstrike’s DOS/4GW programs' },
+    dos16m: { depth: 'solid', checked: 'real files', reads: 'every header field of DOS/16M’s modules', against: 'TD’s and Counterstrike’s' },
+    mz: {
+        depth: 'solid',
+        checked: 'real files',
+        reads: 'the header and relocations, packers’ marks, self-extracting ZIPs, extenders, Borland’s overlays',
+        missing: 'Phar Lap and DJGPP extenders; .COM programs',
+        against: 'Dune II’s, TD’s and RA’s',
+    },
+    voc: { depth: 'thorough', checked: 'reference', reads: 'every block; PCM, A-law, µ-law and Creative ADPCM', against: 'FFmpeg, and Dune II’s sounds' },
+    ogg: { depth: 'solid', checked: 'reference', reads: 'every page; Vorbis, Opus and FLAC headers and tags', missing: 'Speex and Theora are described, not played', against: 'FFmpeg' },
+    pcx: { depth: 'partial', checked: 'real files', reads: '256-color and 24-bit pictures', missing: '1-, 2- and 4-bit pictures; the rows aren’t marked one by one', against: games },
+    vqp: { depth: 'partial', checked: 'real files', reads: 'the tables', missing: 'what each table is for isn’t said', against: games },
+    chunks: { depth: 'partial', checked: 'real files', reads: 'every chunk and property', missing: 'undocumented: most chunk ids are unnamed', against: 'the Remastered Collection’s' },
+    'xcc-names': { depth: 'thorough', checked: 'real files', reads: 'every name', against: 'the games’ archives' },
+    midi: { depth: 'thorough', checked: 'reference', reads: 'formats 0 to 2, every event, the tempo map', against: 'worked examples, by hand' },
+    xmi: { depth: 'solid', checked: 'real files', reads: 'every sequence, instrument, branch and event', missing: 'played through a simple synthesizer, not the games’ drivers', against: 'Dune II’s' },
+    emc: { depth: 'thorough', checked: 'real files', reads: 'every instruction decoded, the game’s routines named', against: 'Dune II’s' },
+    'dune2-credits': { depth: 'thorough', checked: 'real files', reads: 'every row and style byte', against: 'Dune II 1.07’s' },
+    mentat: { depth: 'thorough', checked: 'real files', reads: 'every topic and text', against: 'Dune II’s' },
+    strings: { depth: 'thorough', checked: 'real files', reads: 'every string; Dune II’s compressed ones decompressed', against: games },
+    lut: { depth: 'thorough', checked: 'real files', reads: 'every pixel', against: 'RA’s' },
+    'gray-remap': { depth: 'thorough', checked: 'real files', reads: 'every color', against: 'Dune II’s' },
+    mrf: { depth: 'thorough', checked: 'real files', reads: 'every table', against: 'TD’s' },
+    'blend-table': { depth: 'thorough', checked: 'real files', reads: 'every row, and where the game uses it', against: 'TD’s' },
+    pal: { depth: 'thorough', checked: 'real files', reads: 'every color', against: games },
+    'icon-map': { depth: 'thorough', checked: 'real files', reads: 'every group, building state by state', against: 'Dune II’s' },
+    'dune2-cfg': { depth: 'thorough', checked: 'real files', reads: 'every setting, decoded, with what the game does with it', against: 'Dune II’s' },
+    'dune2-options': { depth: 'thorough', checked: 'real files', reads: 'every option', against: 'Dune II’s' },
+    'map-td': { depth: 'solid', checked: 'real files', reads: 'TD and RA maps: every cell and object, drawn', against: games },
+    'recording-td': {
+        depth: 'partial',
+        checked: 'real files',
+        reads: 'the 1995 game’s attract-mode demo',
+        missing: 'other builds’ recordings, whose layout differs',
+        against: 'TD’s RECORD.BIN, the one at hand',
+    },
+    ini: { depth: 'thorough', checked: 'real files', reads: 'every section and entry; rules.ini as a table', against: games },
+    text: {
+        depth: 'solid',
+        checked: 'real files',
+        reads: 'Latin-1 (for DOS’s characters too), UTF-8 and UTF-16',
+        missing: 'DOS’s own box and accent characters are shown as Latin-1’s',
+        against: games,
+    },
+};

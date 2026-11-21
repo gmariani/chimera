@@ -1,17 +1,22 @@
 import { useState } from 'react';
-import { Button, Form, Modal, Table } from 'react-bootstrap';
+import { Button, ButtonGroup, Form, Modal, Table } from 'react-bootstrap';
 import { FORMATS } from '../formats';
+import { CHECKS, DEPTHS, SCORECARDS, type Depth, type Scorecard } from '../formats/scorecards';
 import { SectionBar } from './ui';
 
-/** Each format once, by name (some names cover several parsers, e.g. the sprite variants). */
+const ORDER: Depth[] = ['thorough', 'solid', 'partial', 'early'];
+
+/** Each format once, by name (some names cover several parsers, e.g. the sprite variants), with the shallowest of their scorecards. */
 function formatList() {
-    const byName = new Map<string, Set<string>>();
+    const byName = new Map<string, { extensions: Set<string>; card?: Scorecard }>();
     for (const f of FORMATS) {
-        const exts = byName.get(f.name) ?? new Set<string>();
-        for (const e of f.extensions) exts.add(e);
-        byName.set(f.name, exts);
+        const entry = byName.get(f.name) ?? { extensions: new Set<string>() };
+        for (const e of f.extensions) entry.extensions.add(e);
+        const card = SCORECARDS[f.id];
+        if (card && (!entry.card || ORDER.indexOf(card.depth) > ORDER.indexOf(entry.card.depth))) entry.card = card;
+        byName.set(f.name, entry);
     }
-    return [...byName].map(([name, exts]) => ({ name, extensions: [...exts] })).sort((a, b) => a.name.localeCompare(b.name));
+    return [...byName].map(([name, e]) => ({ name, extensions: [...e.extensions], card: e.card })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /** The registry doesn't change while the page is open, so the list is made once. */
@@ -55,8 +60,10 @@ export function FormatsCarousel() {
 function FormatsModal({ show, onHide }: { show: boolean; onHide: () => void }) {
     const formats = FORMAT_LIST;
     const [filter, setFilter] = useState('');
+    const [depth, setDepth] = useState<Depth | null>(null);
     const needle = filter.trim().toLowerCase().replace(/^\./, '');
-    const shown = needle ? formats.filter((f) => f.name.toLowerCase().includes(needle) || f.extensions.some((e) => e.includes(needle))) : formats;
+    const shown = formats.filter((f) => (!depth || f.card?.depth === depth) && (!needle || f.name.toLowerCase().includes(needle) || f.extensions.some((e) => e.includes(needle))));
+    const count = (d: Depth) => formats.filter((f) => f.card?.depth === d).length;
     return (
         <Modal show={show} onHide={onHide} size='lg' scrollable centered>
             <Modal.Header closeButton>
@@ -68,34 +75,79 @@ function FormatsModal({ show, onHide }: { show: boolean; onHide: () => void }) {
                     placeholder='Filter by name or extension'
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
-                    className='mb-3'
+                    className='mb-2'
                     // The dialog takes focus anyway; the filter is where someone typing wants it.
                     // oxlint-disable-next-line jsx-a11y/no-autofocus
                     autoFocus
                 />
+                <ButtonGroup size='sm' className='mb-3 flex-wrap' aria-label='How far each reader goes'>
+                    <Button variant='outline-light' active={!depth} onClick={() => setDepth(null)}>
+                        All {formats.length}
+                    </Button>
+                    {ORDER.map((d) => (
+                        <Button key={d} variant='outline-light' active={depth === d} onClick={() => setDepth(depth === d ? null : d)} title={DEPTHS[d]}>
+                            {d} {count(d)}
+                        </Button>
+                    ))}
+                </ButtonGroup>
                 <Table size='sm' hover className='small mb-2'>
                     <thead>
                         <tr>
                             <th>Format</th>
                             <th>Extensions</th>
+                            <th>Mapped</th>
+                            <th>Checked</th>
                         </tr>
                     </thead>
                     <tbody>
                         {shown.map((f) => (
                             <tr key={f.name}>
-                                <td>{f.name}</td>
+                                <td>
+                                    {f.name}
+                                    {f.card && (
+                                        <div className='scorecard-notes text-body-secondary'>
+                                            Reads {f.card.reads}.{f.card.missing && <> Not yet: {f.card.missing}.</>} Checked against {f.card.against}.
+                                        </div>
+                                    )}
+                                </td>
                                 <td className='text-body-secondary'>.{f.extensions.join(', .')}</td>
+                                <td>
+                                    {f.card && (
+                                        <span className={`scorecard-chip scorecard-chip--${f.card.depth}`} title={DEPTHS[f.card.depth]}>
+                                            {f.card.depth}
+                                        </span>
+                                    )}
+                                </td>
+                                <td className='text-body-secondary text-nowrap' title={f.card && CHECKS[f.card.checked]}>
+                                    {f.card?.checked}
+                                </td>
                             </tr>
                         ))}
                         {!shown.length && (
                             <tr>
-                                <td colSpan={2} className='text-body-secondary'>
+                                <td colSpan={4} className='text-body-secondary'>
                                     None by that name. It will still open, in the hex view.
                                 </td>
                             </tr>
                         )}
                     </tbody>
                 </Table>
+                <dl className='scorecard-key small text-body-secondary mb-2'>
+                    {ORDER.map((d) => (
+                        <div key={d}>
+                            <dt>
+                                <span className={`scorecard-chip scorecard-chip--${d}`}>{d}</span>
+                            </dt>
+                            <dd>{DEPTHS[d]}</dd>
+                        </div>
+                    ))}
+                    {(Object.keys(CHECKS) as (keyof typeof CHECKS)[]).map((c) => (
+                        <div key={c}>
+                            <dt>{c}</dt>
+                            <dd>{CHECKS[c]}</dd>
+                        </div>
+                    ))}
+                </dl>
                 <p className='small text-body-secondary mb-0'>Files are recognized by their contents, so the extension doesn't have to match. Anything it doesn't recognize opens in the hex view.</p>
             </Modal.Body>
         </Modal>

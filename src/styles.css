@@ -1829,3 +1829,52 @@ html {
 .files-panel {
     width: min(32rem, 100vw) !important;
 }
+
+/* How far each reader goes, in the list of formats: the accent for what's mapped out, warmer colors for what isn't yet. */
+.scorecard-chip {
+    display: inline-block;
+    padding: 0 0.4em;
+    border: 1px solid currentColor;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.scorecard-chip--thorough {
+    color: var(--bp-accent);
+}
+
+.scorecard-chip--solid {
+    color: var(--bp-line);
+}
+
+.scorecard-chip--partial {
+    color: var(--bp-warning);
+}
+
+.scorecard-chip--early {
+    color: var(--bp-danger);
+}
+
+.scorecard-notes {
+    font-size: 0.75rem;
+    line-height: 1.35;
+}
+
+.scorecard-key > div {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 0.2rem;
+}
+
+.scorecard-key dt {
+    flex: 0 0 6.5rem;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.scorecard-key dd {
+    margin: 0;
+}
