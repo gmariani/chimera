@@ -355,6 +355,11 @@ export interface Parsed {
      * same checks as any found after the last field.
      */
     end?: number;
+    /**
+     * Other extensions this file rightly goes by, for what it holds: a library holding a type library may be named
+     * .tlb. Only used to tell a misnamed file from one named for what it is.
+     */
+    alsoNamed?: string[];
     warnings: string[];
 }
 

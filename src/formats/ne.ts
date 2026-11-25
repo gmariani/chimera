@@ -8,7 +8,7 @@ import { pictureFinder, readDialog } from './win-dialogs';
 import { readAccelerators } from './win-accelerators';
 import { readMenu } from './win-menus';
 import { neOffset } from './ne-sniff';
-import { bitmapFile, iconGroupFile, readStringTable, readVersionInfo, versionText, resourceCounts, RESOURCE_TYPES as TYPES, type VersionInfo } from './win-resources';
+import { bitmapFile, iconGroupFile, readStringTable, readVersionInfo, versionText, namesForResources, resourceCounts, RESOURCE_TYPES as TYPES, type VersionInfo } from './win-resources';
 
 /**
  * 16-bit Windows (and OS/2) modules, "New Executable": Windows 3's programs,
@@ -422,6 +422,7 @@ const parser: FormatParser = {
             preview: items.length ? (items.length === 1 ? items[0].preview : { kind: 'stack', items }) : undefined,
             // Anything after is the usual checks' to look at.
             end,
+            alsoNamed: namesForResources(resources),
             warnings,
         };
     },

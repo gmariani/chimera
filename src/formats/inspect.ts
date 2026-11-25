@@ -173,7 +173,9 @@ export async function inspect(data: Uint8Array, context: ParseContext, { as, hin
         // A program or script under another type's name (a backup's name says nothing either way).
         // (Read by nothing, or by the reader for programs of its kind: a 16-bit Windows module read as one is still a program.)
         const asProgram = format === RAW || format.id === sig?.format;
-        if (asProgram && sig?.runs && ext && !namedAs(sig, ext) && nameHolds) {
+        // (Unless what it holds is what the name says: a library holding a type library, named .tlb.)
+        const heldAs = !!ext && !!parsed?.alsoNamed?.includes(ext);
+        if (asProgram && sig?.runs && ext && !namedAs(sig, ext) && nameHolds && !heldAs) {
             checks.push({ level: BACKUPS.includes(ext) ? 'warning' : 'danger', text: `It's ${a(sig.name)}, named .${ext}.` });
         }
         // A program's container with no code, under another name: it can't run, but it isn't what the name says (Dune II's DUNE2.ICO).

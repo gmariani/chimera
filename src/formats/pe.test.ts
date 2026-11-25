@@ -90,6 +90,15 @@ describe('Windows programs (PE)', () => {
         expect((await inspect(windowsProgram(), { name: 'program.exe', names: [] })).checks).toEqual([]);
     });
 
+    it('is a type library when it holds one: a library named .tlb, as OLE ships them, is named for what it is', async () => {
+        const library = await inspect(windowsProgram({ typeLibrary: true }), { name: 'stdole2.tlb', names: [] });
+        expect(library.format.id).toBe('pe');
+        expect(library.parsed.summary).toContainEqual(['Resources', '1 TYPELIB, 1 icon, 1 icon group']);
+        expect(library.checks).toEqual([]);
+        // Without one, .tlb is just another name for a program to hide under.
+        expect((await inspect(windowsProgram(), { name: 'stdole2.tlb', names: [] })).checks).toEqual([{ level: 'danger', text: "It's a Windows program (PE, 32-bit), named .tlb." }]);
+    });
+
     it('refuses what isn’t a program Windows could load', () => {
         expect(() => parse(new Uint8Array(200))).toThrow(/isn’t a Windows program or library/);
         expect(() => parse(changed((v) => v.setUint16(OPT, 0x107, true)))).toThrow(/ROM image/);
@@ -342,6 +351,17 @@ describe.skipIf(!win32s)('the Win32s that Planet Westwood installs', () => {
         for (const name of odd) {
             const r = parse(archive.parsed.entries!.find((e) => e.name === name)!.data, name);
             expect([name, r.title, r.warnings]).toEqual([name, 'Windows library (DLL, 32-bit)', []]);
+        }
+    });
+
+    it('takes its type libraries, OLE’s in a 16-bit and a 32-bit library, for what their .tlb names say', async () => {
+        const archive = await inspect(new Uint8Array(readFileSync(win32s!)), { name: 'WIN32S.Z', names: [] });
+        for (const [name, format] of [
+            ['STDOLE.TLB', 'ne'],
+            ['STDOLE32.TLB', 'pe'],
+        ]) {
+            const r = await inspect(archive.parsed.entries!.find((e) => e.name === name)!.data, { name, names: [] });
+            expect([name, r.format.id, r.parsed.summary.find(([k]) => k === 'Resources')?.[1], r.checks]).toEqual([name, format, expect.stringContaining('1 TYPELIB'), []]);
         }
     });
 });

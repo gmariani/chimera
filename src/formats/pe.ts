@@ -4,7 +4,7 @@ import type { Field, FormatParser, Preview, TableRow } from '../core/types';
 import { entropy, signature } from './identify';
 import { peOffset } from './pe-sniff';
 import { viewResources } from './win-resource-view';
-import { languageName, resourceCounts, RESOURCE_TYPES } from './win-resources';
+import { languageName, namesForResources, resourceCounts, RESOURCE_TYPES } from './win-resources';
 import { readSignature, signedBy } from './pkcs7';
 
 /**
@@ -1112,6 +1112,7 @@ const parser: FormatParser = {
                 const all = [...(table ? [{ title: 'Imports and exports', preview: table }] : []), ...items];
                 return all.length ? (all.length === 1 ? all[0].preview : { kind: 'stack', items: all }) : undefined;
             })(),
+            alsoNamed: namesForResources(resources),
             warnings: [...warnings, ...[...repeated.values()].map((r) => (r.more ? `${r.text} There ${r.more === 1 ? 'is 1 more' : `are ${r.more.toLocaleString('en-US')} more`} like it.` : r.text))],
         };
     },

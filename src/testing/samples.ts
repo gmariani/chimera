@@ -1159,9 +1159,10 @@ export function versionResource(): number[] {
  * (it does nothing, and exits at once); .rdata, with the import of KERNEL32's ExitProcess, the export of a function
  * named Hello (the same code), and a CodeView debug entry naming sample.pdb; and .rsrc, with a 16 × 16 icon, its
  * group, and version information. 32-bit, or 64-bit with `wide`. With `rich`, a Rich header (as Microsoft's linker
- * leaves) between the DOS stub and the PE header, with one tool's record and its checksum.
+ * leaves) between the DOS stub and the PE header, with one tool's record and its checksum. With `typeLibrary`, a type
+ * library (a TYPELIB resource, named, as OLE's are; only the start of one, "MSFT") in place of the version information.
  */
-export function windowsProgram({ wide = false, rich = false }: { wide?: boolean; rich?: boolean } = {}): Uint8Array {
+export function windowsProgram({ wide = false, rich = false, typeLibrary = false }: { wide?: boolean; rich?: boolean; typeLibrary?: boolean } = {}): Uint8Array {
     const FA = 0x200;
     const SA = 0x1000;
     const up = (n: number, to: number) => Math.ceil(n / to) * to;
@@ -1219,22 +1220,30 @@ export function windowsProgram({ wide = false, rich = false }: { wide?: boolean;
     const RS = 0x3000;
     const icon = iconDib();
     const group = [...u16(0), ...u16(1), ...u16(1), 16, 16, 16, 0, ...u16(1), ...u16(4), ...u32(icon.length), ...u16(1)];
-    const version = versionResource();
+    const version = typeLibrary ? [...text('MSFT'), ...u16(2), ...u16(1), ...new Array(56).fill(0)] : versionResource();
     const leaves = 184;
     const iconAt = leaves + 48;
     const groupAt = up(iconAt + icon.length, 4);
     const versionAt = up(groupAt + group.length, 4);
-    const rsrc = new Uint8Array(versionAt + version.length);
+    // A named type's name: its length, then UTF-16.
+    const typeName = up(versionAt + version.length, 2);
+    const rsrc = new Uint8Array(typeLibrary ? typeName + 2 + 14 : versionAt + version.length);
     const sv = new DataView(rsrc.buffer);
     const directory = (off: number, id: number, target: number) => {
         sv.setUint16(off + 14, 1, true);
         sv.setUint32(off + 16, id, true);
         sv.setUint32(off + 20, target, true);
     };
-    sv.setUint16(14, 3, true);
-    [3, 14, 16].forEach((type, i) => {
-        sv.setUint32(16 + i * 8, type, true);
-        sv.setUint32(20 + i * 8, 0x80000000 | (40 + i * 24), true);
+    // Named types come before numbered ones.
+    sv.setUint16(12, typeLibrary ? 1 : 0, true);
+    sv.setUint16(14, typeLibrary ? 2 : 3, true);
+    const order = typeLibrary ? [2, 0, 1] : [0, 1, 2];
+    order.forEach((i, slot) => {
+        sv.setUint32(16 + slot * 8, i === 2 && typeLibrary ? 0x80000000 | typeName : [3, 14, 16][i], true);
+        sv.setUint32(20 + slot * 8, 0x80000000 | (40 + i * 24), true);
+    });
+    if (typeLibrary) rsrc.set([...u16(7), ...[...'TYPELIB'].flatMap((c) => u16(c.charCodeAt(0)))], typeName);
+    [0, 1, 2].forEach((i) => {
         directory(40 + i * 24, 1, 0x80000000 | (112 + i * 24));
         directory(112 + i * 24, 0x409, leaves + i * 16);
         const [where, size] = [

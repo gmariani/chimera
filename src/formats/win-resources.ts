@@ -57,6 +57,16 @@ export function resourceCounts(resources: { type: number; typeName: string }[]):
     return [...counts].map(([t, n]) => `${n} ${t}${n === 1 || t !== t.toLowerCase() || t.endsWith('data') ? '' : 's'}`).join(', ') || 'none';
 }
 
+/**
+ * Other names a module goes by for the resources it holds: one holding a type library (a TYPELIB resource) is how
+ * type libraries often ship, named .tlb, as OLE's stdole2.tlb and stdole32.tlb are; LoadTypeLib reads the library from
+ * a DLL's resource as well as from a file of its own (Microsoft's LoadTypeLib documentation,
+ * https://learn.microsoft.com/windows/win32/api/oleauto/nf-oleauto-loadtypelib).
+ */
+export function namesForResources(resources: { typeName: string }[]): string[] | undefined {
+    return resources.some((r) => r.typeName === 'TYPELIB') ? ['tlb'] : undefined;
+}
+
 /** Where a resource's bytes are in the file. */
 export interface Located {
     at: number;
