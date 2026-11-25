@@ -444,6 +444,49 @@ export function readLinear(data: Uint8Array, base: number, at: number, stem: str
         fields.push(field('Debug info', debugAt, u(0x9c), bytesLabel(u(0x9c))));
         dataEnd = Math.max(dataEnd, debugAt + u(0x9c));
     }
+    // A Windows driver's version information, after everything else: a resource as a 16-bit resource file holds one
+    // (0xFF and its type, 16 for version; 0xFF and its number; memory flags; the size), then VS_VERSION_INFO in the code
+    // page, as 16-bit programs keep it. Worked out from Windows 95 drivers: Internet Explorer 3's javasup.vxd,
+    // ActiveMovie's quartz.vxd and NetMeeting's MNMVDD.386, whose header gives exactly the bytes to the end of the file.
+    const versionAt = os === 4 && headerEnd - at === 0xc4 && u(0xb8) ? base + u(0xb8) : 0;
+    const versionLength = versionAt ? u(0xbc) : 0;
+    if (versionAt && versionLength) {
+        if (!inFile(versionAt, versionLength)) problems.push(`Its version information is said to be ${bytesLabel(versionLength)} at ${versionAt.toLocaleString('en-US')}, past the end of the file.`);
+        else {
+            const shaped = versionLength >= 12 && data[versionAt] === 0xff && data[versionAt + 3] === 0xff;
+            const type = shaped ? b.u16(versionAt + 1) : 0;
+            const size = shaped ? b.u32(versionAt + 8) : 0;
+            const info = shaped ? Math.min(size, versionLength - 12) : 0;
+            const parts: Field[] = shaped
+                ? [
+                      field('Type', versionAt, 3, type === 16 ? '16 (version)' : type, 'Each 0xFF, then a number: a resource’s type and name given as numbers.'),
+                      field('Number', versionAt + 3, 3, b.u16(versionAt + 4)),
+                      field('Memory flags', versionAt + 6, 2, `0x${hex(b.u16(versionAt + 6), 4)}`),
+                      field('Size', versionAt + 8, 4, bytesLabel(size)),
+                      ...(info ? [field('Version information', versionAt + 12, info, bytesLabel(info), 'Under Contents, to open.')] : []),
+                  ]
+                : [];
+            fields.push({
+                ...field('Version resource', versionAt, versionLength, bytesLabel(versionLength), 'What Windows shows on the driver’s Details tab.'),
+                children: fillGaps(data, parts, versionAt, versionAt + versionLength, 'Not read'),
+            });
+            if (!shaped) problems.push('Its version information doesn’t start with a resource’s header, as Windows drivers’ do.');
+            else if (type !== 16) problems.push(`Its version information is said to be a resource of type ${type}, not 16, Windows’ type for version information.`);
+            else if (size + 12 !== versionLength)
+                problems.push(`Its version information says it’s ${bytesLabel(size)}, but the header gives it ${bytesLabel(versionLength - 12)} after the resource’s header.`);
+            if (info)
+                entries.push({
+                    name: null,
+                    label: `${stem}-version.bin`,
+                    offset: versionAt + 12,
+                    size: info,
+                    data: data.subarray(versionAt + 12, versionAt + 12 + info),
+                    meta: { Type: 'Version information' },
+                    format: 'version',
+                });
+            dataEnd = Math.max(dataEnd, versionAt + versionLength);
+        }
+    }
     for (const { text, more } of repeated.values()) problems.push(more ? `${text} There ${more === 1 ? 'is 1 more' : `are ${more} more`} like it.` : text);
 
     // A DOS extender's program, when the caller found one (bound before it, or as its stub), whatever system it names: Watcom's

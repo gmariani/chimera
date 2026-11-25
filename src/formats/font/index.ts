@@ -40,6 +40,7 @@ const parser: FormatParser = {
         const u16 = (at: number) => view.getUint16(at);
         const i16 = (at: number) => view.getInt16(at);
         const u32 = (at: number) => view.getUint32(at);
+        const i32 = (at: number) => view.getInt32(at);
         const tag = (at: number) => String.fromCharCode(...data.subarray(at, at + 4));
         const fields: Field[] = [];
         const warnings: string[] = [];
@@ -112,8 +113,16 @@ const parser: FormatParser = {
             let value: string | undefined;
             const f = (name: string, o: number, n: number, v?: string | number, note?: string) => children.push(field(name, at + o, n, v, note));
             const fixed = (o: number) => +(i16(at + o) + u16(at + o + 2) / 65536).toFixed(4);
-            /** LONGDATETIME: seconds since 1904. */
-            const date = (o: number) => new Date((u32(at + o) * 2 ** 32 + u32(at + o + 4) - 2082844800) * 1000).toISOString().slice(0, 19).replace('T', ' ');
+            /** LONGDATETIME: seconds since 1904, signed. One past what a date can be (Comic Sans Bold's, in Internet Explorer 3) is said so, and the rest read. */
+            const date = (o: number, what: string) => {
+                const seconds = i32(at + o) * 2 ** 32 + u32(at + o + 4);
+                const when = new Date((seconds - 2082844800) * 1000);
+                if (Number.isNaN(when.getTime())) {
+                    warnings.push(`Its ${what} date isn’t a real one: ${seconds.toLocaleString('en-US')} seconds from 1904 is more than 200,000 years either way.`);
+                    return `not a date (${seconds.toLocaleString('en-US')} seconds from 1904)`;
+                }
+                return when.toISOString().slice(0, 19).replace('T', ' ');
+            };
             try {
                 switch (t) {
                     case 'head':
@@ -126,8 +135,8 @@ const parser: FormatParser = {
                         f('Magic number', 12, 4, hex(u32(at + 12)), 'Always 5F0F3CF5.');
                         f('Flags', 16, 2, `0x${hex(u16(at + 16), 4)}`);
                         f('Units per em', 18, 2, unitsPerEm);
-                        f('Created', 20, 8, date(20));
-                        f('Modified', 28, 8, date(28));
+                        f('Created', 20, 8, date(20, 'creation'));
+                        f('Modified', 28, 8, date(28, 'last-modified'));
                         f('xMin', 36, 2, i16(at + 36));
                         f('yMin', 38, 2, i16(at + 38));
                         f('xMax', 40, 2, i16(at + 40));

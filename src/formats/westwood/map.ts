@@ -590,7 +590,25 @@ function drawLabel(pixels: Uint8Array, width: number, height: number, text: stri
     });
 }
 
-export type TileRender = { status: 'drawn'; image: IndexedImage; palette?: Uint8Array; wanted?: string; legend?: { label: string; index: number }[] } | { status: 'needs'; wanted: string };
+export type TileRender =
+    | {
+          status: 'drawn';
+          image: IndexedImage;
+          palette?: Uint8Array;
+          wanted?: string;
+          legend?: { label: string; index: number }[];
+          /** How many tiles each template's file, as found, has: what a cell's tile is checked against. */
+          tileCounts: Map<number, number>;
+      }
+    | { status: 'needs'; wanted: string };
+
+/**
+ * A file opened on its own, not from inside an archive: the session names it after itself (numbered when two share a
+ * name). The games open a file from their folder before looking in their MIX files (CCFileClass::Open in TD's
+ * CCFILE.CPP, in EA's released source), so it's the one they'd use: TD's second console CD keeps a P04.DES with
+ * two tiles beside its mission SCB22EA, which uses the second, over the one-tile P04 in DESERT.MIX.
+ */
+const loose = (c: Companion, file: string) => c.source.replace(/ \(\d+\)$/, '').toLowerCase() === file.toLowerCase();
 
 const GAME_NAMES = { td: 'Tiberian Dawn', ra: 'Red Alert' };
 
@@ -609,11 +627,12 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
     const tileSet = (id: number): TileSet | null => {
         if (!tileSets.has(id)) {
             const file = `${table[id]?.name.toLowerCase()}.${theater.ext}`;
-            // Expansions can keep extra templates in another archive, so the same one is only a preference.
+            // One beside the map, as the game does; then the same archive as the others, though expansions can keep
+            // extra templates in another archive, so that's only a preference.
             const candidates = find(file).filter((c) => readTileSet(c.data)?.layout.game === m.game);
-            const found = candidates.find((c) => c.source === source) ?? candidates[0];
+            const found = candidates.find((c) => loose(c, file)) ?? candidates.find((c) => c.source === source) ?? candidates[0];
             if (found) {
-                source ??= found.source;
+                if (!loose(found, file)) source ??= found.source;
                 links.use(file, found, `Tile set (in ${archive})`);
             } else if (table[id]) {
                 links.miss(file, `Tile set (in ${archive})`);
@@ -949,7 +968,9 @@ export function renderTiles(m: Mission, find: Finder, links: Links, { starts = t
         if (unseen.size) notes.push(`The map's vehicles and buildings (${some(unseen)}) need their sprites from ${conquer}. Open MAIN.MIX as well to draw them.`);
         if (unseenInfantry.size) notes.push(`Its infantry (${some(unseenInfantry)}) are in ${infantryIn}. Open REDALERT.MIX as well to draw them.`);
     }
-    return { status: 'drawn', image: { width, height, pixels }, palette, wanted: notes.filter(Boolean).join(' ') || undefined, legend: legend.length ? legend : undefined };
+    const tileCounts = new Map<number, number>();
+    for (const [id, set] of tileSets) if (set) tileCounts.set(id, set.cells.length);
+    return { status: 'drawn', image: { width, height, pixels }, palette, wanted: notes.filter(Boolean).join(' ') || undefined, legend: legend.length ? legend : undefined, tileCounts };
 }
 
 /** A mission's map as previews (real tiles when they're available, and terrain kinds), with summary rows. */
@@ -957,7 +978,7 @@ export function missionPreviews(
     m: Mission,
     find: Finder | undefined,
     links: Links
-): { items: { title: string; preview: Preview }[]; summary: [string, string][]; warnings: string[]; wanted?: string } {
+): { items: { title: string; preview: Preview }[]; summary: [string, string][]; warnings: string[]; wanted?: string; tileCounts?: Map<number, number> } {
     const { image, counts, unknown } = renderMap(m);
     const summary: [string, string][] = [['Map', `${m.size} × ${m.size} cells${m.area ? `, playable ${m.area.width} × ${m.area.height} at ${m.area.x}, ${m.area.y} (shown)` : ''}`]];
     if (m.theater) summary.push(['Theater', m.theater]);
@@ -1000,6 +1021,7 @@ export function missionPreviews(
             : { kind: 'images', frames: [tiles.image], palette: tiles.palette, toggle: starts };
     return {
         wanted: tiles.wanted,
+        tileCounts: tiles.tileCounts,
         items: [
             { title: 'Map', preview: map },
             { title: 'Terrain kinds', preview: kinds },

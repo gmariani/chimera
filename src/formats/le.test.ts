@@ -64,6 +64,61 @@ describe('Linear Executables (LE, LX)', () => {
         }
     });
 
+    it('reads a Windows driver’s version information, after its pages, and opens it as a version resource', async () => {
+        // A 16-bit VS_VERSION_INFO (no type, the key in the code page) holding only the fixed numbers: version 4.0.0.950.
+        const fixed = [0xfeef04bd, 0x10000, 0x40000, 950, 0x40000, 950, 0x3f, 0, 0x4, 3, 0, 0, 0];
+        const info = new Uint8Array(72);
+        const iv = new DataView(info.buffer);
+        iv.setUint16(0, 72, true);
+        iv.setUint16(2, 52, true);
+        info.set(new TextEncoder().encode('VS_VERSION_INFO\0'), 4);
+        fixed.forEach((n, i) => iv.setUint32(20 + i * 4, n, true));
+        const driver = (size = 72) => {
+            const program = linearProgram();
+            const out = new Uint8Array(program.length + 12 + 72);
+            out.set(program);
+            const v = new DataView(out.buffer);
+            v.setUint16(HEADER + 0x0a, 4, true); // Windows 386: a driver
+            v.setUint32(HEADER + 0xb8, program.length, true);
+            v.setUint32(HEADER + 0xbc, 12 + 72, true);
+            out.set([0xff, 16, 0, 0xff, 1, 0, 0x30, 0], program.length);
+            v.setUint32(program.length + 8, size, true);
+            out.set(info, program.length + 12);
+            return out;
+        };
+        const data = driver();
+        const inspected = await inspect(data, { name: 'driver.vxd', names: [] });
+        expect(inspected.checks).toEqual([]);
+        const r = inspected.parsed;
+        expect(r.warnings).toEqual([]);
+        expect(r.title).toBe('Windows driver (VxD) (LE)');
+        expect(r.end).toBe(data.length);
+        expect(r.fields.reduce((n, f) => n + f.length, 0)).toBe(data.length);
+        const resource = r.fields.find((f) => f.name === 'Version resource')!;
+        expect([resource.offset, resource.length]).toEqual([data.length - 84, 84]);
+        expect(resource.children!.map((f) => [f.name, f.value])).toEqual([
+            ['Type', '16 (version)'],
+            ['Number', '1'],
+            ['Memory flags', '0x0030'],
+            ['Size', '72 bytes'],
+            ['Version information', '72 bytes'],
+        ]);
+        const entry = r.entries!.find((e) => e.format === 'version')!;
+        expect([entry.label, entry.offset, entry.size]).toEqual(['driver-version.bin', data.length - 72, 72]);
+        const opened = await inspect(entry.data, { name: null, names: [] }, { hint: entry.format, shownName: entry.label });
+        expect(opened.format.id).toBe('version');
+        expect(opened.parsed.summary).toContainEqual(['File version', '4.0.0.950']);
+
+        expect(parse(driver(70)).warnings).toEqual(['Its version information says it’s 70 bytes, but the header gives it 72 bytes after the resource’s header.']);
+        expect(parse(changed((_, d) => (d[d.length - 84] = 0), driver())).warnings).toEqual(['Its version information doesn’t start with a resource’s header, as Windows drivers’ do.']);
+        expect(parse(changed((_, d) => (d[d.length - 83] = 6), driver())).warnings).toEqual([
+            'Its version information is said to be a resource of type 6, not 16, Windows’ type for version information.',
+        ]);
+        expect(parse(changed((v) => v.setUint32(HEADER + 0xbc, 9999, true), driver())).warnings).toEqual([
+            `Its version information is said to be 9,999 bytes at ${(data.length - 84).toLocaleString('en-US')}, past the end of the file.`,
+        ]);
+    });
+
     it('says what doesn’t fit', () => {
         expect(parse(changed((v) => v.setUint32(HEADER + 0x28, 512, true))).warnings).toContain('It says its pages are 512 bytes: every LE program’s are 4,096.');
         expect(parse(changed((v) => v.setUint32(HEADER + 0x44, 9999, true))).warnings).toContain('It says it has 9,999 objects, but the object table has room for 176.');

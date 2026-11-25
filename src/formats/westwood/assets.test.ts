@@ -297,18 +297,23 @@ describe('vortex frames', () => {
     });
 });
 
-// A TD CLEAR1 with a single 24 × 24 tile of one color (the real one has 16 variants).
-function tileSet(color: number): Uint8Array {
-    const size = 32 + 576 + 1 + 1;
+// A TD tile set of `count` 24 × 24 tiles, each in one color (`color`, then the next), one to a cell: by default a
+// CLEAR1 with a single tile (the real one has 16 variants).
+function tileSet(color: number, count = 1): Uint8Array {
+    const map = 32 + 576 * count;
+    const size = map + count + 1;
     return bytes(size, (v, b) => {
         v.setUint16(0, 24, true);
         v.setUint16(2, 24, true);
-        v.setUint16(4, 1, true);
+        v.setUint16(4, count, true);
         v.setUint32(8, size, true);
         v.setUint32(12, 32, true);
-        v.setUint32(24, 32 + 576 + 1, true);
-        v.setUint32(28, 32 + 576, true);
-        b.fill(color, 32, 32 + 576);
+        v.setUint32(24, map + count, true);
+        v.setUint32(28, map, true);
+        for (let i = 0; i < count; i++) {
+            b.fill(color + i, 32 + 576 * i, 32 + 576 * (i + 1));
+            b[map + i] = i;
+        }
     });
 }
 
@@ -343,6 +348,38 @@ describe('maps with real tiles', () => {
             '3 cells name a tile its template doesn\'t have: (63, 49) S36, tile 44: not one of its 4 tiles; (0, 50) S32, tile 77: not one of its 4 tiles; (1, 50) D05, tile 114: not one of its 12 tiles. All are outside the playable area, so the game never shows them. Their bytes read as the text "0,,Mar". They\'re drawn as clear ground.',
         ]);
         expect(parsed.fields[50].children![0].value).toBe('S32, tile 77: not one of its 4 tiles');
+    });
+
+    it('uses a template beside the map over the one in the theater’s archive, as the game does, and checks its tiles against it', () => {
+        // As on TD's second console CD: SCB22EA.BIN uses tile 1 of P04, which DESERT.MIX's P04.DES (one tile) lacks
+        // and the P04.DES beside it (two tiles) has. P04 is template 70.
+        const P04 = 70;
+        const bin = new Uint8Array(8192).fill(0xff);
+        bin.set([P04, 1], (1 * 64 + 2) * 2);
+        const ini = new TextEncoder().encode('[MAP]\nTheater=DESERT\nX=1\nY=1\nWidth=2\nHeight=1\n');
+        const archive = { 'scb22ea.ini': ini, 'clear1.des': tileSet(7), 'p04.des': tileSet(40), 'desert.pal': new Uint8Array(768).fill(63) };
+        const open = (beside: boolean) =>
+            mapTd.parse(bin, {
+                name: 'scb22ea.bin',
+                names: [],
+                find: (n) => [
+                    ...(beside && n === 'p04.des' ? [{ data: tileSet(20, 2), source: 'P04.DES' }] : []),
+                    ...(archive[n as keyof typeof archive] ? [{ data: archive[n as keyof typeof archive], source: 'DESERT.MIX' }] : []),
+                ],
+            });
+
+        const withOwn = open(true);
+        expect(withOwn.warnings).toEqual([]);
+        expect(withOwn.fields[1].children![2].value).toBe('P04, tile 1');
+        if (withOwn.preview?.kind !== 'stack') throw new Error('expected a stack');
+        const drawn = images(withOwn.preview.items[0].preview).frames[0];
+        // The map's two cells: clear ground, then the loose P04's second tile.
+        expect([drawn.pixels[0], drawn.pixels[24]]).toEqual([7, 21]);
+        expect(withOwn.links!.find((l) => l.name === 'p04.des')).toMatchObject({ source: 'P04.DES' });
+
+        expect(open(false).warnings).toEqual([
+            "A cell names a tile its template doesn't have: (2, 1) P04, tile 1: not one of its 1 tiles. All are inside the playable area. They're drawn as clear ground.",
+        ]);
     });
 
     it("doesn't take text of a map's size for a map", () => {

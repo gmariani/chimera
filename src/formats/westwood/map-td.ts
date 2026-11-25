@@ -15,34 +15,42 @@ import { TD_TEMPLATES, tdTileCount } from './templates';
  * A cell naming a tile its template doesn't have is said, and drawn as clear
  * ground, as OpenRA's importer does (its ReplaceInvalidTerrainTiles). One map
  * the game ships has three: SCB07EC.BIN, where the text "0,,Mar" is written over
- * cells outside the playable area.
+ * cells outside the playable area. A tile is checked against the template's own
+ * file when the map is drawn from one: a mission can bring its own, as SCB22EA
+ * on the second console CD does with a P04.DES of two tiles (see map.ts).
  */
 
+/**
+ * How many tiles a template has: as many as its file has, when the map was drawn from one (a mission can bring its own,
+ * as SCB22EA does), or else as many as TD's own templates do.
+ */
+type TileCount = (id: number) => number | null;
+
 /** The cells that name a template TD doesn't have, or a tile their template doesn't have. */
-function badCells(data: Uint8Array): number[] {
+function badCells(data: Uint8Array, tileCount: TileCount): number[] {
     const bad: number[] = [];
     for (let cell = 0; cell < TD_SIZE * TD_SIZE; cell++) {
         const id = data[cell * 2];
         if (id === 0xff) continue;
-        const count = tdTileCount(id);
+        const count = tileCount(id);
         if (count === null || data[cell * 2 + 1] >= count) bad.push(cell);
     }
     return bad;
 }
 
 /** A cell's template and tile, as a person reads them. */
-function describe(id: number, tile: number): string {
-    const count = tdTileCount(id);
+function describe(id: number, tile: number, tileCount: TileCount): string {
+    const count = tileCount(id);
     const name = TD_TEMPLATES[id]?.name ?? `Template ${id}`;
     if (count === null) return `${name} (not a template TD has), tile ${tile}`;
     return tile >= count ? `${name}, tile ${tile}: not one of its ${count} tiles` : `${name}, tile ${tile}`;
 }
 
 /** What's wrong with the bad cells, where they are, and what their bytes say when they read as text. */
-function badCellWarning(data: Uint8Array, bad: number[], area: { x: number; y: number; width: number; height: number } | undefined): string | null {
+function badCellWarning(data: Uint8Array, bad: number[], area: { x: number; y: number; width: number; height: number } | undefined, tileCount: TileCount): string | null {
     if (!bad.length) return null;
     const at = (cell: number) => `(${cell % TD_SIZE}, ${Math.floor(cell / TD_SIZE)})`;
-    const listed = bad.slice(0, 6).map((cell) => `${at(cell)} ${describe(data[cell * 2], data[cell * 2 + 1])}`);
+    const listed = bad.slice(0, 6).map((cell) => `${at(cell)} ${describe(data[cell * 2], data[cell * 2 + 1], tileCount)}`);
     const more = bad.length > listed.length ? `, and ${(bad.length - listed.length).toLocaleString('en-US')} more` : '';
     const inside = area
         ? bad.filter((cell) => {
@@ -78,8 +86,9 @@ const parser: FormatParser = {
         const mission = tdMission(data, companion ?? null);
         const map = missionPreviews(mission, companion ? context.find : undefined, links);
         const used = new Set(Array.from(mission.templates).filter((t) => t !== 0xff));
-        const bad = badCells(data);
-        const badWarning = badCellWarning(data, bad, mission.area);
+        const tileCount: TileCount = (id) => map.tileCounts?.get(id) ?? tdTileCount(id);
+        const bad = badCells(data, tileCount);
+        const badWarning = badCellWarning(data, bad, mission.area, tileCount);
 
         return {
             title: 'Map terrain (TD)',
@@ -91,7 +100,7 @@ const parser: FormatParser = {
                 children: Array.from({ length: TD_SIZE }, (_, x) => {
                     const at = (y * TD_SIZE + x) * 2;
                     const id = data[at];
-                    return field(`Cell ${x}, ${y}`, at, 2, id === 0xff ? 'Clear' : describe(id, data[at + 1]));
+                    return field(`Cell ${x}, ${y}`, at, 2, id === 0xff ? 'Clear' : describe(id, data[at + 1], tileCount));
                 }),
             })),
             preview: map.items.length === 1 ? map.items[0].preview : { kind: 'stack', items: map.items },

@@ -48,6 +48,22 @@ describe.skipIf(!existsSync(samples))('sample fonts', () => {
         expect(ink(parsed)).toBeGreaterThan(0.02);
     });
 
+    it('says when a date in the head table isn’t one, and reads the rest of the table', () => {
+        const data = new Uint8Array(readFileSync(join(samples, 'ttf-truetype.ttf')));
+        const v = new DataView(data.buffer);
+        const head = [...Array(v.getUint16(4)).keys()].map((i) => 12 + i * 16).find((e) => String.fromCharCode(...data.subarray(e, e + 4)) === 'head')!;
+        const at = v.getUint32(head + 8);
+        // Comic Sans Bold's creation date, as Internet Explorer 3 ships it: millions of years from 1904.
+        v.setUint32(at + 20, 40902, false);
+        v.setUint32(at + 24, 0x1c99_3e5a, false);
+        const parsed = font.parse(data, { name: 'ttf-truetype.ttf', names: [] });
+        const seconds = (40902 * 2 ** 32 + 0x1c99_3e5a).toLocaleString('en-US');
+        expect(parsed.warnings).toEqual([`Its creation date isn’t a real one: ${seconds} seconds from 1904 is more than 200,000 years either way.`]);
+        const fields = parsed.fields.find((f) => f.name.startsWith('head'))!.children!;
+        expect(fields.find((f) => f.name === 'Created')!.value).toBe(`not a date (${seconds} seconds from 1904)`);
+        expect(fields.find((f) => f.name === 'Units per em')!.value).toBe('256');
+    });
+
     it('reads the first font of a collection, a CID-keyed CFF one', () => {
         const parsed = open('ttc-cid-cff.ttc');
         expect(parsed.title).toBe('Font (OpenType, CFF outlines, collection)');
