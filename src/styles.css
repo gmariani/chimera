@@ -59,8 +59,21 @@
 body {
     font-family: 'Lato', Helvetica, Arial, sans-serif;
     text-rendering: optimizeLegibility;
-    /* A faint drafting grid behind everything: fine squares within larger ones. */
     background-color: var(--bp-ink);
+}
+
+/*
+ * A faint drafting grid, fine squares within larger ones, pinned to the window:
+ * plain blue at the top, coming in over the lower part so it never crowds the content.
+ */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 40%);
+    mask-image: linear-gradient(to top, #000 0%, transparent 40%);
     background-image:
         linear-gradient(rgba(var(--bp-line-rgb), 0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--bp-line-rgb), 0.04) 1px, transparent 1px),
         linear-gradient(rgba(var(--bp-line-rgb), 0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--bp-line-rgb), 0.015) 1px, transparent 1px);
