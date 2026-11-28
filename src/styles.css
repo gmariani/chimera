@@ -388,13 +388,16 @@ html {
     border-bottom: 1px solid var(--bp-rule);
     font-family: var(--bs-font-monospace);
     font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.5;
     text-transform: uppercase;
     letter-spacing: 0.14em;
-    color: var(--bs-body-color);
+    color: var(--bs-emphasis-color);
 }
 
 .section-index,
 .section-aside {
+    font-weight: 400;
     color: var(--bs-tertiary-color);
 }
 
@@ -432,7 +435,7 @@ html {
     font-size: inherit;
     letter-spacing: inherit;
     --bs-breadcrumb-divider-color: var(--bs-tertiary-color);
-    --bs-breadcrumb-item-active-color: var(--bs-body-color);
+    --bs-breadcrumb-item-active-color: var(--bs-emphasis-color);
 }
 
 .section-bar .breadcrumb .btn-link {
