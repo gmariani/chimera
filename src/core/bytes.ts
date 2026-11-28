@@ -108,6 +108,18 @@ export function fillGaps(data: Uint8Array, inside: Field[], from: number, to: nu
     return out.length === 1 && out[0].name === between ? [] : out;
 }
 
+/**
+ * A Windows FILETIME (100-nanosecond steps from 1601, in UTC), from its two 32-bit halves: "1997-04-23 14:02:10 UTC", or
+ * null when it's 0 or after the year 9999, past any date a file was written.
+ */
+export function fileTime(low: number, high: number): string | null {
+    const steps = high * 2 ** 32 + low;
+    if (!steps) return null;
+    const date = new Date(steps / 10000 - 11644473600000);
+    if (Number.isNaN(date.getTime()) || date.getUTCFullYear() > 9999) return null;
+    return `${date.toISOString().slice(0, 19).replace('T', ' ')} UTC`;
+}
+
 /** An MS-DOS date and time, as ZIP and cabinets store a file's (local time, 2-second steps): "1997-04-23 14:02:10". */
 export function dosDateTime(date: number, time: number): string {
     const pad = (n: number) => String(n).padStart(2, '0');

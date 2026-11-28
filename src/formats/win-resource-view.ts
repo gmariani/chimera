@@ -1,6 +1,6 @@
 import { bytesLabel, field, hex } from '../core/bytes';
 import type { Entry, Field, Preview, TableRow } from '../core/types';
-import { decodeDib } from './dib';
+import { decodeDib, pixelsNote } from './dib';
 import { pictureFinder, readDialog } from './win-dialogs';
 import { readAccelerators } from './win-accelerators';
 import { readMenu, type MenuItem } from './win-menus';
@@ -97,6 +97,7 @@ export function viewResources(
                 continue;
             }
             const { width, height, bits, colors, headerSize, colorsAt, pixelsAt, length } = dib.info;
+            dib.info.problems.forEach((p) => repeat('bitmap', `${nameOf(r)}: ${p}`));
             const value = `${width} × ${height}, ${colors ? `${colors} colors` : `${bits}-bit`}`;
             items.push({ title: `${nameOf(r)}: ${value}`, preview: { kind: 'picture', width, height, rgba: dib.rgba } });
             inside.set(r, {
@@ -104,7 +105,7 @@ export function viewResources(
                 fields: [
                     field('Header', r.at, headerSize, `${width} × ${height}, ${bits} bits a pixel`),
                     ...(pixelsAt > colorsAt ? [field('Colors', r.at + colorsAt, pixelsAt - colorsAt, plural(colors, 'color'))] : []),
-                    field('Pixels', r.at + pixelsAt, length - pixelsAt, bytesLabel(length - pixelsAt), 'Row by row, the bottom row first, each padded to 4 bytes.'),
+                    field('Pixels', r.at + pixelsAt, length - pixelsAt, bytesLabel(length - pixelsAt), pixelsNote(dib.info)),
                 ],
             });
         } else if (r.type === 16 && !version) {

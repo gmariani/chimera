@@ -120,14 +120,14 @@ describe('Windows bitmaps (BMP)', () => {
         expect(r.preview).toBeUndefined();
         expect(r.end).toBe(cut.length);
 
-        const rle = bitmap(8);
-        new DataView(rle.buffer).setUint32(30, 1, true);
-        expect(parse(rle).warnings).toContain("The picture can't be drawn: it’s compressed (method 1), which isn’t drawn here.");
+        const fields = bitmap(8);
+        new DataView(fields.buffer).setUint32(30, 3, true);
+        expect(parse(fields).warnings).toContain("The picture can't be drawn: it’s compressed (method 3), which isn’t drawn here.");
         expect(
-            parse(rle)
+            parse(fields)
                 .fields.find((f) => f.name === 'Bitmap header')!
                 .children!.find((f) => f.name === 'Compression')!.value
-        ).toBe('run-length, 8 bits a pixel (RLE8)');
+        ).toBe('bit fields');
 
         const inside = bitmap(8);
         new DataView(inside.buffer).setUint32(10, 100, true);

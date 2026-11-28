@@ -111,10 +111,10 @@ export const SCORECARDS: Record<string, Scorecard> = {
     gif: { depth: 'thorough', checked: 'samples', reads: '87a and 89a, interlacing, every disposal', against: 'Chimera’s samples only' },
     bmp: {
         depth: 'solid',
-        checked: 'real files',
-        reads: '1 to 32 bits a pixel, uncompressed',
-        missing: 'run-length compressed BMPs are read, not drawn',
-        against: 'TS’s, RA2’s and the Remastered Collection’s',
+        checked: 'reference',
+        reads: '1 to 32 bits a pixel, uncompressed and run-length compressed (RLE4, RLE8)',
+        missing: 'bit fields, and JPEG or PNG inside a BMP, are read, not drawn',
+        against: 'FFmpeg (its RLE pictures), Microsoft’s worked examples, and TS’s, RA2’s and Internet Explorer 3’s',
     },
     png: { depth: 'thorough', checked: 'reference', reads: 'every color type and depth, Adam7, every chunk', against: 'Pillow' },
     swf: {
@@ -158,6 +158,20 @@ export const SCORECARDS: Record<string, Scorecard> = {
         reads: 'stored and MSZIP folders, checksums, signatures',
         missing: 'Quantum and LZX folders are listed, not unpacked',
         against: 'cabextract, and IE 3’s and TS’s cabinets',
+    },
+    cfb: {
+        depth: 'solid',
+        checked: 'reference',
+        reads: 'versions 3 and 4: every sector, chain and directory entry, mini streams; summary information; Word 6.0 to 2003 documents’ text',
+        missing: 'Word’s formatting, Excel’s and PowerPoint’s contents, and what TS’s and RA2’s saved games hold, are left as streams',
+        against: '7-Zip (every stream), catdoc and LibreOffice (Word’s text), and RA2’s documents and TS’s and RA2’s saved games',
+    },
+    'ole-properties': {
+        depth: 'solid',
+        checked: 'real files',
+        reads: 'both property sets, their dictionaries, the common types',
+        missing: 'vectors and variants are named, not read',
+        against: 'RA2’s documents and saved games',
     },
     rtpatch: {
         depth: 'partial',

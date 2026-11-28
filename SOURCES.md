@@ -102,7 +102,7 @@ No code is taken from any of these: they're where the facts about each format co
 - **ISO/IEC 15948** (the W3C PNG spec): PNG. **RFC 1950** and **RFC 1951**: zlib and Deflate.
 - **The GIF89a specification** (CompuServe, 1990: https://www.w3.org/Graphics/GIF/spec-gif89a.txt): GIF; Netscape's looping extension as "What's In A GIF" (https://giflib.sourceforge.net/whatsinagif/bits_and_bytes.html) and Vurdalakov's notes (http://www.vurdalakov.net/misc/gif/netscape-looping-application-extension) describe it; frame timing as browsers do it, from Nullsleep's study (2012: https://www.tumblr.com/nullsleep/16524517190/animated-gif-minimum-frame-delay-browser) and Mozilla's bug 125137 (https://bugzilla.mozilla.org/show_bug.cgi?id=125137). ImageMagick's decoding to compare frames.
 - **TIFF 6.0**, with **ITU T.4** and **T.6** for its fax compression.
-- **Microsoft's documentation** of BITMAPFILEHEADER, BITMAPINFOHEADER and icons: BMP, DIB, ICO and CUR. Its **"Bitmap Compression"** page (https://learn.microsoft.com/windows/win32/gdi/bitmap-compression): RLE at 8 and 4 bits a pixel, as AVI videos have it; its two worked examples are tests.
+- **Microsoft's documentation** of BITMAPFILEHEADER, BITMAPINFOHEADER and icons: BMP, DIB, ICO and CUR. Its **"Bitmap Compression"** page (https://learn.microsoft.com/windows/win32/gdi/bitmap-compression): RLE at 8 and 4 bits a pixel, as AVI videos, BMPs and bitmap resources have it; its two worked examples are tests (`dib.test.ts`). FFmpeg's decoding of Internet Explorer 3's RLE bitmaps (and of the generated samples) was the ground truth they were checked against; Pillow 10.2's RLE4 decoding differs from both on two of them.
 - **The description of animated cursors that came with the Windows 95 SDK** (mirrored at https://www.moon-soft.com/program/FORMAT/windows/ani.htm) and **Wikipedia's "ANI (file format)"** (https://en.wikipedia.org/wiki/ANI_(file_format)), facts only: animated cursors (.ani). That Westwood's cursors (Red Alert's themes) and Generals' give a RIFF size counting its own header was worked out from the files.
 - Microsoft's **"AVI RIFF File Reference"** (https://learn.microsoft.com/windows/win32/directshow/avi-riff-file-reference), its **AVIMAINHEADER**, **AVISTREAMHEADER**, **AVIOLDINDEX** and **AVIPALCHANGE** pages, and **OpenDML's AVI File Format Extensions 1.02**: AVI video. FFmpeg, where it's installed, makes the AVIs a test compares the frames and sound against, and decodes them as the ground truth.
 
@@ -122,6 +122,13 @@ No code is taken from any of these: they're where the facts about each format co
 - **The SWF 19 specification**: Flash movies.
 - **Flashbug** (Gabriel Mariani, https://github.com/gmariani/flashbug, GPL 3), the owner's earlier project, kept in this repository as `legacy/` until November 2026: the SWF work, and the kernel header reading `pbj.ts` started from; the **Haxe format library's PBJ reader** (Nicolas Cannasse, https://github.com/HaxeFoundation/format, BSD 2-Clause) for Pixel Bender's records, types and opcodes.
 - **minilzo's LZO1X**: the format of TS and RA2's map cells.
+
+### Documents
+
+- **[MS-CFB]**, "Compound File Binary File Format" (https://learn.microsoft.com/openspecs/windows_protocols/ms-cfb): compound files. That Tiberian Sun's and Red Alert 2's saved games end partway through their last sector was worked out from the files; the [1]CompObj way of showing a name's control characters is 7-Zip's.
+- **[MS-OLEPS]**, "Object Linking and Embedding (OLE) Property Set Data Structures" (https://learn.microsoft.com/openspecs/windows_protocols/ms-oleps), and Microsoft's "The Summary Information Property Set" (https://learn.microsoft.com/windows/win32/stg/the-summary-information-property-set): property sets. That TS's and RA2's saves put a date where the time spent editing belongs was worked out from the files.
+- **[MS-DOC]**, "Word (.doc) Binary File Format" (https://learn.microsoft.com/openspecs/office_file_formats/ms-doc): Word 97's and later's FIB and piece table. Word 6.0's and 95's FIB, which [MS-DOC] doesn't cover, as **LibreOffice's Word importer** reads it (sw/source/filter/ww8/ww8scan.cxx, MPL 2.0; facts only). That Word 6.0's macro viruses saved infected documents as templates under .doc is from their descriptions (Concept, 1995).
+- **7-Zip** (every stream's bytes), **catdoc** and **LibreOffice** (Word's text): what the reader was checked against, on RA2's documents, Counterstrike's README.WRI and the generated samples.
 
 ### Worked out here
 

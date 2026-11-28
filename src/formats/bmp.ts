@@ -1,7 +1,7 @@
 import { Bytes, bytesLabel, field } from '../core/bytes';
 import type { Field, FormatParser } from '../core/types';
 import { sniffBmp } from './bmp-sniff';
-import { decodeDib } from './dib';
+import { decodeDib, pixelsNote } from './dib';
 
 /**
  * Windows bitmaps (.bmp, .dib): a 14-byte file header ("BM", the file's size, two reserved words, where the pixels
@@ -139,8 +139,9 @@ const parser: FormatParser = {
             if (!zeros) warnings.push(`${bytesLabel(gap.length)} between the colors and the pixels aren't part of the picture.`);
         }
         const stride = ((d.width * bits + 31) >> 5) * 4;
-        const pixelsEnd = offset + stride * d.height;
-        fields.push(field('Pixels', offset, pixelsEnd - offset, `${d.width} × ${d.height}`, `Each row padded to 4 bytes; ${topDown ? 'the top row first' : 'the bottom row first'}.`));
+        const pixelsEnd = 14 + d.length;
+        fields.push(field('Pixels', offset, pixelsEnd - offset, `${d.width} × ${d.height}`, pixelsNote(d, topDown)));
+        warnings.push(...d.problems);
         if (important > d.colors && d.colors) warnings.push(`It says ${important} colors are important, but it has only ${d.colors}.`);
         if (d.beyond)
             warnings.push(
@@ -158,10 +159,10 @@ const parser: FormatParser = {
             fields.push(field('Padding', pixelsEnd, after.length, bytesLabel(after.length), 'Zeros to round the file up to a multiple of 4 bytes, which some programs write.'));
             end = data.length;
         }
-        if (imageSize && imageSize !== stride * d.height && !(padded && imageSize === stride * d.height + after.length))
+        if (!d.compression && imageSize && imageSize !== stride * d.height && !(padded && imageSize === stride * d.height + after.length))
             warnings.push(`The header says the pixels take ${bytesLabel(imageSize)}, but ${d.width} × ${d.height} at ${bits} bits a pixel takes ${bytesLabel(stride * d.height)}.`);
 
-        const colors = bits <= 8 ? `${d.colors} (${bits} bit${bits === 1 ? '' : 's'} a pixel)` : `${bits}-bit`;
+        const colors = `${bits <= 8 ? `${d.colors} (${bits} bit${bits === 1 ? '' : 's'} a pixel)` : `${bits}-bit`}${d.compression ? `, run-length compressed` : ''}`;
         return {
             title: 'Picture (BMP)',
             summary: [

@@ -35,6 +35,10 @@ The pictures are one 320 × 200 test card in 16 colors (bands, a checkerboard, a
 | `cursor.cur` | Windows cursor: a 32 × 32 arrow in 2 colors, its hot spot at the tip | 326 bytes |
 | `cursor.ani` | Animated cursor: two frames (an arrow, a fading disc) in three steps of their own times and order, with a title | 4,782 bytes |
 | `video.avi` | AVI video: Microsoft RLE frames, one drawn over the last, a palette change, an empty frame, 8-bit sound, an index | 8,622 bytes |
+| `bitmap-rle8.bmp` | Windows bitmap, run-length compressed (RLE8): the test card in runs and stretches of colors as they are | 10,098 bytes |
+| `bitmap-rle4.bmp` | Windows bitmap, run-length compressed (RLE4): the test card, two colors to a byte | 9,136 bytes |
+| `word6.doc` | Word 6.0 document in a compound file: its text in one stretch, a field, summary information, an embedded object’s storage | 7,680 bytes |
+| `word97.doc` | Word 97 document in a compound file: its text in two pieces, one in code page 1252 and one in UTF-16 | 7,168 bytes |
 | `cabinet.cab` | Microsoft cabinet: a folder stored, a folder in MSZIP whose second block reaches back into the first, checksums | 482 bytes |
 | `cabinet-signed.cab` | Microsoft cabinet, signed: the same files, an Authenticode signature after it that its header points to | 1,330 bytes |
 | `certificate-v1.cer` | X.509 certificate, version 1: no version written, no extensions, as the first roots were | 357 bytes |

@@ -10,6 +10,7 @@ import { sniffIco } from './ico-sniff';
 import { sniffAni } from './ani-sniff';
 import { sniffAvi } from './avi-sniff';
 import { sniffCab } from './cab-sniff';
+import { sniffCfb } from './cfb/sniff';
 import { sniffRtPatch } from './rtpatch/sniff';
 import { sniffZip } from './zip-sniff';
 import { sniffShg, sniffWinHelp } from './winhelp/sniff';
@@ -172,6 +173,17 @@ export const FORMATS: FormatDescriptor[] = [
     { id: 'ani', name: 'Animated cursor (ANI)', extensions: ['ani'], sniff: sniffAni, load: parserOf(() => import('./ani')) },
     { id: 'avi', name: 'Video (AVI)', extensions: ['avi'], sniff: sniffAvi, load: parserOf(() => import('./avi')) },
     { id: 'cab', name: 'Microsoft cabinet (CAB)', extensions: ['cab'], sniff: sniffCab, load: parserOf(() => import('./cab')) },
+    // Word opens RTF under .doc, and readmes ship that way (Counterstrike's README.DOC is RTF): the name alone doesn't make a file a compound file.
+    {
+        id: 'cfb',
+        name: 'Compound file (OLE: Word, Excel, Installer)',
+        extensions: ['doc', 'dot', 'xls', 'xlt', 'ppt', 'pot', 'pps', 'msi', 'msp', 'mst', 'msg', 'mpp', 'vsd', 'pub'],
+        alsoNamed: ['sav'],
+        sniff: sniffCfb,
+        byNameAlone: false,
+        load: parserOf(() => import('./cfb')),
+    },
+    { id: 'ole-properties', name: 'Document properties (OLE property set)', extensions: ['bin'], sniff: () => false, byNameAlone: false, load: parserOf(() => import('./cfb/properties')) },
     { id: 'rtpatch', name: 'RTPatch patch (RTP)', extensions: ['rtp'], sniff: sniffRtPatch, load: parserOf(() => import('./rtpatch')) },
     { id: 'winhelp', name: 'Windows Help file (HLP)', extensions: ['hlp', 'ann', 'gid', 'mvb'], sniff: sniffWinHelp, load: parserOf(() => import('./winhelp')) },
     { id: 'shg', name: 'Windows Help picture (SHG, MRB)', extensions: ['shg', 'mrb'], sniff: sniffShg, load: parserOf(() => import('./winhelp/shg')) },

@@ -1,4 +1,4 @@
-import { Bytes } from '../core/bytes';
+import { Bytes, bytesLabel } from '../core/bytes';
 
 /**
  * Windows' device-independent bitmaps (DIBs), as icons, cursors and bitmap
@@ -12,6 +12,15 @@ import { Bytes } from '../core/bytes';
  * screen inverted). A 32-bit icon carries its own alpha, and the mask is then
  * only for older systems.
  * See https://learn.microsoft.com/windows/win32/api/wingdi/ns-wingdi-bitmapinfoheader.
+ *
+ * A bitmap of 4 or 8 bits a pixel can be run-length compressed (RLE4, RLE8), as
+ * Internet Explorer's and Windows' own DLLs keep many: pairs of a count and a
+ * color, or a 0 and an escape: 0 ends a row, 1 ends the picture, 2 moves right
+ * and up by the next two bytes, and 3 or more is that many colors as they are,
+ * padded to 2 bytes. RLE4's colors are two to a byte, used in turn. Pixels the
+ * moves and early ends skip aren't given a color: they're drawn see-through
+ * here. The header's image size is how many bytes the compressed pixels take.
+ * See https://learn.microsoft.com/windows/win32/gdi/bitmap-compression.
  */
 
 export interface DibInfo {
@@ -31,6 +40,19 @@ export interface DibInfo {
     inverted: number;
     /** Pixels whose color number is past the end of the color table (drawn black here). */
     beyond: number;
+    /** 0 for none, 1 for RLE8, 2 for RLE4. */
+    compression: number;
+    /** For a compressed bitmap, the pixels it skips (drawn see-through). */
+    skipped: number;
+    /** What's wrong with a compressed bitmap that could still be drawn, as sentences. */
+    problems: string[];
+}
+
+/** What a DIB's pixels field says they are, for the fields under it. */
+export function pixelsNote(info: DibInfo, topDown = false): string {
+    if (!info.compression) return `Row by row, ${topDown ? 'the top row first' : 'the bottom row first'}, each padded to 4 bytes.`;
+    const skipped = info.skipped ? ` It skips ${info.skipped.toLocaleString('en-US')} pixel${info.skipped === 1 ? '' : 's'}, drawn see-through here.` : '';
+    return `Run-length compressed (RLE${info.compression === 1 ? 8 : 4}): counts and colors, row by row, the bottom row first.${skipped}`;
 }
 
 /** A bitmap drawn, or why not: `unsupported` when it's a kind this doesn't draw, rather than one that's wrong. */
@@ -55,7 +77,10 @@ export function decodeDib(data: Uint8Array, at: number, length: number, masked: 
     const topDown = rawHeight < 0 && !masked;
     const height = masked ? Math.floor(rawHeight / 2) : Math.abs(rawHeight);
     if (width <= 0 || height <= 0 || width > 4096 || height > 4096) return { problem: `it says it’s ${width} × ${height}` };
-    if (compression !== 0) return { problem: `it’s compressed (method ${compression}), which isn’t drawn here`, unsupported: true };
+    const rle = (compression === 1 || compression === 2) && !masked;
+    if (compression !== 0 && !rle) return { problem: `it’s compressed (method ${compression}), which isn’t drawn here`, unsupported: true };
+    if (rle && bits !== (compression === 1 ? 8 : 4)) return { problem: `it’s run-length compressed for ${compression === 1 ? 8 : 4} bits a pixel (RLE${compression === 1 ? 8 : 4}), but has ${bits}` };
+    if (rle && rawHeight < 0) return { problem: 'it’s compressed and its height is negative (the top row first), which a compressed bitmap can’t be' };
     if (![1, 4, 8, 16, 24, 32].includes(bits)) return { problem: `it has ${bits} bits a pixel` };
     const used = core ? 0 : b.u32(at + 32);
     const colors = bits <= 8 ? (used && used <= 1 << bits ? used : 1 << bits) : 0;
@@ -66,10 +91,6 @@ export function decodeDib(data: Uint8Array, at: number, length: number, masked: 
     if (pixelsFrom !== undefined && pixelsFrom < colorsAt + colors * entry)
         return { problem: `its pixels are said to start at ${pixelsFrom}, inside its own header and colors (which end at ${colorsAt + colors * entry})` };
     const pixelsAt = pixelsFrom ?? colorsAt + colors * entry;
-    const maskAt = masked ? pixelsAt + stride * height : null;
-    const total = (maskAt ?? pixelsAt) + (masked ? maskStride : stride) * height;
-    if (at + total > end) return { problem: `its ${width} × ${height} pixels run past the end of the data it’s given` };
-
     const rgba = new Uint8Array(width * height * 4);
     let beyond = 0;
     const color = (i: number) => {
@@ -78,6 +99,31 @@ export function decodeDib(data: Uint8Array, at: number, length: number, masked: 
         beyond++;
         return [0, 0, 0];
     };
+    if (rle) {
+        if (at + colorsAt + colors * entry > end) return { problem: 'its colors run past the end of the data it’s given' };
+        const said = b.u32(at + 20);
+        const there = Math.max(0, end - at - pixelsAt);
+        const r = unpackRle(data, at + pixelsAt, Math.min(there, said || there), width, height, compression === 1 ? 8 : 4);
+        const problems: string[] = [];
+        if (!said) problems.push('It doesn’t say how many bytes its compressed pixels take (its image size is 0), as a compressed bitmap must.');
+        else if (said > there) problems.push(`It says its compressed pixels take ${bytesLabel(said)}, but only ${bytesLabel(there)} are there.`);
+        problems.push(...r.problems);
+        if (said && r.used < Math.min(said, there))
+            problems.push(`Its compressed pixels end ${bytesLabel(r.used)} in, ${bytesLabel(Math.min(said, there) - r.used)} short of the ${bytesLabel(said)} its image size gives them.`);
+        let skipped = 0;
+        for (let y = 0; y < height; y++)
+            for (let x = 0; x < width; x++) {
+                const i = r.pixels[(height - 1 - y) * width + x];
+                if (i < 0) skipped++;
+                else rgba.set([...color(i), 255], (y * width + x) * 4);
+            }
+        const length = pixelsAt + (said && said <= there ? said : r.used);
+        return { info: { width, height, bits, colors, headerSize: size, colorsAt, pixelsAt, maskAt: null, length, inverted: 0, beyond, compression, skipped, problems }, rgba };
+    }
+    const maskAt = masked ? pixelsAt + stride * height : null;
+    const total = (maskAt ?? pixelsAt) + (masked ? maskStride : stride) * height;
+    if (at + total > end) return { problem: `its ${width} × ${height} pixels run past the end of the data it’s given` };
+
     // 32-bit icons carry alpha; if every pixel's is 0, it's an older one that relies on the mask.
     let alpha = false;
     if (bits === 32) for (let i = 0; i < width * height && !alpha; i++) if (data[at + pixelsAt + i * 4 + 3]) alpha = true;
@@ -107,5 +153,63 @@ export function decodeDib(data: Uint8Array, at: number, length: number, masked: 
             rgba.set([rgb[0], rgb[1], rgb[2], a], o);
         }
     }
-    return { info: { width, height, bits, colors, headerSize: size, colorsAt, pixelsAt, maskAt, length: total, inverted, beyond }, rgba };
+    return { info: { width, height, bits, colors, headerSize: size, colorsAt, pixelsAt, maskAt, length: total, inverted, beyond, compression: 0, skipped: 0, problems: [] }, rgba };
+}
+
+/**
+ * Unpacks RLE8 or RLE4 pixels (`length` bytes at `at`) to color numbers, the bottom row first, -1 where it gives no
+ * color; `used` is how many bytes it took, up to and with the end-of-picture marker.
+ */
+function unpackRle(data: Uint8Array, at: number, length: number, width: number, height: number, bits: 8 | 4): { pixels: Int16Array; used: number; problems: string[] } {
+    const pixels = new Int16Array(width * height).fill(-1);
+    const end = at + length;
+    const problems: string[] = [];
+    let p = at;
+    let x = 0;
+    let y = 0;
+    let outside = 0;
+    let ended = false;
+    const put = (i: number) => {
+        if (x < width && y < height) pixels[y * width + x] = i;
+        else outside++;
+        x++;
+    };
+    // Every turn takes at least 2 bytes, so the loop ends with the data.
+    while (p + 2 <= end) {
+        const count = data[p];
+        const value = data[p + 1];
+        p += 2;
+        if (count) {
+            for (let n = 0; n < count; n++) put(bits === 8 ? value : n & 1 ? value & 15 : value >> 4);
+        } else if (value === 0) {
+            x = 0;
+            y++;
+        } else if (value === 1) {
+            ended = true;
+            break;
+        } else if (value === 2) {
+            if (p + 2 > end) break;
+            x += data[p];
+            y += data[p + 1];
+            p += 2;
+        } else {
+            const bytes = bits === 8 ? value : (value + 1) >> 1;
+            if (p + bytes > end) {
+                problems.push(`Its compressed pixels end partway through a run of ${value} colors.`);
+                p = end;
+                break;
+            }
+            for (let n = 0; n < value; n++) put(bits === 8 ? data[p + n] : n & 1 ? data[p + (n >> 1)] & 15 : data[p + (n >> 1)] >> 4);
+            p += bytes + (bytes & 1);
+        }
+    }
+    if (!ended)
+        problems.push(
+            `Its compressed pixels run out without the marker that ends the picture${y < height ? `, at row ${(y + 1).toLocaleString('en-US')} of ${height.toLocaleString('en-US')} from the bottom` : ''}.`
+        );
+    if (outside)
+        problems.push(
+            `${outside.toLocaleString('en-US')} of its compressed pixel${outside === 1 ? ' falls' : 's fall'} outside the picture, past a row’s end or above its top row: ${outside === 1 ? 'it’s' : 'they’re'} left out here.`
+        );
+    return { pixels, used: Math.min(p, end) - at, problems };
 }

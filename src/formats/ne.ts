@@ -3,7 +3,7 @@ import { checkCount } from '../core/limits';
 import { minOf } from '../core/math';
 import type { Entry, Field, FormatParser, Preview, TableRow } from '../core/types';
 import { debugInfo } from './debug-info';
-import { decodeDib } from './dib';
+import { decodeDib, pixelsNote } from './dib';
 import { pictureFinder, readDialog } from './win-dialogs';
 import { readAccelerators } from './win-accelerators';
 import { readMenu } from './win-menus';
@@ -173,6 +173,7 @@ const parser: FormatParser = {
                     continue;
                 }
                 const { width, height, bits, colors, headerSize, colorsAt, pixelsAt, length } = dib.info;
+                warnings.push(...dib.info.problems.map((p) => `${r.typeName} ${r.name}: ${p}`));
                 const value = `${width} × ${height}, ${colors ? `${colors} colors` : `${bits}-bit`}`;
                 items.push({ title: `${r.typeName} ${r.name}: ${value}`, preview: { kind: 'picture', width, height, rgba: dib.rgba } });
                 inside.set(r, {
@@ -180,7 +181,7 @@ const parser: FormatParser = {
                     fields: [
                         field('Header', r.at, headerSize, `${width} × ${height}, ${bits} bits a pixel`),
                         ...(pixelsAt > colorsAt ? [field('Colors', r.at + colorsAt, pixelsAt - colorsAt, `${colors} colors`)] : []),
-                        field('Pixels', r.at + pixelsAt, length - pixelsAt, bytesLabel(length - pixelsAt), 'Row by row, the bottom row first, each padded to 4 bytes.'),
+                        field('Pixels', r.at + pixelsAt, length - pixelsAt, bytesLabel(length - pixelsAt), pixelsNote(dib.info)),
                     ],
                 });
             } else if (r.type === 16 && !version) {

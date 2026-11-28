@@ -167,6 +167,7 @@ export function signature(data: Uint8Array): Signature | null {
             name: 'Compound file (old Office document, MSI installer, Outlook message)',
             ext: 'doc',
             exts: ['doc', 'xls', 'ppt', 'msi', 'msg', 'dot', 'xlt', 'pot', 'mpp', 'vsd', 'pub', 'db'],
+            format: 'cfb',
             length: 8,
         };
     if (ascii(data, 0, '{\\rtf')) return { name: 'RTF document', ext: 'rtf', length: 5 };

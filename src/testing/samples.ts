@@ -115,6 +115,65 @@ export function bitmap(bits: 4 | 8 | 24, { pad = false }: { pad?: boolean } = {}
 }
 
 /**
+ * The test card as a run-length compressed bitmap (RLE8, or RLE4 two colors to a byte), with palette6's colors: runs of
+ * one color as a count and the color, the rest as colors as they are (3 or more, padded to 2 bytes), an end-of-row
+ * mark after each row but the last, and the end-of-picture mark.
+ */
+export function rleBitmap(bits: 4 | 8): Uint8Array {
+    const [width, height] = [320, 200];
+    const card = testCard(width, height);
+    const stream: number[] = [];
+    const literal = (pixels: number[]) => {
+        const packed = bits === 8 ? pixels : Array.from({ length: Math.ceil(pixels.length / 2) }, (_, i) => (pixels[i * 2] << 4) | (pixels[i * 2 + 1] ?? 0));
+        stream.push(0, pixels.length, ...packed, ...(packed.length & 1 ? [0] : []));
+    };
+    for (let y = height - 1; y >= 0; y--) {
+        const row = Array.from(card.subarray(y * width, (y + 1) * width));
+        const runAt = (i: number) => {
+            let n = 1;
+            while (i + n < width && n < 255 && row[i + n] === row[i]) n++;
+            return n;
+        };
+        for (let x = 0; x < width;) {
+            const run = runAt(x);
+            if (run >= 3) {
+                stream.push(run, bits === 8 ? row[x] : row[x] * 17);
+                x += run;
+                continue;
+            }
+            // Colors as they are, up to the next run of 3.
+            let n = 0;
+            while (x + n < width && n < 255 && runAt(x + n) < 3) n++;
+            if (n >= 3) literal(row.slice(x, x + n));
+            else for (let i = 0; i < n; i++) stream.push(1, bits === 8 ? row[x + i] : row[x + i] << 4);
+            x += n;
+        }
+        if (y) stream.push(0, 0);
+    }
+    stream.push(0, 1);
+    const colors = 1 << bits;
+    const offset = 14 + 40 + colors * 4;
+    const out = new Uint8Array(offset + stream.length);
+    const v = new DataView(out.buffer);
+    out.set([0x42, 0x4d]);
+    v.setUint32(2, out.length, true);
+    v.setUint32(10, offset, true);
+    v.setUint32(14, 40, true);
+    v.setInt32(18, width, true);
+    v.setInt32(22, height, true);
+    v.setUint16(26, 1, true);
+    v.setUint16(28, bits, true);
+    v.setUint32(30, bits === 8 ? 1 : 2, true);
+    v.setUint32(34, stream.length, true);
+    v.setInt32(38, 2835, true);
+    v.setInt32(42, 2835, true);
+    const p = palette6();
+    for (let i = 0; i < colors; i++) out.set([p[i * 3 + 2] << 2, p[i * 3 + 1] << 2, p[i * 3] << 2, 0], 54 + i * 4);
+    out.set(stream, offset);
+    return out;
+}
+
+/**
  * An InstallShield 3 archive laid out as InstallShield's are: the 59-byte header, zeros to byte 255, each file's data
  * (imploded, or stored when `stored`), the directory table, the file table. Dates are 1997-02-25 11:51:24.
  */
@@ -1623,6 +1682,219 @@ export function cabinet({ signed = false, short = false }: { signed?: boolean; s
     return bytes(header, folders, fileBytes, blockBytes, signature);
 }
 
+/** A stream (with data) or a storage (with what's in it) for compoundFile. */
+export interface CompoundItem {
+    name: string;
+    data?: Uint8Array;
+    items?: CompoundItem[];
+}
+
+/**
+ * A compound file (version 3, 512-byte sectors) holding `items`, laid out as Windows lays one out: the FAT's sectors
+ * first, then the directory, the mini FAT, the mini stream (the streams under 4,096 bytes, in 64-byte mini sectors),
+ * then the larger streams. Each storage's children hang to the right of the first, a tree only one deep in each.
+ */
+export function compoundFile(items: CompoundItem[]): Uint8Array {
+    const SECTOR = 512;
+    const END = 0xfffffffe;
+    const NONE = 0xffffffff;
+    const entries: { name: string; type: number; data?: Uint8Array; child: number; right: number; start: number; size: number }[] = [
+        { name: 'Root Entry', type: 5, child: NONE, right: NONE, start: END, size: 0 },
+    ];
+    const add = (list: CompoundItem[]): number => {
+        const indexes = list.map((item) => entries.push({ name: item.name, type: item.data ? 2 : 1, data: item.data, child: NONE, right: NONE, start: END, size: item.data?.length ?? 0 }) - 1);
+        list.forEach((item, i) => {
+            if (i + 1 < indexes.length) entries[indexes[i]].right = indexes[i + 1];
+            if (item.items) entries[indexes[i]].child = add(item.items);
+        });
+        return indexes[0] ?? NONE;
+    };
+    entries[0].child = add(items);
+    const sectorsFor = (n: number, unit: number) => Math.ceil(n / unit);
+
+    // Mini sectors for the small streams.
+    const small = entries.filter((e) => e.type === 2 && e.size && e.size < 4096);
+    const miniFat: number[] = [];
+    let mini = 0;
+    for (const e of small) {
+        const n = sectorsFor(e.size, 64);
+        e.start = mini;
+        for (let i = 0; i < n; i++) miniFat.push(i + 1 < n ? mini + i + 1 : END);
+        mini += n;
+    }
+    const miniStream = new Uint8Array(mini * 64);
+    for (const e of small) miniStream.set(e.data!, e.start * 64);
+    entries[0].size = miniStream.length;
+
+    const big = entries.filter((e) => e.type === 2 && e.size >= 4096);
+    const dirSectors = sectorsFor(entries.length, 4);
+    const miniFatSectors = sectorsFor(miniFat.length * 4, SECTOR);
+    const rest = dirSectors + miniFatSectors + sectorsFor(miniStream.length, SECTOR) + big.reduce((n, e) => n + sectorsFor(e.size, SECTOR), 0);
+    let fatSectors = 1;
+    while (fatSectors * 128 < fatSectors + rest) fatSectors++;
+    const fat: number[] = Array(fatSectors).fill(0xfffffffd);
+    const chain = (n: number) => {
+        const start = fat.length;
+        for (let i = 0; i < n; i++) fat.push(i + 1 < n ? start + i + 1 : END);
+        return n ? start : END;
+    };
+    const dirStart = chain(dirSectors);
+    const miniFatStart = chain(miniFatSectors);
+    entries[0].start = chain(sectorsFor(miniStream.length, SECTOR));
+    for (const e of big) e.start = chain(sectorsFor(e.size, SECTOR));
+    const total = fat.length;
+    while (fat.length % 128) fat.push(NONE);
+
+    const out = new Uint8Array(SECTOR * (1 + total));
+    const v = new DataView(out.buffer);
+    const at = (s: number) => SECTOR * (s + 1);
+    out.set([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+    v.setUint16(24, 0x3e, true);
+    v.setUint16(26, 3, true);
+    v.setUint16(28, 0xfffe, true);
+    v.setUint16(30, 9, true);
+    v.setUint16(32, 6, true);
+    v.setUint32(44, fatSectors, true);
+    v.setUint32(48, dirStart, true);
+    v.setUint32(56, 4096, true);
+    v.setUint32(60, miniFatSectors ? miniFatStart : END, true);
+    v.setUint32(64, miniFatSectors, true);
+    v.setUint32(68, END, true);
+    for (let i = 0; i < 109; i++) v.setUint32(76 + i * 4, i < fatSectors ? i : NONE, true);
+    fat.forEach((n, i) => v.setUint32(at(Math.floor(i / 128)) + (i % 128) * 4, n, true));
+    // The directory: 128 bytes an entry, unused ones with no siblings or child.
+    for (let i = 0; i < dirSectors * 4; i++) {
+        const o = at(dirStart) + i * 128;
+        const e = entries[i];
+        if (!e) {
+            v.setUint32(o + 68, NONE, true);
+            v.setUint32(o + 72, NONE, true);
+            v.setUint32(o + 76, NONE, true);
+            continue;
+        }
+        for (let c = 0; c < e.name.length; c++) v.setUint16(o + c * 2, e.name.charCodeAt(c), true);
+        v.setUint16(o + 64, (e.name.length + 1) * 2, true);
+        out[o + 66] = e.type;
+        out[o + 67] = 1;
+        v.setUint32(o + 68, NONE, true);
+        v.setUint32(o + 72, e.right, true);
+        v.setUint32(o + 76, e.child, true);
+        v.setUint32(o + 116, e.start, true);
+        v.setUint32(o + 120, e.size, true);
+    }
+    miniFat.forEach((n, i) => v.setUint32(at(miniFatStart) + i * 4, n, true));
+    for (let i = miniFat.length; i < miniFatSectors * 128; i++) v.setUint32(at(miniFatStart) + i * 4, NONE, true);
+    out.set(miniStream, at(entries[0].start));
+    for (const e of big) out.set(e.data!, at(e.start));
+    return out;
+}
+
+/** 1997-04-23 14:02:10 UTC as a FILETIME's two halves. */
+function sampleFileTime(): [number, number] {
+    const steps = (BigInt(Date.UTC(1997, 3, 23, 14, 2, 10)) + 11644473600000n) * 10000n;
+    return [Number(steps & 0xffffffffn), Number(steps >> 32n)];
+}
+
+/** A summary information stream: one set, its code page 1252, then a title, an author, a creation date and the program. */
+export function summaryInformation(title: string, author: string, program: string): Uint8Array {
+    const lpstr = (s: string) => {
+        const t = [...text(s), 0];
+        while (t.length % 4) t.push(0);
+        return [...u16(30), 0, 0, ...u32(s.length + 1), ...t];
+    };
+    const [low, high] = sampleFileTime();
+    const values: [number, number[]][] = [
+        [1, [...u16(2), 0, 0, ...u16(1252), 0, 0]],
+        [2, lpstr(title)],
+        [4, lpstr(author)],
+        [12, [...u16(64), 0, 0, ...u32(low), ...u32(high)]],
+        [18, lpstr(program)],
+    ];
+    const index: number[] = [];
+    const body: number[] = [];
+    let offset = 8 + values.length * 8;
+    for (const [id, value] of values) {
+        index.push(...u32(id), ...u32(offset));
+        body.push(...value);
+        offset += value.length;
+    }
+    const set = [...u32(offset), ...u32(values.length), ...index, ...body];
+    const fmtid = [0xe0, 0x85, 0x9f, 0xf2, 0xf9, 0x4f, 0x68, 0x10, 0xab, 0x91, 0x08, 0x00, 0x2b, 0x27, 0xb3, 0xd9];
+    // Written on 32-bit Windows 4.0, no class ID.
+    return bytes(u16(0xfffe), u16(0), u32(0x00020004), Array(16).fill(0), u32(1), fmtid, u32(48), set);
+}
+
+/** The text in the sample Word documents: two paragraphs, a field (its code, then its result), a tab and a page break. */
+export const WORD_TEXT = ['Chimera sample document.\r', 'A field: \x13 PAGE \x141\x15, and a tab:\tdone.\x0c', 'The last paragraph.\r'];
+
+/**
+ * A Word 6.0 document, as WordPad and Word 6 save one: the WordDocument stream, its FIB (signature 0xA5DC, version
+ * 101) then the text in one stretch from fcMin, padded to 4,608 bytes so it isn't kept in mini sectors; a CompObj
+ * stream naming the program; summary information; and an embedded object's storage under ObjectPool.
+ */
+export function word6Document(): Uint8Array {
+    const body = text(WORD_TEXT.join(''));
+    const fcMin = 0x180;
+    const stream = new Uint8Array(4608);
+    const v = new DataView(stream.buffer);
+    v.setUint16(0, 0xa5dc, true);
+    v.setUint16(2, 101, true);
+    v.setUint16(4, 0x6027, true);
+    v.setUint16(6, 0x0409, true);
+    v.setUint32(0x18, fcMin, true);
+    v.setUint32(0x1c, fcMin + body.length, true);
+    v.setUint32(0x20, stream.length, true);
+    v.setInt32(0x34, body.length, true);
+    stream.set(body, fcMin);
+    // CompObj: a version, the byte order, the system, a class ID, then the program's name for its documents.
+    const kind = 'Microsoft Word 6.0 Document';
+    const compObj = bytes(u16(1), u16(0xfffe), u32(0x0a03), Array(16).fill(0), u32(kind.length + 1), text(kind), [0]);
+    return compoundFile([
+        { name: 'WordDocument', data: stream },
+        { name: '\x01CompObj', data: compObj },
+        { name: '\x05SummaryInformation', data: summaryInformation('Chimera sample', 'Chimera', 'Microsoft Word 6.0') },
+        { name: 'ObjectPool', items: [{ name: '_1234', items: [{ name: '\x01Ole', data: Uint8Array.from(u32(0x02000001)) }] }] },
+    ]);
+}
+
+/**
+ * A Word 97 document: the WordDocument stream's FIB (signature 0xA5EC, version 193, its tables in 1Table) points to a
+ * piece table there, and the text is in two pieces: the first in code page 1252 (the compressed bit set, its place
+ * doubled), the rest in UTF-16.
+ */
+export function word97Document(): Uint8Array {
+    const [one, ...rest] = WORD_TEXT;
+    const first = text(one);
+    const second = Array.from(rest.join(''), (c) => u16(c.charCodeAt(0))).flat();
+    const chars = one.length + rest.join('').length;
+    const firstAt = 0x600;
+    const secondAt = firstAt + first.length + (first.length & 1);
+    const stream = new Uint8Array(4608);
+    const v = new DataView(stream.buffer);
+    v.setUint16(0, 0xa5ec, true);
+    v.setUint16(2, 193, true);
+    v.setUint16(0x0a, 0x0200, true);
+    v.setUint16(32, 14, true);
+    const lw = 34 + 14 * 2 + 2;
+    v.setUint16(34 + 14 * 2, 22, true);
+    v.setUint32(lw, stream.length, true);
+    v.setInt32(lw + 12, chars, true);
+    const fcLcb = lw + 22 * 4 + 2;
+    v.setUint16(lw + 22 * 4, 93, true);
+    stream.set(first, firstAt);
+    stream.set(second, secondAt);
+    // The piece table: its character positions (0, the end of the first piece, the end), then each piece's 8 bytes.
+    const pieces = [...u32(0), ...u32(one.length), ...u32(chars), ...u16(0), ...u32(0x40000000 | (firstAt * 2)), ...u16(0), ...u16(0), ...u32(secondAt), ...u16(0)];
+    const clx = [2, ...u32(pieces.length), ...pieces];
+    v.setUint32(fcLcb + 33 * 8, 0, true);
+    v.setUint32(fcLcb + 33 * 8 + 4, clx.length, true);
+    return compoundFile([
+        { name: 'WordDocument', data: stream },
+        { name: '1Table', data: Uint8Array.from(clx) },
+        { name: '\x05SummaryInformation', data: summaryInformation('Chimera sample', 'Chimera', 'Microsoft Word 8.0') },
+    ]);
+}
+
 /** A file for zipArchive: its name, its data, and how it's packed. */
 export interface ZipFile {
     name: string;
@@ -2455,6 +2727,15 @@ export function samples(): Sample[] {
         },
         { name: 'cursor.ani', format: 'ani', about: 'Animated cursor: two frames (an arrow, a fading disc) in three steps of their own times and order, with a title', data: animatedCursor() },
         { name: 'video.avi', format: 'avi', about: 'AVI video: Microsoft RLE frames, one drawn over the last, a palette change, an empty frame, 8-bit sound, an index', data: aviVideo() },
+        { name: 'bitmap-rle8.bmp', format: 'bmp', about: 'Windows bitmap, run-length compressed (RLE8): the test card in runs and stretches of colors as they are', data: rleBitmap(8) },
+        { name: 'bitmap-rle4.bmp', format: 'bmp', about: 'Windows bitmap, run-length compressed (RLE4): the test card, two colors to a byte', data: rleBitmap(4) },
+        {
+            name: 'word6.doc',
+            format: 'cfb',
+            about: 'Word 6.0 document in a compound file: its text in one stretch, a field, summary information, an embedded object’s storage',
+            data: word6Document(),
+        },
+        { name: 'word97.doc', format: 'cfb', about: 'Word 97 document in a compound file: its text in two pieces, one in code page 1252 and one in UTF-16', data: word97Document() },
         { name: 'cabinet.cab', format: 'cab', about: 'Microsoft cabinet: a folder stored, a folder in MSZIP whose second block reaches back into the first, checksums', data: cabinet() },
         {
             name: 'cabinet-signed.cab',
